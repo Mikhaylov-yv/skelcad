@@ -67,7 +67,17 @@ def write_compare(reports: list[dict], out: Path) -> Path:
         standards=reports[0].get("standards", []),
         generated=dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
         data_json=json.dumps(
-            {"variants": [{"id": r["variant"], "title": r["title"], "glb": r["files"].get("gltf")} for r in reports]},
+            {
+                "variants": [
+                    {
+                        "id": r["variant"],
+                        "title": r["title"],
+                        "glb": r["files"].get("gltf"),
+                        "mount": r.get("mount_plane"),
+                    }
+                    for r in reports
+                ]
+            },
             ensure_ascii=False,
         ),
     )

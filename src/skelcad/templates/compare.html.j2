@@ -201,7 +201,7 @@ import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js";
 const DATA = JSON.parse(document.getElementById("data").textContent);
 const viewers = [];
 
-// glTF: Y-up. Глобальные оси модели: X -> X, Z(вверх) -> Y, Y(от стены) -> -Z.
+// glTF: Y-up. Глобальные оси модели: X -> X, Z(вверх) -> Y, Y -> -Z.
 const VIEWS = {
   main: {dir: [-1, 0, 0], up: [0, 1, 0]},
   left: {dir: [0, 0, -1], up: [0, 1, 0]},
@@ -241,12 +241,19 @@ function makeViewer(el, v) {
     const box = new THREE.Box3().setFromObject(root);
     box.getCenter(st.center);
     st.radius = box.getSize(new THREE.Vector3()).length() / 2;
-    // стена: плоскость Y=0 модели (z=0 в glTF), полупрозрачная
-    const s = box.getSize(new THREE.Vector3());
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(s.x * 2.2, s.y * 1.6),
-      new THREE.MeshBasicMaterial({color: 0x9aa3ab, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false}));
-    wall.position.set(st.center.x, st.center.y, 0.0001);
-    scene.add(wall);
+    // опорная плоскость интерфейса mount_plane скелета (стена, пол, фундамент), полупрозрачная
+    if (v.mount) {
+      const toG = (p) => new THREE.Vector3(p[0], p[2], -p[1]).multiplyScalar(0.001);   // модель (мм) -> glTF (м)
+      const n = toG(v.mount.normal).normalize();
+      const s = box.getSize(new THREE.Vector3()).length();
+      const wall = new THREE.Mesh(new THREE.PlaneGeometry(s * 1.6, s * 1.6),
+        new THREE.MeshBasicMaterial({color: 0x9aa3ab, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false}));
+      wall.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+      const o = toG(v.mount.origin);
+      const c = st.center.clone().sub(o);
+      wall.position.copy(o).add(c.sub(n.clone().multiplyScalar(c.dot(n)))).add(n.clone().multiplyScalar(0.0001));
+      scene.add(wall);
+    }
     setView(st, "iso");
   }, undefined, (e) => { el.insertAdjacentHTML("beforeend", `<div style="padding:16px">Не удалось загрузить ${v.glb}: откройте страницу через http-сервер</div>`); });
   return st;

@@ -16,6 +16,17 @@ from skelcad.geom.views import write_views
 from skelcad.rules import Metric, PluginSet, run_calcs, run_checks, run_metrics, run_rules
 
 
+def mount_plane(m: Project) -> dict | None:
+    """Опорная плоскость (стена, пол) для визуализации: datum первого интерфейса mount_plane."""
+    for i in m.skeleton.interfaces:
+        if i.kind != "mount_plane" or not i.datum:
+            continue
+        d = next((d for d in m.skeleton.datums if d.id == i.datum and d.kind == "plane"), None)
+        if d and d.direction:
+            return {"origin": list(d.origin), "normal": list(d.direction)}
+    return None
+
+
 def blanks(m: Project) -> dict[str, int]:
     return dict(
         Counter(
@@ -95,6 +106,7 @@ def build_variant(
         "metrics": [x.model_dump() for x in metrics],
         "derived": m.derived,
         "requirements": m.requirements.model_dump(),
+        "mount_plane": mount_plane(m),
         "parts": [
             {
                 "id": p.id,
