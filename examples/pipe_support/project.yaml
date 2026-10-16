@@ -1,0 +1,50 @@
+# Второй класс изделий SkelCAD: скользящая опора под трубопровод с направляющими.
+# Опорная плоскость — пол (горизонтальная), труба лежит на верхней плите и удерживается направляющими.
+id: pipe_support
+title: "Опора скользящая под трубу Ø108 с направляющими"
+description: >
+  Опорная плита на анкерах в бетонный пол, стойка, верхняя плита и две направляющие вдоль трубы.
+  Труба свободно скользит по оси (тепловое удлинение), от бокового смещения удерживается направляющими.
+lang: ru
+coordinate_system: "X — вдоль трубы, Y — поперёк, Z — вверх; Z=0 — поверхность пола"
+standards: [gost]
+generator: generators/support.py
+plugins: [plugins/calc.py]
+
+requirements:
+  purpose: "Опора трубопровода Ду100 с водой на отметке +0,400; скользящая, с боковым ограничением"
+  loads: {Fv: 3.0, Fx: 0.9, Fy: 1.0}       # кН: вес трубы с водой; трение вдоль оси (μ=0,3); боковая на направляющую
+  factors: {gamma_dyn: 1.2}
+  safety_required: 1.5
+  environment: {location: "помещение", floor: "бетон B25, толщина ≥ 200 мм"}
+
+skeleton:
+  datums:
+    - {id: floor, kind: plane, origin: [0, 0, 0], direction: [0, 0, 1], name: "Поверхность пола"}
+    - {id: pipe_axis, kind: axis, origin: [0, 0, 400], direction: [1, 0, 0], name: "Ось трубы (отметка 400)"}
+  interfaces:
+    - id: floor
+      kind: mount_plane
+      name: "Крепление к полу"
+      datum: floor
+      params: {concrete: B25, anchor_size: M12}
+    - id: pipe
+      kind: pipe_rest
+      name: "Опирание трубы"
+      datum: pipe_axis
+      params: {od: 108, length: 300, lateral_gap: 3}   # внешний диаметр трубы, длина опорного тела, зазор до направляющих
+
+params:
+  material: St3sp
+  base_plate: {thickness: 12, edge: 35, corner_radius: 8}
+  top_plate: {thickness: 12, length: 160, width: 160}
+  guides: {thickness: 8, height: 60, length: 160}
+  anchors: {clearance: 3}
+  welds: {leg_base: 6, leg_other: 6}
+
+assumptions:
+  - {id: G1, topic: loads, text: "Вес трубы с водой на пролёт между опорами собран на одну опору; трение по стали μ = 0,3."}
+  - {id: G2, topic: loads, text: "Боковая сила на направляющую — от изгиба трубы при самокомпенсации, задана в ТЗ."}
+  - {id: G3, topic: geom, text: "Труба не крепится к опоре: лежит на верхней плите, скользит вдоль X."}
+  - {id: G4, topic: anchors, text: "Анкеры химические; несущая способность по бетону — условная, уточнить по каталогу производителя."}
+  - {id: G5, topic: weld, text: "Сварка механизированная в CO2 (ГОСТ 14771), швы угловые."}

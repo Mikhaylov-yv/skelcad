@@ -1,8 +1,8 @@
 # SkelCAD
 
 **Среда совместного конструирования «ИИ-агент + инженер-конструктор», сверху вниз.**
-Open source, Apache-2.0. Стадия: M0 — обобщение пилота (октябрь 2026): ядро, CLI, пакет `std-gost`,
-пример `bracket`.
+Open source, Apache-2.0. Стадия: M0 (обобщение пилота) закрыт 16.10.2026: ядро, CLI, пакет `std-gost`,
+примеры `bracket` и `pipe_support`. Следующий этап — M1, агентный контур (MCP).
 
 *SkelCAD is an open-source environment where an AI agent and a design engineer develop a product
 together, top-down (skeleton → units → parts → drawings). The product model, not the CAD file, is
@@ -26,6 +26,7 @@ English documentation will follow; design documents below are in Russian for now
 uv sync --all-extras                      # Python 3.12, build123d/OCCT, пакет std-gost
 uv run skelcad check-env                  # куб -> STEP, glTF, обратное чтение
 uv run skelcad build examples/bracket     # три варианта кронштейна -> examples/bracket/out/, compare.html
+uv run skelcad build examples/pipe_support   # опора под трубопровод: два варианта стойки
 uv run skelcad check examples/bracket -v A_fork   # только правила, проверки и расчёт
 uv run skelcad standards                  # установленные пакеты стандартов
 uv run pytest -q
@@ -33,7 +34,8 @@ uv run pytest -q
 
 Устройство репозитория и план этапа — в [docs/architecture/03-m0-plan.md](docs/architecture/03-m0-plan.md).
 Проект для SkelCAD — папка с `project.yaml` (требования, скелет, пакеты стандартов, генератор, плагины)
-и `variants/*.yaml` (параметры топологий); см. [examples/bracket](examples/bracket).
+и `variants/*.yaml` (параметры топологий); см. [examples/bracket](examples/bracket) (кронштейн на стене)
+и [examples/pipe_support](examples/pipe_support) (опора под трубу на полу).
 JSON Schema спецификации проекта, варианта и разрешённой модели — в [docs/schema](docs/schema).
 
 ## Документы

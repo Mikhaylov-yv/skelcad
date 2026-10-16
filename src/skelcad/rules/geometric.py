@@ -163,4 +163,34 @@ def c_wrench(m: Project, g: Geometry, ctx: Context) -> list[Finding]:
     return out
 
 
-CHECKS = [c_interference, c_weld_contact, c_shaft_seat, c_wrench]
+def c_interface_bodies(m: Project, g: Geometry, ctx: Context) -> list[Finding]:
+    """Опорные тела интерфейсов (труба, соседний узел) не проникают в детали; для shaft_seat — своя проверка."""
+    out = []
+    for i in m.skeleton.interfaces:
+        if i.kind == "shaft_seat" or i.id not in g.bodies:
+            continue
+        body = g.bodies[i.id]
+        bad = {pid: v for pid, s in g.parts.items() if (v := common_volume(body, s)) > TOL_VOL}
+        for pid, v in bad.items():
+            out.append(
+                F(
+                    "error",
+                    "C-BODY",
+                    f"interface:{i.id}+part:{pid}",
+                    f"Тело интерфейса врезается в деталь, объём {v:.0f} мм³",
+                )
+            )
+        if not bad:
+            touching = [pid for pid, s in g.parts.items() if body.distance_to(s) <= TOL_GAP]
+            out.append(
+                F(
+                    "info",
+                    "C-BODY",
+                    f"interface:{i.id}",
+                    f"Тело интерфейса не врезается в детали; касается: {', '.join(touching) or 'ничего'}",
+                )
+            )
+    return out
+
+
+CHECKS = [c_interference, c_weld_contact, c_shaft_seat, c_interface_bodies, c_wrench]
