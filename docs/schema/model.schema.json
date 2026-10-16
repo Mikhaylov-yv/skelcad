@@ -1,0 +1,1552 @@
+{
+  "$defs": {
+    "Assumption": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "title": "Text"
+        },
+        "topic": {
+          "default": "общее",
+          "title": "Topic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ],
+      "title": "Assumption",
+      "type": "object"
+    },
+    "Cylinder": {
+      "description": "Цилиндр по центру и оси — опорное тело интерфейса (вал, ось, труба соседнего узла).",
+      "properties": {
+        "center": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Center",
+          "type": "array"
+        },
+        "axis": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Axis",
+          "type": "array"
+        },
+        "diameter": {
+          "title": "Diameter",
+          "type": "number"
+        },
+        "length": {
+          "title": "Length",
+          "type": "number"
+        }
+      },
+      "required": [
+        "center",
+        "axis",
+        "diameter",
+        "length"
+      ],
+      "title": "Cylinder",
+      "type": "object"
+    },
+    "Datum": {
+      "description": "Базовый элемент скелета: плоскость (origin + normal), ось (origin + direction) или точка.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "plane",
+            "axis",
+            "point"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "origin": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Origin",
+          "type": "array"
+        },
+        "direction": {
+          "anyOf": [
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Direction"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "default": "",
+          "title": "Name"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "origin"
+      ],
+      "title": "Datum",
+      "type": "object"
+    },
+    "Envelope": {
+      "description": "Допустимый (keep_in) или запретный (keep_out) объём — в M0 только боксы.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "keep_in",
+            "keep_out"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "min": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Min",
+          "type": "array"
+        },
+        "max": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Max",
+          "type": "array"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "default": "",
+          "title": "Name"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "min",
+        "max"
+      ],
+      "title": "Envelope",
+      "type": "object"
+    },
+    "Fastener": {
+      "description": "Крепёж через отверстие детали: анкер в основание или болт.\n\n`position` — точка на опорной поверхности (например, лицо стены), `axis` — направление\nот неё наружу, `clamp_depth` — расстояние по оси до плоскости прижима шайбы.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "kind": {
+          "const": "fastener",
+          "default": "fastener",
+          "title": "Kind",
+          "type": "string"
+        },
+        "fastener_type": {
+          "default": "anchor",
+          "title": "Fastener Type",
+          "type": "string"
+        },
+        "size": {
+          "title": "Size",
+          "type": "string"
+        },
+        "part": {
+          "title": "Part",
+          "type": "string"
+        },
+        "hole": {
+          "title": "Hole",
+          "type": "string"
+        },
+        "position": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Position",
+          "type": "array"
+        },
+        "axis": {
+          "default": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Axis",
+          "type": "array"
+        },
+        "clamp_depth": {
+          "title": "Clamp Depth",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "size",
+        "part",
+        "hole",
+        "position",
+        "clamp_depth"
+      ],
+      "title": "Fastener",
+      "type": "object"
+    },
+    "Hole": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "purpose": {
+          "title": "Purpose",
+          "type": "string"
+        },
+        "diameter": {
+          "title": "Diameter",
+          "type": "number"
+        },
+        "center": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Center",
+          "type": "array"
+        },
+        "tolerance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tolerance"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "purpose",
+        "diameter",
+        "center"
+      ],
+      "title": "Hole",
+      "type": "object"
+    },
+    "Interface": {
+      "description": "Посадочное место к соседнему узлу: что приходит снаружи (стена, вал, фланец) и с какой нагрузкой.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "default": "",
+          "title": "Name"
+        },
+        "datum": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Datum"
+        },
+        "body": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cylinder"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "params": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "default": {},
+          "title": "Params",
+          "type": "object"
+        },
+        "loads": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Loads",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "Interface",
+      "type": "object"
+    },
+    "Outline": {
+      "description": "Контур пластины: выпуклая оболочка точек и окружностей (как эскиз в САПР).",
+      "properties": {
+        "points": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "circles": {
+          "default": [],
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Circles",
+          "type": "array"
+        },
+        "corner_radius": {
+          "default": 0.0,
+          "title": "Corner Radius",
+          "type": "number"
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "title": "Outline",
+      "type": "object"
+    },
+    "Placement": {
+      "description": "Плоскость эскиза детали: начало, ось u эскиза и нормаль (направление выдавливания).",
+      "properties": {
+        "origin": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Origin",
+          "type": "array"
+        },
+        "u": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "U",
+          "type": "array"
+        },
+        "normal": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Normal",
+          "type": "array"
+        }
+      },
+      "required": [
+        "origin",
+        "u",
+        "normal"
+      ],
+      "title": "Placement",
+      "type": "object"
+    },
+    "PlatePart": {
+      "description": "Деталь из листа: эскиз на плоскости + выдавливание на толщину.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "title": "Name"
+        },
+        "role": {
+          "default": "",
+          "title": "Role",
+          "type": "string"
+        },
+        "material": {
+          "title": "Material",
+          "type": "string"
+        },
+        "color": {
+          "default": "#8aa1b8",
+          "title": "Color",
+          "type": "string"
+        },
+        "kind": {
+          "const": "plate",
+          "default": "plate",
+          "title": "Kind",
+          "type": "string"
+        },
+        "thickness": {
+          "title": "Thickness",
+          "type": "number"
+        },
+        "outline": {
+          "$ref": "#/$defs/Outline"
+        },
+        "placement": {
+          "$ref": "#/$defs/Placement"
+        },
+        "holes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Hole"
+          },
+          "title": "Holes",
+          "type": "array"
+        },
+        "trims": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Trim"
+          },
+          "title": "Trims",
+          "type": "array"
+        },
+        "free_edges": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Free Edges",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "material",
+        "thickness",
+        "outline",
+        "placement"
+      ],
+      "title": "PlatePart",
+      "type": "object"
+    },
+    "Requirements": {
+      "properties": {
+        "purpose": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "default": "",
+          "title": "Purpose"
+        },
+        "loads": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Loads",
+          "type": "object"
+        },
+        "factors": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Factors",
+          "type": "object"
+        },
+        "safety_required": {
+          "default": 1.5,
+          "title": "Safety Required",
+          "type": "number"
+        },
+        "environment": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "default": {},
+          "title": "Environment",
+          "type": "object"
+        },
+        "constraints": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "default": {},
+          "title": "Constraints",
+          "type": "object"
+        },
+        "standards": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Standards",
+          "type": "array"
+        }
+      },
+      "title": "Requirements",
+      "type": "object"
+    },
+    "Skeleton": {
+      "properties": {
+        "datums": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Datum"
+          },
+          "title": "Datums",
+          "type": "array"
+        },
+        "envelopes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Envelope"
+          },
+          "title": "Envelopes",
+          "type": "array"
+        },
+        "interfaces": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Interface"
+          },
+          "title": "Interfaces",
+          "type": "array"
+        }
+      },
+      "title": "Skeleton",
+      "type": "object"
+    },
+    "Trim": {
+      "description": "Обрезка тела полупространством: остаётся часть, где (p − point)·normal ≥ 0.",
+      "properties": {
+        "point": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Point",
+          "type": "array"
+        },
+        "normal": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Normal",
+          "type": "array"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "point",
+        "normal"
+      ],
+      "title": "Trim",
+      "type": "object"
+    },
+    "TubePart": {
+      "description": "Деталь из трубы: типоразмер каталога, отрезок по оси, расточка после сварки.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "title": "Name"
+        },
+        "role": {
+          "default": "",
+          "title": "Role",
+          "type": "string"
+        },
+        "material": {
+          "title": "Material",
+          "type": "string"
+        },
+        "color": {
+          "default": "#8aa1b8",
+          "title": "Color",
+          "type": "string"
+        },
+        "kind": {
+          "const": "tube",
+          "default": "tube",
+          "title": "Kind",
+          "type": "string"
+        },
+        "tube_size": {
+          "title": "Tube Size",
+          "type": "string"
+        },
+        "od": {
+          "title": "Od",
+          "type": "number"
+        },
+        "wall": {
+          "title": "Wall",
+          "type": "number"
+        },
+        "length": {
+          "title": "Length",
+          "type": "number"
+        },
+        "center": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Center",
+          "type": "array"
+        },
+        "axis": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Axis",
+          "type": "array"
+        },
+        "bore": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Hole"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "material",
+        "tube_size",
+        "od",
+        "wall",
+        "length",
+        "center",
+        "axis"
+      ],
+      "title": "TubePart",
+      "type": "object"
+    },
+    "Unit": {
+      "description": "Узел: детали и соединения; ссылается на интерфейсы скелета, не на другие узлы.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "title": "Name"
+        },
+        "material": {
+          "default": "",
+          "title": "Material",
+          "type": "string"
+        },
+        "interfaces": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Interfaces",
+          "type": "array"
+        },
+        "parts": {
+          "default": [],
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "plate": "#/$defs/PlatePart",
+                "tube": "#/$defs/TubePart"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/PlatePart"
+              },
+              {
+                "$ref": "#/$defs/TubePart"
+              }
+            ]
+          },
+          "title": "Parts",
+          "type": "array"
+        },
+        "joints": {
+          "default": [],
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "fastener": "#/$defs/Fastener",
+                "weld": "#/$defs/Weld"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Weld"
+              },
+              {
+                "$ref": "#/$defs/Fastener"
+              }
+            ]
+          },
+          "title": "Joints",
+          "type": "array"
+        },
+        "derived": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "default": {},
+          "title": "Derived",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "Unit",
+      "type": "object"
+    },
+    "Weld": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "kind": {
+          "const": "weld",
+          "default": "weld",
+          "title": "Kind",
+          "type": "string"
+        },
+        "parts": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Parts",
+          "type": "array"
+        },
+        "weld_type": {
+          "const": "fillet",
+          "default": "fillet",
+          "title": "Weld Type",
+          "type": "string"
+        },
+        "leg": {
+          "title": "Leg",
+          "type": "number"
+        },
+        "segments": {
+          "items": {
+            "$ref": "#/$defs/WeldSegment"
+          },
+          "title": "Segments",
+          "type": "array"
+        },
+        "access_gap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Access Gap"
+        },
+        "access_depth": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Access Depth"
+        }
+      },
+      "required": [
+        "id",
+        "parts",
+        "leg",
+        "segments"
+      ],
+      "title": "Weld",
+      "type": "object"
+    },
+    "WeldSegment": {
+      "properties": {
+        "start": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Start",
+          "type": "array"
+        },
+        "end": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "End",
+          "type": "array"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "WeldSegment",
+      "type": "object"
+    }
+  },
+  "description": "Проект (одна разрешённая конфигурация изделия — вариант).",
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      ],
+      "title": "Title"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      ],
+      "default": "",
+      "title": "Description"
+    },
+    "lang": {
+      "default": "ru",
+      "title": "Lang",
+      "type": "string"
+    },
+    "variant": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Variant"
+    },
+    "coordinate_system": {
+      "default": "",
+      "title": "Coordinate System",
+      "type": "string"
+    },
+    "requirements": {
+      "$ref": "#/$defs/Requirements",
+      "default": {
+        "purpose": "",
+        "loads": {},
+        "factors": {},
+        "safety_required": 1.5,
+        "environment": {},
+        "constraints": {},
+        "standards": []
+      }
+    },
+    "skeleton": {
+      "$ref": "#/$defs/Skeleton",
+      "default": {
+        "datums": [],
+        "envelopes": [],
+        "interfaces": []
+      }
+    },
+    "units": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Unit"
+      },
+      "title": "Units",
+      "type": "array"
+    },
+    "assumptions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Assumption"
+      },
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "derived": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "default": {},
+      "title": "Derived",
+      "type": "object"
+    }
+  },
+  "required": [
+    "id",
+    "title"
+  ],
+  "title": "Project",
+  "type": "object"
+}

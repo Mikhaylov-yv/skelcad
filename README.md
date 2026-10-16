@@ -1,7 +1,8 @@
 # SkelCAD
 
 **Среда совместного конструирования «ИИ-агент + инженер-конструктор», сверху вниз.**
-Open source, Apache-2.0. Стадия: проектирование (октябрь 2026), кода ещё нет.
+Open source, Apache-2.0. Стадия: M0 — обобщение пилота (октябрь 2026): ядро, CLI, пакет `std-gost`,
+пример `bracket`.
 
 *SkelCAD is an open-source environment where an AI agent and a design engineer develop a product
 together, top-down (skeleton → units → parts → drawings). The product model, not the CAD file, is
@@ -19,12 +20,29 @@ English documentation will follow; design documents below are in Russian for now
    дерево построения в САПР конструктора (SolidWorks, КОМПАС, FreeCAD, …) через рецепт построения
    и адаптер.
 
+## Быстрый старт
+
+```bash
+uv sync --all-extras                      # Python 3.12, build123d/OCCT, пакет std-gost
+uv run skelcad check-env                  # куб -> STEP, glTF, обратное чтение
+uv run skelcad build examples/bracket     # три варианта кронштейна -> examples/bracket/out/, compare.html
+uv run skelcad check examples/bracket -v A_fork   # только правила, проверки и расчёт
+uv run skelcad standards                  # установленные пакеты стандартов
+uv run pytest -q
+```
+
+Устройство репозитория и план этапа — в [docs/architecture/03-m0-plan.md](docs/architecture/03-m0-plan.md).
+Проект для SkelCAD — папка с `project.yaml` (требования, скелет, пакеты стандартов, генератор, плагины)
+и `variants/*.yaml` (параметры топологий); см. [examples/bracket](examples/bracket).
+JSON Schema спецификации проекта, варианта и разрешённой модели — в [docs/schema](docs/schema).
+
 ## Документы
 
 | Файл | Что это |
 |---|---|
 | [docs/architecture/01-vision-and-architecture.md](docs/architecture/01-vision-and-architecture.md) | Замысел, принципы, архитектура (C4), проектная модель, режимы выдачи, дорожная карта, риски |
 | [docs/architecture/02-decisions.md](docs/architecture/02-decisions.md) | Журнал решений D1–D10: принятые, обсуждаемые, отложенные |
+| [docs/architecture/03-m0-plan.md](docs/architecture/03-m0-plan.md) | План этапа M0: устройство репозитория, что переезжает из пилота, шаги и статус |
 | [docs/architecture/c4.png](docs/architecture/c4.png) | C4-схема: контекст и контейнеры |
 | [docs/research/reports/](docs/research/reports/) | Обзор мира: open source и коммерческие инструменты, бенчмарки, форматы обмена, пакеты стандартов, UX, дистрибуция |
 | [docs/research/research_notes/](docs/research/research_notes/) | Исходные заметки исследования со ссылками |

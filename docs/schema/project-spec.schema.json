@@ -1,0 +1,681 @@
+{
+  "$defs": {
+    "Assumption": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "title": "Text"
+        },
+        "topic": {
+          "default": "общее",
+          "title": "Topic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ],
+      "title": "Assumption",
+      "type": "object"
+    },
+    "Cylinder": {
+      "description": "Цилиндр по центру и оси — опорное тело интерфейса (вал, ось, труба соседнего узла).",
+      "properties": {
+        "center": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Center",
+          "type": "array"
+        },
+        "axis": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Axis",
+          "type": "array"
+        },
+        "diameter": {
+          "title": "Diameter",
+          "type": "number"
+        },
+        "length": {
+          "title": "Length",
+          "type": "number"
+        }
+      },
+      "required": [
+        "center",
+        "axis",
+        "diameter",
+        "length"
+      ],
+      "title": "Cylinder",
+      "type": "object"
+    },
+    "Datum": {
+      "description": "Базовый элемент скелета: плоскость (origin + normal), ось (origin + direction) или точка.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "plane",
+            "axis",
+            "point"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "origin": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Origin",
+          "type": "array"
+        },
+        "direction": {
+          "anyOf": [
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Direction"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "default": "",
+          "title": "Name"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "origin"
+      ],
+      "title": "Datum",
+      "type": "object"
+    },
+    "Envelope": {
+      "description": "Допустимый (keep_in) или запретный (keep_out) объём — в M0 только боксы.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "keep_in",
+            "keep_out"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "min": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Min",
+          "type": "array"
+        },
+        "max": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Max",
+          "type": "array"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "default": "",
+          "title": "Name"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "min",
+        "max"
+      ],
+      "title": "Envelope",
+      "type": "object"
+    },
+    "Interface": {
+      "description": "Посадочное место к соседнему узлу: что приходит снаружи (стена, вал, фланец) и с какой нагрузкой.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "default": "",
+          "title": "Name"
+        },
+        "datum": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Datum"
+        },
+        "body": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cylinder"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "params": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "default": {},
+          "title": "Params",
+          "type": "object"
+        },
+        "loads": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Loads",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "Interface",
+      "type": "object"
+    },
+    "Requirements": {
+      "properties": {
+        "purpose": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "default": "",
+          "title": "Purpose"
+        },
+        "loads": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Loads",
+          "type": "object"
+        },
+        "factors": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Factors",
+          "type": "object"
+        },
+        "safety_required": {
+          "default": 1.5,
+          "title": "Safety Required",
+          "type": "number"
+        },
+        "environment": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "default": {},
+          "title": "Environment",
+          "type": "object"
+        },
+        "constraints": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "default": {},
+          "title": "Constraints",
+          "type": "object"
+        },
+        "standards": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Standards",
+          "type": "array"
+        }
+      },
+      "title": "Requirements",
+      "type": "object"
+    },
+    "Skeleton": {
+      "properties": {
+        "datums": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Datum"
+          },
+          "title": "Datums",
+          "type": "array"
+        },
+        "envelopes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Envelope"
+          },
+          "title": "Envelopes",
+          "type": "array"
+        },
+        "interfaces": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Interface"
+          },
+          "title": "Interfaces",
+          "type": "array"
+        }
+      },
+      "title": "Skeleton",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      ],
+      "title": "Title"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      ],
+      "default": "",
+      "title": "Description"
+    },
+    "lang": {
+      "default": "ru",
+      "title": "Lang",
+      "type": "string"
+    },
+    "coordinate_system": {
+      "default": "",
+      "title": "Coordinate System",
+      "type": "string"
+    },
+    "standards": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Standards",
+      "type": "array"
+    },
+    "tables": {
+      "additionalProperties": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "default": {},
+      "title": "Tables",
+      "type": "object"
+    },
+    "generator": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Generator"
+    },
+    "plugins": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Plugins",
+      "type": "array"
+    },
+    "requirements": {
+      "$ref": "#/$defs/Requirements",
+      "default": {
+        "purpose": "",
+        "loads": {},
+        "factors": {},
+        "safety_required": 1.5,
+        "environment": {},
+        "constraints": {},
+        "standards": []
+      }
+    },
+    "skeleton": {
+      "$ref": "#/$defs/Skeleton",
+      "default": {
+        "datums": [],
+        "envelopes": [],
+        "interfaces": []
+      }
+    },
+    "assumptions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Assumption"
+      },
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "params": {
+      "additionalProperties": true,
+      "default": {},
+      "title": "Params",
+      "type": "object"
+    }
+  },
+  "required": [
+    "id",
+    "title"
+  ],
+  "title": "ProjectSpec",
+  "type": "object"
+}

@@ -1,0 +1,5 @@
+# Крепёж, мм. Гайки ГОСТ 5915-70, шайбы ГОСТ 11371-78 (исп. 1), отверстия ГОСТ 11284-75 (2-й ряд).
+# socket_od — наружный диаметр торцевой головки под ключ (типовой, для проверки доступа).
+M12: {d: 12, pitch: 1.75, As: 84.3,  hole: 14, nut_s: 18, nut_e: 19.85, nut_m: 10, washer_d: 24, washer_s: 2.5, socket_od: 26}
+M16: {d: 16, pitch: 2.0,  As: 157.0, hole: 18, nut_s: 24, nut_e: 26.17, nut_m: 13, washer_d: 30, washer_s: 3.0, socket_od: 34}
+M20: {d: 20, pitch: 2.5,  As: 245.0, hole: 22, nut_s: 30, nut_e: 32.95, nut_m: 16, washer_d: 37, washer_s: 3.0, socket_od: 40}

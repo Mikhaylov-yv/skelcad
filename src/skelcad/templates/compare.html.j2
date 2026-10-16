@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ project_title }} — сравнение вариантов</title>
+<link rel="icon" href="data:,">
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--ink:#1d2329;--mut:#66707a;--line:#dfe2e5;--acc:#1f6fb2;--ok:#2f8a4c;--warn:#b7791f;--err:#c0392b;--chip:#eef1f4;--hl:#e8f3ea}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15181b;--card:#1d2125;--ink:#e6e8ea;--mut:#98a1aa;--line:#30363c;--acc:#5aa6e6;--ok:#58c27d;--warn:#e0a84a;--err:#ec6f5f;--chip:#262b31;--hl:#1f3326}}
+:root[data-theme=dark]{--bg:#15181b;--card:#1d2125;--ink:#e6e8ea;--mut:#98a1aa;--line:#30363c;--acc:#5aa6e6;--ok:#58c27d;--warn:#e0a84a;--err:#ec6f5f;--chip:#262b31;--hl:#1f3326}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1280px;margin:0 auto;padding:24px 16px 80px}
+h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:32px 0 12px}h3{font-size:16px;margin:0}
+.mut{color:var(--mut)}.small{font-size:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+table{border-collapse:collapse;width:100%}th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:600;color:var(--mut);font-size:12px}
+.scroll{overflow-x:auto}
+td.best{background:var(--hl);font-weight:600}
+.k{font-variant-numeric:tabular-nums;font-weight:600}.k.ok{color:var(--ok)}.k.warn{color:var(--warn)}.k.err{color:var(--err)}
+.chip{display:inline-block;padding:1px 8px;border-radius:10px;background:var(--chip);font-size:12px;margin-right:4px}
+.lv-error{color:var(--err)}.lv-warning{color:var(--warn)}.lv-info{color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px}
+.viewer{position:relative;height:340px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:linear-gradient(#fafbfc,#e9edf1)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .viewer{background:linear-gradient(#262b31,#191c20)}}
+.viewer canvas{display:block;width:100%;height:100%}
+.vbtn{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+button,.btn{font:inherit;font-size:13px;padding:4px 10px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);cursor:pointer;text-decoration:none;display:inline-block}
+button:hover,.btn:hover{border-color:var(--acc);color:var(--acc)}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+details{border-top:1px solid var(--line);padding:8px 0}summary{cursor:pointer;font-weight:600}
+.eskd{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.eskd figure{margin:0;border:1px solid var(--line);border-radius:6px;padding:4px;background:#fff}
+.eskd img{width:100%;height:200px;object-fit:contain}
+.eskd figcaption{font-size:11px;color:#555;text-align:center}
+.formula{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--mut)}
+.approve label{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px dashed var(--line)}
+.approve select{font:inherit;font-size:12px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--ink)}
+.approve input[type=text],textarea{font:inherit;width:100%;border:1px solid var(--line);border-radius:6px;padding:6px;background:var(--card);color:var(--ink)}
+.pick{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0}
+.pick label{border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer}
+.pick input:checked+span{font-weight:700;color:var(--acc)}
+.hint{position:absolute;right:8px;bottom:6px;font-size:11px;color:var(--mut)}
+</style>
+</head>
+<body>
+<main>
+<h1>{{ project_title }}</h1>
+<div class="mut">SkelCAD · сгенерировано {{ generated }} · {{ reports|length }} варианта ·
+  все величины получены из проектной модели (<code>project.yaml</code>, <code>variants/*.yaml</code>)
+  {%- if standards %} · стандарты: {{ standards|join(", ") }}{% endif %}</div>
+
+<div class="card" style="margin-top:16px">
+  <b>Исходные данные (приняты агентом, требуют согласования):</b>
+  {%- set req = reports[0].requirements %}
+  {%- if req.purpose %} {{ req.purpose }}.{% endif %}
+  {%- if req.loads %} Нагрузки: {% for k, v in req.loads.items() %}{{ k }} = {{ v|num }} кН{{ ", " if not loop.last }}{% endfor %};{% endif %}
+  {%- if req.factors %} коэффициенты: {% for k, v in req.factors.items() %}{{ k }} = {{ v|num }}{{ ", " if not loop.last }}{% endfor %};{% endif %}
+  требуемый запас K ≥ {{ req.safety_required|num }}.
+  {%- for k, v in req.environment.items() %} {{ k }}: {{ v }}.{% endfor %}
+  Расчёт оценочный, это не замена проверочному расчёту.
+</div>
+
+<h2>1. Сравнение вариантов</h2>
+<div class="card scroll">
+<table>
+  <tr><th></th>{% for r in reports %}<th><a href="#{{ r.variant }}">{{ r.title }}</a></th>{% endfor %}</tr>
+  {% for m in metrics %}
+  <tr><td>{{ m.title }}</td>{% for v in m["values"] %}<td class="{{ 'best' if loop.index0 in m.best }}">{{ v|num }}</td>{% endfor %}</tr>
+  {% endfor %}
+  <tr><td>Замечания: ошибки / предупреждения / инфо</td>{% for r in reports %}{% set f = r.summary.findings %}
+    <td><span class="lv-error">{{ f.error }}</span> / <span class="lv-warning">{{ f.warning }}</span> / <span class="lv-info">{{ f.info }}</span></td>{% endfor %}</tr>
+  <tr><th colspan="{{ reports|length + 1 }}">Запасы K = предельное / действующее (зелёный ≥ K_треб, жёлтый 1…K_треб, красный &lt; 1)</th></tr>
+  {% for row in calc_rows %}
+  <tr><td>{{ row.title }}</td>{% for c in row.cells %}
+    <td>{% if c %}<span class="k {{ 'ok' if c.K >= c.K_req else ('warn' if c.K >= 1 else 'err') }}">{{ '%.2f'|format(c.K) }}</span>
+      <span class="mut small">{{ c.demand|num }} / {{ c.capacity|num }} {{ c.unit }}</span>{% else %}<span class="mut">—</span>{% endif %}</td>{% endfor %}</tr>
+  {% endfor %}
+  <tr><td>Скачать</td>{% for r in reports %}<td>
+    <a class="btn primary" href="{{ r.files.assembly_step }}" download>STEP сборки</a>
+    <a class="btn" href="{{ r.files.gltf }}" download>glTF</a>
+    <a class="btn" href="{{ r.files.manifest }}" download>manifest.json</a></td>{% endfor %}</tr>
+</table>
+</div>
+
+<h2>2. Согласование</h2>
+<div class="card approve" id="approve">
+  <div><b>Выбор варианта для доработки</b></div>
+  <div class="pick">
+    {% for r in reports %}<label><input type="radio" name="variant" value="{{ r.variant }}"> <span>{{ r.title }}</span></label>{% endfor %}
+    <label><input type="radio" name="variant" value="none"> <span>Ни один, нужен другой</span></label>
+  </div>
+  <div style="margin:12px 0 4px"><b>Общие допущения</b> <span class="mut small">отметьте статус и при необходимости напишите правку</span></div>
+  {% for a in common %}
+  <label><select data-a="{{ a.id }}"><option value="">—</option><option value="ok">согласовано</option><option value="change">изменить</option></select>
+    <span style="flex:1"><span class="chip">{{ a.id }}</span>{{ a.text }}
+    <input type="text" data-c="{{ a.id }}" placeholder="правка / комментарий" style="margin-top:4px"></span></label>
+  {% endfor %}
+  <div style="margin:12px 0 4px"><b>Общий комментарий</b></div>
+  <textarea id="note" rows="3" placeholder="например: нагрузка 35 кН, анкеры М20, вылет 250"></textarea>
+  <div class="vbtn" style="margin-top:12px">
+    <button class="btn primary" id="dl">Скачать decisions.json</button>
+    <button id="copy">Скопировать текстом для чата</button>
+    <span class="mut small" id="saved">ответы сохраняются в этом браузере</span>
+  </div>
+</div>
+
+<h2>3. Варианты</h2>
+{% for r in reports %}
+<div class="card" id="{{ r.variant }}">
+  <h3>{{ r.title }}</h3>
+  <div class="mut">{{ r.description }}</div>
+  <div class="grid" style="margin-top:12px">
+    <div>
+      <div class="viewer" data-v="{{ loop.index0 }}"><span class="hint">ЛКМ вращать · колесо масштаб · ПКМ сдвиг</span></div>
+      <div class="vbtn">
+        <button data-view="main" data-v="{{ loop.index0 }}">Главный (вдоль оси)</button>
+        <button data-view="left" data-v="{{ loop.index0 }}">Слева (от помещения)</button>
+        <button data-view="top" data-v="{{ loop.index0 }}">Сверху</button>
+        <button data-view="iso" data-v="{{ loop.index0 }}">Изометрия</button>
+      </div>
+    </div>
+    <div>
+      <div class="mut small">Проекции по ЕСКД: главный вид, справа — вид слева, снизу — вид сверху. Штрих — невидимые линии.</div>
+      <div class="eskd">
+        <figure><img src="{{ r.files.svg.main }}" alt="Главный вид"><figcaption>Главный вид</figcaption></figure>
+        <figure><img src="{{ r.files.svg.left }}" alt="Вид слева"><figcaption>Вид слева</figcaption></figure>
+        <figure><img src="{{ r.files.svg.top }}" alt="Вид сверху"><figcaption>Вид сверху</figcaption></figure>
+      </div>
+    </div>
+  </div>
+
+  <details {% if r.summary.findings.error or r.summary.findings.warning %}open{% endif %}>
+    <summary>Замечания: <span class="lv-error">{{ r.summary.findings.error }} ошибок</span>,
+      <span class="lv-warning">{{ r.summary.findings.warning }} предупреждений</span>,
+      <span class="lv-info">{{ r.summary.findings.info }} инфо</span></summary>
+    <table>
+      <tr><th>Уровень</th><th>Код</th><th>Элемент</th><th>Сообщение</th><th>Источник</th></tr>
+      {% for f in r.findings if f.level != 'info' %}
+      <tr><td class="lv-{{ f.level }}">{{ level_ru[f.level] }}</td><td><code>{{ f.code }}</code></td>
+        <td><code class="small">{{ f.ref }}</code></td><td>{{ f.message }}</td><td class="small">{{ f.source }}</td></tr>
+      {% else %}<tr><td colspan="5" class="lv-info">Ошибок и предупреждений нет</td></tr>
+      {% endfor %}
+    </table>
+    <details style="margin-left:12px"><summary class="mut">Информационные сообщения ({{ r.summary.findings.info }}) — что проверено и с каким результатом</summary>
+    <table>
+      {% for f in r.findings if f.level == 'info' %}
+      <tr class="mut"><td><code>{{ f.code }}</code></td><td><code class="small">{{ f.ref }}</code></td><td>{{ f.message }}</td><td class="small">{{ f.source }}</td></tr>
+      {% endfor %}
+    </table>
+    </details>
+  </details>
+
+  <details>
+    <summary>Расчётная оценка (формулы и промежуточные величины)</summary>
+    <table>
+      <tr><th>Проверка</th><th>Формула</th><th>Величины</th><th>K</th></tr>
+      {% for c in r.calc %}
+      <tr><td>{{ c.title }}</td><td class="formula">{{ c.formula }}</td>
+        <td class="small">{% for k, v in c["values"].items() %}{{ k }} = {{ v|num }}<br>{% endfor %}
+          действ. {{ c.demand|num }} / пред. {{ c.capacity|num }} {{ c.unit }}</td>
+        <td><span class="k {{ 'ok' if c.K >= c.K_req else ('warn' if c.K >= 1 else 'err') }}">{{ '%.2f'|format(c.K) }}</span></td></tr>
+      {% endfor %}
+    </table>
+  </details>
+
+  <details>
+    <summary>Допущения варианта и вычисленные параметры</summary>
+    <ul>{% for a in r.assumptions if not a.id.startswith('G') %}<li><span class="chip">{{ a.id }}</span>{{ a.text }}</li>{% endfor %}</ul>
+    <table>{% for k, v in r.derived.items() %}<tr><td>{{ k }}</td><td>{{ v|num }}</td></tr>{% endfor %}</table>
+  </details>
+
+  <details>
+    <summary>Детали и швы ({{ r.parts|length }} деталей, {{ r.welds|length }} швов)</summary>
+    <table>
+      <tr><th>Деталь</th><th>Роль</th><th>Масса, кг</th><th>STEP</th></tr>
+      {% for p in r.parts %}<tr><td>{{ p.name }}</td><td><code>{{ p.role }}</code></td><td>{{ p.mass_kg }}</td>
+        <td><a href="{{ r.files.parts_step[p.id] }}" download>{{ p.id }}.step</a> · <a href="{{ r.files.parts_stl[p.id] }}" download>stl</a></td></tr>{% endfor %}
+    </table>
+    <table style="margin-top:8px">
+      <tr><th>Шов</th><th>Соединяет</th><th>Катет</th><th>Длина, мм</th><th>Примечание</th></tr>
+      {% for w in r.welds %}<tr><td><code>{{ w.id }}</code></td><td>{{ w.parts|join(' + ') }}</td><td>{{ w.leg|num }}</td><td>{{ w.length }}</td><td>{{ w.note }}</td></tr>{% endfor %}
+    </table>
+  </details>
+</div>
+{% endfor %}
+</main>
+
+<script type="application/json" id="data">{{ data_json|safe }}</script>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from "three";
+import {OrbitControls} from "three/addons/controls/OrbitControls.js";
+import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js";
+
+const DATA = JSON.parse(document.getElementById("data").textContent);
+const viewers = [];
+
+// glTF: Y-up. Глобальные оси модели: X -> X, Z(вверх) -> Y, Y(от стены) -> -Z.
+const VIEWS = {
+  main: {dir: [-1, 0, 0], up: [0, 1, 0]},
+  left: {dir: [0, 0, -1], up: [0, 1, 0]},
+  top:  {dir: [0, 1, 0],  up: [0, 0, -1]},
+  iso:  {dir: [-1, 0.8, -1.1], up: [0, 1, 0]},
+};
+
+function makeViewer(el, v) {
+  const renderer = new THREE.WebGLRenderer({antialias: true, alpha: true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  el.prepend(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 1.6));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(-1, 2, -1.5); scene.add(sun);
+  const cam = new THREE.PerspectiveCamera(30, 1, 0.001, 100);
+  const ctl = new OrbitControls(cam, renderer.domElement);
+  const st = {renderer, scene, cam, ctl, el, center: new THREE.Vector3(), radius: 0.3};
+  const render = () => renderer.render(scene, cam);
+  ctl.addEventListener("change", render);
+  renderer.domElement.addEventListener("webglcontextrestored", () => render());
+  st.render = render;
+  new ResizeObserver(() => {
+    const w = el.clientWidth, h = el.clientHeight;
+    renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); render();
+  }).observe(el);
+  new GLTFLoader().load(v.glb, (g) => {
+    const root = g.scene;
+    root.traverse(o => {
+      if (o.isMesh) {
+        o.material = o.material.clone(); o.material.side = THREE.DoubleSide; o.material.metalness = 0.2; o.material.roughness = 0.6;
+        const e = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, 25),
+          new THREE.LineBasicMaterial({color: 0x222222, transparent: true, opacity: 0.45}));
+        o.add(e);
+      }
+    });
+    scene.add(root);
+    const box = new THREE.Box3().setFromObject(root);
+    box.getCenter(st.center);
+    st.radius = box.getSize(new THREE.Vector3()).length() / 2;
+    // стена: плоскость Y=0 модели (z=0 в glTF), полупрозрачная
+    const s = box.getSize(new THREE.Vector3());
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(s.x * 2.2, s.y * 1.6),
+      new THREE.MeshBasicMaterial({color: 0x9aa3ab, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false}));
+    wall.position.set(st.center.x, st.center.y, 0.0001);
+    scene.add(wall);
+    setView(st, "iso");
+  }, undefined, (e) => { el.insertAdjacentHTML("beforeend", `<div style="padding:16px">Не удалось загрузить ${v.glb}: откройте страницу через http-сервер</div>`); });
+  return st;
+}
+
+function setView(st, name) {
+  const p = VIEWS[name];
+  const d = new THREE.Vector3(...p.dir).normalize().multiplyScalar(st.radius / Math.sin(THREE.MathUtils.degToRad(15)) * 1.05);
+  st.cam.position.copy(st.center).add(d);
+  st.cam.up.set(...p.up);
+  st.ctl.target.copy(st.center);
+  st.cam.lookAt(st.center);
+  st.ctl.update();
+  st.render();
+}
+
+document.querySelectorAll(".viewer").forEach(el => viewers[+el.dataset.v] = makeViewer(el, DATA.variants[+el.dataset.v]));
+document.querySelectorAll("button[data-view]").forEach(b => b.onclick = () => setView(viewers[+b.dataset.v], b.dataset.view));
+
+// ---- согласование: сохраняем в localStorage, выгружаем JSON / текст ----
+const KEY = "bracket-pilot-decisions";
+const root = document.getElementById("approve");
+function collect() {
+  const d = {variant: root.querySelector("input[name=variant]:checked")?.value || null, assumptions: {}, note: document.getElementById("note").value};
+  root.querySelectorAll("select[data-a]").forEach(s => {
+    const c = root.querySelector(`input[data-c="${s.dataset.a}"]`).value;
+    if (s.value || c) d.assumptions[s.dataset.a] = {status: s.value || null, comment: c};
+  });
+  d.saved_at = new Date().toISOString();
+  return d;
+}
+function restore() {
+  let d; try { d = JSON.parse(localStorage.getItem(KEY) || "null"); } catch { d = null; }
+  if (!d) return;
+  if (d.variant) { const r = root.querySelector(`input[name=variant][value="${d.variant}"]`); if (r) r.checked = true; }
+  for (const [id, a] of Object.entries(d.assumptions || {})) {
+    const s = root.querySelector(`select[data-a="${id}"]`); if (s) s.value = a.status || "";
+    const c = root.querySelector(`input[data-c="${id}"]`); if (c) c.value = a.comment || "";
+  }
+  document.getElementById("note").value = d.note || "";
+}
+root.addEventListener("input", () => { try { localStorage.setItem(KEY, JSON.stringify(collect())); document.getElementById("saved").textContent = "сохранено в браузере"; } catch {} });
+document.getElementById("dl").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(collect(), null, 2)], {type: "application/json"}));
+  a.download = "decisions.json"; a.click();
+};
+document.getElementById("copy").onclick = async () => {
+  const d = collect();
+  const lines = [`Вариант: ${d.variant || "не выбран"}`];
+  for (const [id, a] of Object.entries(d.assumptions)) lines.push(`${id}: ${a.status === "ok" ? "согласовано" : a.status === "change" ? "изменить" : "—"}${a.comment ? " — " + a.comment : ""}`);
+  if (d.note) lines.push(`Комментарий: ${d.note}`);
+  try { await navigator.clipboard.writeText(lines.join("\n")); document.getElementById("saved").textContent = "скопировано"; }
+  catch { prompt("Скопируйте текст:", lines.join("\n")); }
+};
+restore();
+</script>
+</body>
+</html>

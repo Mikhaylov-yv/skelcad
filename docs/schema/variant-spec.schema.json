@@ -1,0 +1,57 @@
+{
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      ],
+      "default": "",
+      "title": "Title"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      ],
+      "default": "",
+      "title": "Description"
+    },
+    "params": {
+      "additionalProperties": true,
+      "default": {},
+      "title": "Params",
+      "type": "object"
+    },
+    "assumptions": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Assumptions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "title": "VariantSpec",
+  "type": "object"
+}
