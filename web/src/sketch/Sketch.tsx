@@ -19,23 +19,18 @@ export interface SketchProps {
   fitNonce?: number; // «Вписать»
   onPick?: (ref: string | null, point?: [number, number, number]) => void;
   onHover?: (ref: string | null) => void;
+  viewBox?: number[]; // общий viewBox (сравнение в одном масштабе, наложение)
+  className?: string;
 }
 
 /** Точка модели → координаты вида (u, v): u = знак·координата по оси вида. */
-export function toView(
-  view: LayoutView,
-  p: [number, number, number],
-): [number, number] {
+export function toView(view: LayoutView, p: [number, number, number]): [number, number] {
   const idx = (axis: string) => "XYZ".indexOf(axis);
   return [view.u[1] * p[idx(view.u[0])], view.v[1] * p[idx(view.v[0])]];
 }
 
 /** Координаты вида → точка модели; координата вдоль взгляда — centre сцены (depth). */
-export function fromView(
-  view: LayoutView,
-  u: number,
-  v: number,
-): [number, number, number] {
+export function fromView(view: LayoutView, u: number, v: number): [number, number, number] {
   const out: [number, number, number] = [0, 0, 0];
   const idx = (axis: string) => "XYZ".indexOf(axis);
   out[idx(view.u[0])] = u / view.u[1];
@@ -53,6 +48,8 @@ export function Sketch({
   fitNonce,
   onPick,
   onHover,
+  viewBox,
+  className,
 }: SketchProps) {
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,17 +77,20 @@ export function Sketch({
   }, [url]);
   useEffect(() => setTf({ x: 0, y: 0, k: 1 }), [fitNonce, url]);
 
+  // общий viewBox: одинаковый масштаб и начало координат у нескольких эскизов
+  useEffect(() => {
+    const root = host.current?.querySelector("svg");
+    if (!root || !svg) return;
+    if (viewBox && viewBox.length === 4) root.setAttribute("viewBox", viewBox.join(" "));
+  }, [svg, viewBox]);
+
   // подсветка выбранных сущностей
   useEffect(() => {
     const root = host.current;
     if (!root || !svg) return;
-    root
-      .querySelectorAll("[data-ref].selected")
-      .forEach((el) => el.classList.remove("selected"));
+    root.querySelectorAll("[data-ref].selected").forEach((el) => el.classList.remove("selected"));
     for (const ref of selected) {
-      root
-        .querySelectorAll(`[data-ref="${CSS.escape(ref)}"]`)
-        .forEach((el) => el.classList.add("selected"));
+      root.querySelectorAll(`[data-ref="${CSS.escape(ref)}"]`).forEach((el) => el.classList.add("selected"));
     }
   }, [selected, svg]);
 
@@ -107,10 +107,7 @@ export function Sketch({
     g.setAttribute("class", "pins");
     for (const p of pins) {
       const [u, v] = toView(view, p.point);
-      const c = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "circle",
-      );
+      const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       c.setAttribute("cx", String(u));
       c.setAttribute("cy", String(-v));
       c.setAttribute("r", String(r));
@@ -128,9 +125,7 @@ export function Sketch({
   }, [pinKey, pins, svg, view]);
 
   const refAt = (target: EventTarget | null): string | null => {
-    const el = (target as Element | null)?.closest?.(
-      "[data-ref]",
-    ) as Element | null;
+    const el = (target as Element | null)?.closest?.("[data-ref]") as Element | null;
     return el?.getAttribute("data-ref") ?? null;
   };
 
@@ -141,10 +136,7 @@ export function Sketch({
     const mx = e.clientX - box.left;
     const my = e.clientY - box.top;
     setTf((t) => {
-      const k = Math.min(
-        20,
-        Math.max(0.2, t.k * (e.deltaY < 0 ? 1.15 : 1 / 1.15)),
-      );
+      const k = Math.min(20, Math.max(0.2, t.k * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
       // масштаб вокруг курсора
       return {
         k,
@@ -183,9 +175,7 @@ export function Sketch({
     if (svgEl) {
       const ctm = svgEl.getScreenCTM?.();
       if (ctm) {
-        const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(
-          ctm.inverse(),
-        );
+        const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
         point = fromView(view, pt.x, -pt.y);
       }
     }
@@ -194,7 +184,7 @@ export function Sketch({
 
   return (
     <div
-      className={"sketch" + (pinMode ? " sketch--pinning" : "")}
+      className={"sketch" + (pinMode ? " sketch--pinning" : "") + (className ? " " + className : "")}
       ref={host}
       onWheel={onWheel}
       onPointerDown={onDown}
@@ -210,9 +200,7 @@ export function Sketch({
           {error}
         </p>
       )}
-      {!svg && !error && (
-        <p className="canvas__note muted">{S.layout.loading}</p>
-      )}
+      {!svg && !error && <p className="canvas__note muted">{S.layout.loading}</p>}
       {svg && (
         <div
           className="sketch__inner"

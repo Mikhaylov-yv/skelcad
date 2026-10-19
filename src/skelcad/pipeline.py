@@ -12,6 +12,7 @@ from skelcad.core.model import PlatePart, Project, text
 from skelcad.core.project import ProjectDir, save_model
 from skelcad.geom.export import export_all
 from skelcad.geom.generator import Geometry, generate
+from skelcad.geom.sketch import write_sketch
 from skelcad.geom.views import write_views
 from skelcad.rules import Metric, PluginSet, run_calcs, run_checks, run_metrics, run_rules
 
@@ -89,6 +90,13 @@ def build_variant(
     if export:
         files = export_all(m, g, pd.ctx, out)
         files["svg"] = {k: f"{name}/{v}" for k, v in write_views(g.assembly(m, with_purchased=True), out, name).items()}
+        try:
+            sk = write_sketch(m, g, out, name)
+            files["sketch"] = {k: f"{name}/{v['svg']}" for k, v in sk["views"].items()}
+            files["sketch_json"] = f"{name}/{name}_sketch.json"
+        except Exception as e:  # noqa: BLE001 — эскиз не должен валить сборку; причина — в замечаниях
+            msg = f"эскиз не построен: {e}"
+            findings.append(Finding(level="info", code="SKETCH", ref="assembly", source="pipeline", message=msg))
     else:
         files = previous_files(out) or files
 

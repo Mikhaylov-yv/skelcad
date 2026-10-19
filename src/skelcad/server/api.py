@@ -81,7 +81,15 @@ def variant_report(ws: Workspace, out_dir: Path, project: str, variant: str) -> 
         "glb": base + files["gltf"] if files.get("gltf") else None,
         "step": base + files["assembly_step"] if files.get("assembly_step") else None,
         "svg": {k: base + v for k, v in (files.get("svg") or {}).items()},
+        "sketch": {k: base + v for k, v in (files.get("sketch") or {}).items()},
     }
+    r["sketch"] = None
+    sj = out_dir / project / files["sketch_json"] if files.get("sketch_json") else None
+    if sj and sj.is_file():
+        try:
+            r["sketch"] = json.loads(sj.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            r["sketch"] = None
     r["built_at"] = datetime.fromtimestamp(rep.stat().st_mtime, tz=UTC).isoformat(timespec="seconds")
     # геометрия может быть старше отчёта: сборка без экспорта (build export=False) переносит ссылки прошлой сборки
     glb = out_dir / project / files["gltf"] if files.get("gltf") else None
@@ -227,25 +235,80 @@ def commit_model(srv, project: str, commit: str, variant: str) -> dict:
 
 
 def compare(tools, out_dir: Path, project: str, variants: list[str] | None = None) -> dict:
-    """Таблица метрик по вариантам (как инструмент compare) + числа и ссылки на GLB каждого варианта."""
+    """Таблица метрик по вариантам (как инструмент compare) + числа, ссылки на GLB и эскизы каждого варианта,
+    строки различающихся размеров (из <v>_sketch.json) и параметров вариантов."""
+    from skelcad.server import params as P
+
     res = tools.compare(project, variants)
     ws = tools.ws
+    spec = ws.spec(project)
     cols = []
+    dims_by: dict[str, dict[str, dict]] = {}
+    params_by: dict[str, dict[str, object]] = {}
     for v in res["variants"]:
         item = variant_overview(out_dir, project, {"id": v, "title": ""})
         rep = out_dir / project / v / "report.json"
         glb = None
+        sketch_urls: dict[str, str] = {}
+        sketch_views: dict = {}
         if rep.is_file():
             r = json.loads(rep.read_text(encoding="utf-8"))
             item["title"] = r.get("title", "")
             files = r.get("files") or {}
             glb = f"/out/{project}/{files['gltf']}" if files.get("gltf") else None
+            sketch_urls = {k: f"/out/{project}/{p}" for k, p in (files.get("sketch") or {}).items()}
+            sj = out_dir / project / files["sketch_json"] if files.get("sketch_json") else None
+            if sj and sj.is_file():
+                try:
+                    sk = json.loads(sj.read_text(encoding="utf-8"))
+                    sketch_views = sk.get("views") or {}
+                    dims_by[v] = {d["id"]: d for d in sk.get("dims") or [] if d.get("value") is not None}
+                except (OSError, ValueError):
+                    pass
         item["glb"] = glb
+        item["sketch"] = sketch_urls
+        item["sketch_views"] = sketch_views
+        try:
+            vspec = next((x for x in ws.variants(project) if x["id"] == v), None)
+            vparams = yaml.safe_load((ws.path(project) / vspec["file"]).read_text(encoding="utf-8")) if vspec else {}
+            params_by[v] = {
+                f["path"]: f["value"] for f in P.fields(spec.get("params") or {}, (vparams or {}).get("params") or {})
+            }
+        except (OSError, ValueError, TypeError):
+            params_by[v] = {}
         cols.append(item)
     titles = {v["id"]: v.get("title", "") for v in ws.variants(project)}
     for c in cols:
         c["title"] = c["title"] or titles.get(c["id"], "")
-    return {"summary": res["summary"], "variants": cols, "rows": res["rows"]}
+    names = [c["id"] for c in cols]
+    # размеры: один id в двух и более вариантах с разными значениями
+    dim_rows = []
+    ids = list(dict.fromkeys(i for d in dims_by.values() for i in d))
+    for did in ids:
+        vals = {v: dims_by[v][did] for v in names if v in dims_by and did in dims_by[v]}
+        if len(vals) < 2 or len({round(float(x["value"]), 2) for x in vals.values()}) < 2:
+            continue
+        first = next(iter(vals.values()))
+        dim_rows.append(
+            {
+                "id": did,
+                "axis": first.get("axis", ""),
+                "views": sorted({x["view"] for x in vals.values()}),
+                "values": {v: (vals[v]["text"] if v in vals else None) for v in names},
+            }
+        )
+    param_rows = []
+    for path in dict.fromkeys(k for d in params_by.values() for k in d):
+        vals = {v: params_by.get(v, {}).get(path) for v in names}
+        if len({json.dumps(x, sort_keys=True, ensure_ascii=False) for x in vals.values()}) > 1:
+            param_rows.append({"path": path, "values": vals})
+    return {
+        "summary": res["summary"],
+        "variants": cols,
+        "rows": res["rows"],
+        "dim_rows": dim_rows,
+        "param_rows": param_rows,
+    }
 
 
 # ---------------------------------------------------------------- параметры варианта (форма, черновик, сохранение)

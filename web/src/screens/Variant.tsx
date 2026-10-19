@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import {
-  api,
-  ApiError,
-  type LayoutResponse,
-  type Report,
-  type ReviewItem,
-} from "../api";
+import { api, ApiError, type LayoutResponse, type Report, type ReviewItem } from "../api";
 import { S } from "../strings";
 import { NumbersRow } from "../ui/NumbersRow";
 import { Findings } from "../ui/Findings";
@@ -17,6 +11,7 @@ import { indexNodes, nodesForRef } from "../three/refs";
 import { useProjectState } from "../ui/useProjectState";
 import { AgentBanner } from "../ui/AgentBanner";
 import { ApprovalBox, LayoutPane, LayoutTree } from "../sketch/LayoutPane";
+import { Sketch } from "../sketch/Sketch";
 
 type State =
   | { kind: "loading" }
@@ -30,9 +25,7 @@ export function Variant() {
   const locked = pstate?.state === "agent";
   const [st, setSt] = useState<State>({ kind: "loading" });
   const [params, setParams] = useSearchParams();
-  const [selected, setSelected] = useState<string[]>(() =>
-    params.get("part") ? [params.get("part")!] : [],
-  );
+  const [selected, setSelected] = useState<string[]>(() => (params.get("part") ? [params.get("part")!] : []));
   const [activeRef, setActiveRef] = useState<string | null>(null);
   const [topLevel, setTopLevel] = useState<string[]>([]);
   const [dim, setDim] = useState(true);
@@ -49,21 +42,22 @@ export function Variant() {
   const [buildError, setBuildError] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
   // режим центрального окна: 3D или компоновка (эскиз по скелету и обстановке; работает и без сборки)
-  const mode: "3d" | "layout" =
-    !variant || params.get("mode") === "layout" ? "layout" : "3d";
-  const setMode = (m: "3d" | "layout") => {
+  type Mode = "3d" | "layout" | "sketch";
+  const modeParam = params.get("mode");
+  const mode: Mode = !variant ? "layout" : modeParam === "layout" || modeParam === "sketch" ? modeParam : "3d";
+  const setMode = (m: Mode) => {
     const p = new URLSearchParams(params);
-    if (m === "layout") p.set("mode", "layout");
-    else p.delete("mode");
+    if (m === "3d") p.delete("mode");
+    else p.set("mode", m);
     setParams(p, { replace: true });
   };
+  const [sketchView, setSketchView] = useState<"main" | "left" | "top">("main");
+  const [sketchFit, setSketchFit] = useState(0);
+  const [sketchHover, setSketchHover] = useState<string | null>(null);
   const [layout, setLayout] = useState<LayoutResponse | null>(null);
   const [layoutSel, setLayoutSel] = useState<string[]>([]);
   const [layoutNonce, setLayoutNonce] = useState(0);
-  const onLayoutData = useCallback(
-    (d: LayoutResponse | null) => setLayout(d),
-    [],
-  );
+  const onLayoutData = useCallback((d: LayoutResponse | null) => setLayout(d), []);
 
   const load = useCallback(() => {
     if (!variant) {
@@ -75,8 +69,7 @@ export function Variant() {
       .report(project, variant)
       .then((report) => setSt({ kind: "ok", report }))
       .catch((e: Error) => {
-        if (e instanceof ApiError && e.status === 404)
-          setSt({ kind: "notbuilt", message: e.message });
+        if (e instanceof ApiError && e.status === 404) setSt({ kind: "notbuilt", message: e.message });
         else setSt({ kind: "error", message: e.message });
       });
   }, [project, variant]);
@@ -86,10 +79,7 @@ export function Variant() {
     setBuildError(null);
     setBuilding(0);
     const t0 = Date.now();
-    timer.current = window.setInterval(
-      () => setBuilding(Math.round((Date.now() - t0) / 1000)),
-      1000,
-    );
+    timer.current = window.setInterval(() => setBuilding(Math.round((Date.now() - t0) / 1000)), 1000);
     api
       .build(project, variant)
       .then(() => load())
@@ -109,10 +99,7 @@ export function Variant() {
   }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const report = st.kind === "ok" ? st.report : null;
-  const idx = useMemo(
-    () => (report ? indexNodes(report, topLevel) : null),
-    [report, topLevel],
-  );
+  const idx = useMemo(() => (report ? indexNodes(report, topLevel) : null), [report, topLevel]);
 
   const pickRef = (ref: string) => {
     if (!report || !idx) return;
@@ -168,6 +155,32 @@ export function Variant() {
     },
     [pinMode],
   );
+  // эскиз варианта: клик по детали/крепежу выделяет узел (общее выделение с 3D и деревом), по размеру — его сущности
+  const onPartSketchPick = useCallback(
+    (ref: string | null, point?: [number, number, number]) => {
+      const idOf = (r: string) => r.split(":")[1].split("/")[0];
+      if (pinMode && point) {
+        setPinAt({ part: ref && /^(part|fastener):/.test(ref) ? idOf(ref) : null, point });
+        setPinMode(false);
+        return;
+      }
+      setActiveRef(null);
+      if (!ref) {
+        setSelected([]);
+        return;
+      }
+      if (ref.startsWith("dim:")) {
+        const dims = st.kind === "ok" ? (st.report.sketch?.dims ?? []) : [];
+        const dim = dims.find((d) => "dim:" + d.id === ref);
+        const ids = (dim?.refs ?? []).filter((r) => /^(part|fastener):/.test(r)).map(idOf);
+        setSelected(Array.from(new Set(ids)));
+        return;
+      }
+      if (/^(part|fastener):/.test(ref)) setSelected([idOf(ref)]);
+    },
+    [pinMode, st],
+  );
+  const sketchSelected = useMemo(() => selected.flatMap((id) => [`part:${id}`, `fastener:${id}`]), [selected]);
   const sendPin = () => {
     if (!pinText.trim()) {
       setPinErr(S.review.needText);
@@ -219,22 +232,15 @@ export function Variant() {
       : `${project}${tail}`;
   // геометрия старше отчёта больше чем на минуту — после сборки была ещё сборка без экспорта
   const geometryStale =
-    !!report?.urls.glb &&
-    !!report.geometry_at &&
-    Date.parse(report.built_at) - Date.parse(report.geometry_at) > 60_000;
+    !!report?.urls.glb && !!report.geometry_at && Date.parse(report.built_at) - Date.parse(report.geometry_at) > 60_000;
 
   return (
     <main className="variant">
       <header className="variant__head">
         <nav aria-label="Путь">
-          <Link to="/">{S.variant.back}</Link> <span className="muted">/</span>{" "}
-          <span className="mono">{project}</span>{" "}
+          <Link to="/">{S.variant.back}</Link> <span className="muted">/</span> <span className="mono">{project}</span>{" "}
           <span className="muted">/</span>{" "}
-          {variant ? (
-            <strong className="mono">{variant}</strong>
-          ) : (
-            <strong>{S.layout.title}</strong>
-          )}
+          {variant ? <strong className="mono">{variant}</strong> : <strong>{S.layout.title}</strong>}
         </nav>
         <h1>{title}</h1>
         {report && (
@@ -282,12 +288,18 @@ export function Variant() {
                     (v) =>
                       report.urls.svg[v] && (
                         <li key={v}>
-                          <a
-                            href={report.urls.svg[v]}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
+                          <a href={report.urls.svg[v]} target="_blank" rel="noreferrer">
                             {S.export.svg[v]}
+                          </a>
+                        </li>
+                      ),
+                  )}
+                  {(["main", "left", "top"] as const).map(
+                    (v) =>
+                      report.urls.sketch?.[v] && (
+                        <li key={"sk-" + v}>
+                          <a href={report.urls.sketch[v]} target="_blank" rel="noreferrer">
+                            {S.export.sketch[v]}
                           </a>
                         </li>
                       ),
@@ -310,16 +322,10 @@ export function Variant() {
             >
               {S.feed.tab}
             </Link>
-            <Link
-              className="small"
-              to={`/p/${encodeURIComponent(project)}/compare`}
-            >
+            <Link className="small" to={`/p/${encodeURIComponent(project)}/compare`}>
               {S.compare.tab}
             </Link>
-            <Link
-              className="small"
-              to={`/p/${encodeURIComponent(project)}/${encodeURIComponent(variant)}/params`}
-            >
+            <Link className="small" to={`/p/${encodeURIComponent(project)}/${encodeURIComponent(variant)}/params`}>
               {S.params.tab}
             </Link>
             <Link
@@ -332,11 +338,7 @@ export function Variant() {
         )}
         {variant && (
           <div className="variant__actions">
-            <button
-              onClick={build}
-              disabled={building !== null}
-              aria-busy={building !== null}
-            >
+            <button onClick={build} disabled={building !== null} aria-busy={building !== null}>
               {report ? S.variant.rebuild : S.variant.build}
             </button>
             {building !== null && (
@@ -354,9 +356,7 @@ export function Variant() {
       </header>
 
       <AgentBanner p={pstate} />
-      {st.kind === "loading" && (
-        <p className="muted page">{S.variant.loading}</p>
-      )}
+      {st.kind === "loading" && <p className="muted page">{S.variant.loading}</p>}
       {st.kind === "error" && (
         <div className="callout callout--error page" role="alert">
           <p>
@@ -374,17 +374,12 @@ export function Variant() {
 
       {(mode === "layout" || (report && idx)) && (
         <div className="variant__body">
-          <aside
-            className="pane pane--tree"
-            aria-label={mode === "layout" ? S.layout.entities : S.variant.tree}
-          >
+          <aside className="pane pane--tree" aria-label={mode === "layout" ? S.layout.entities : S.variant.tree}>
             {mode === "layout" ? (
               <LayoutTree
                 entities={layout?.entities ?? []}
                 selected={layoutSel}
-                onSelect={(r) =>
-                  setLayoutSel((cur) => (cur.includes(r) ? [] : [r]))
-                }
+                onSelect={(r) => setLayoutSel((cur) => (cur.includes(r) ? [] : [r]))}
               />
             ) : (
               report &&
@@ -395,18 +390,13 @@ export function Variant() {
                     {report.parts.map((p) => (
                       <li key={p.id}>
                         <button
-                          className={
-                            "tree__item" +
-                            (selected.includes(p.id) ? " selected" : "")
-                          }
+                          className={"tree__item" + (selected.includes(p.id) ? " selected" : "")}
                           onClick={() => toggleNode(p.id)}
                           aria-pressed={selected.includes(p.id)}
                         >
                           <span>{p.name || p.id}</span>
                           <span className="muted small">
-                            {p.mass_kg !== undefined
-                              ? `${fmtNum(p.mass_kg)} кг`
-                              : ""}
+                            {p.mass_kg !== undefined ? `${fmtNum(p.mass_kg)} кг` : ""}
                           </span>
                         </button>
                       </li>
@@ -418,19 +408,11 @@ export function Variant() {
                       <ul className="tree">
                         {report.welds.map((w) => (
                           <li key={w.id}>
-                            <button
-                              className="tree__item"
-                              onClick={() => pickRef("weld:" + w.id)}
-                              title={w.note}
-                            >
+                            <button className="tree__item" onClick={() => pickRef("weld:" + w.id)} title={w.note}>
                               <span className="mono">{w.id}</span>
                               <span className="muted small">
-                                {w.leg !== undefined
-                                  ? `к${fmtNum(w.leg)} · `
-                                  : ""}
-                                {w.length !== undefined
-                                  ? `${fmtNum(w.length)} мм`
-                                  : ""}
+                                {w.leg !== undefined ? `к${fmtNum(w.leg)} · ` : ""}
+                                {w.length !== undefined ? `${fmtNum(w.length)} мм` : ""}
                               </span>
                             </button>
                           </li>
@@ -445,10 +427,7 @@ export function Variant() {
                         {idx.fasteners.map((id) => (
                           <li key={id}>
                             <button
-                              className={
-                                "tree__item" +
-                                (selected.includes(id) ? " selected" : "")
-                              }
+                              className={"tree__item" + (selected.includes(id) ? " selected" : "")}
                               onClick={() => toggleNode(id)}
                               aria-pressed={selected.includes(id)}
                             >
@@ -466,10 +445,7 @@ export function Variant() {
                         {idx.other.map((id) => (
                           <li key={id}>
                             <button
-                              className={
-                                "tree__item" +
-                                (selected.includes(id) ? " selected" : "")
-                              }
+                              className={"tree__item" + (selected.includes(id) ? " selected" : "")}
                               onClick={() => toggleNode(id)}
                               aria-pressed={selected.includes(id)}
                             >
@@ -485,28 +461,80 @@ export function Variant() {
             )}
           </aside>
 
-          <section
-            className="pane pane--3d"
-            aria-label={mode === "layout" ? S.layout.title : "3D"}
-          >
+          <section className="pane pane--3d" aria-label={mode === "layout" ? S.layout.title : "3D"}>
             <div className="modebar" role="tablist" aria-label="Окно">
-              <button
-                role="tab"
-                aria-selected={mode === "3d"}
-                onClick={() => setMode("3d")}
-                disabled={!variant}
-              >
+              <button role="tab" aria-selected={mode === "3d"} onClick={() => setMode("3d")} disabled={!variant}>
                 {S.layout.mode3d}
               </button>
               <button
                 role="tab"
-                aria-selected={mode === "layout"}
-                onClick={() => setMode("layout")}
+                aria-selected={mode === "sketch"}
+                onClick={() => setMode("sketch")}
+                disabled={!report?.urls.sketch || Object.keys(report.urls.sketch).length === 0}
+                title={S.sketch.hint}
               >
+                {S.sketch.tab}
+              </button>
+              <button role="tab" aria-selected={mode === "layout"} onClick={() => setMode("layout")}>
                 {S.layout.tab}
               </button>
             </div>
-            {mode === "layout" ? (
+            {mode === "sketch" && report ? (
+              <>
+                <div className="toolbar">
+                  <span className="muted small">{S.variant.viewsLabel}:</span>
+                  {(["main", "left", "top"] as const).map((v) => (
+                    <button key={v} onClick={() => setSketchView(v)} aria-pressed={sketchView === v}>
+                      {S.variant.views[v]}
+                    </button>
+                  ))}
+                  <button onClick={() => setSketchFit((n) => n + 1)}>{S.layout.fit}</button>
+                  <span className="muted small">{S.layout.zoomHint}</span>
+                  {sketchHover && (
+                    <span className="small sketch__hover" aria-live="polite">
+                      {sketchHover.replace(/^dim:/, "")}
+                    </span>
+                  )}
+                </div>
+                <div className={"canvas canvas--sketch" + (pinMode ? " canvas--pinning" : "")}>
+                  {report.urls.sketch?.[sketchView] && report.sketch?.views[sketchView] ? (
+                    <Sketch
+                      url={report.urls.sketch[sketchView]}
+                      view={report.sketch.views[sketchView]}
+                      selected={sketchSelected}
+                      pins={pins}
+                      pinMode={pinMode}
+                      fitNonce={sketchFit}
+                      onPick={onPartSketchPick}
+                      onHover={setSketchHover}
+                    />
+                  ) : (
+                    <div className="canvas__empty">
+                      <p className="muted">{S.sketch.missing}</p>
+                      <button onClick={build} disabled={building !== null} aria-busy={building !== null}>
+                        {S.variant.rebuild}
+                      </button>
+                    </div>
+                  )}
+                  {pinMode && <p className="canvas__note muted">{S.layout.pinHere}</p>}
+                </div>
+                {report.sketch && (
+                  <div className="sketch__foot small muted">
+                    {S.sketch.dims}:{" "}
+                    {report.sketch.dims
+                      .filter((d) => d.view === sketchView)
+                      .map((d) => d.text + (d.axis ? ` (${d.axis})` : ""))
+                      .join(", ") || "—"}
+                    .{" "}
+                    {report.sketch.notes.map((n, i) => (
+                      <span key={i} className="level-warning">
+                        {n}{" "}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : mode === "layout" ? (
               <LayoutPane
                 project={project}
                 variant={variant || undefined}
@@ -524,36 +552,21 @@ export function Variant() {
                   {(["main", "left", "top", "iso"] as ViewName[]).map((v) => (
                     <button
                       key={v}
-                      onClick={() =>
-                        setView({ name: v, nonce: view.nonce + 1 })
-                      }
+                      onClick={() => setView({ name: v, nonce: view.nonce + 1 })}
                       aria-pressed={view.name === v}
                     >
                       {S.variant.views[v]}
                     </button>
                   ))}
-                  <button
-                    onClick={() =>
-                      setView((v) => ({ ...v, nonce: v.nonce + 1 }))
-                    }
-                  >
-                    {S.variant.fit}
-                  </button>
+                  <button onClick={() => setView((v) => ({ ...v, nonce: v.nonce + 1 }))}>{S.variant.fit}</button>
                   <label className="small">
-                    <input
-                      type="checkbox"
-                      checked={dim}
-                      onChange={(e) => setDim(e.target.checked)}
-                    />{" "}
-                    {S.variant.dim}
+                    <input type="checkbox" checked={dim} onChange={(e) => setDim(e.target.checked)} /> {S.variant.dim}
                   </label>
                   <label className="small">
                     <input
                       type="checkbox"
                       checked={clip.on}
-                      onChange={(e) =>
-                        setClip({ ...clip, on: e.target.checked })
-                      }
+                      onChange={(e) => setClip({ ...clip, on: e.target.checked })}
                     />{" "}
                     {S.variant.clip}
                   </label>
@@ -562,9 +575,7 @@ export function Variant() {
                       <select
                         aria-label={S.variant.clipAxis}
                         value={clip.axis}
-                        onChange={(e) =>
-                          setClip({ ...clip, axis: e.target.value as ClipAxis })
-                        }
+                        onChange={(e) => setClip({ ...clip, axis: e.target.value as ClipAxis })}
                       >
                         <option value="x">X</option>
                         <option value="y">Y</option>
@@ -577,9 +588,7 @@ export function Variant() {
                         max={1}
                         step={0.01}
                         value={clip.pos}
-                        onChange={(e) =>
-                          setClip({ ...clip, pos: Number(e.target.value) })
-                        }
+                        onChange={(e) => setClip({ ...clip, pos: Number(e.target.value) })}
                       />
                     </>
                   )}
@@ -593,9 +602,7 @@ export function Variant() {
                   {report.urls.glb ? (
                     <>
                       {topLevel.length === 0 && !glbError && (
-                        <p className="canvas__note muted">
-                          {S.variant.glbLoading}
-                        </p>
+                        <p className="canvas__note muted">{S.variant.glbLoading}</p>
                       )}
                       {glbError && (
                         <p className="canvas__note level-error" role="alert">
@@ -618,11 +625,7 @@ export function Variant() {
                     <div className="canvas__empty">
                       <p className="muted">{S.variant.glbMissing}</p>
                       <p className="muted small">{S.variant.glbMissingHint}</p>
-                      <button
-                        onClick={build}
-                        disabled={building !== null}
-                        aria-busy={building !== null}
-                      >
+                      <button onClick={build} disabled={building !== null} aria-busy={building !== null}>
                         {S.variant.rebuild}
                       </button>
                     </div>
@@ -645,11 +648,7 @@ export function Variant() {
             <section className="review" aria-label={S.review.title}>
               <div className="commit__actions">
                 {!pinMode && !pinAt && (
-                  <button
-                    onClick={() => setPinMode(true)}
-                    aria-pressed={pinMode}
-                    disabled={locked}
-                  >
+                  <button onClick={() => setPinMode(true)} aria-pressed={pinMode} disabled={locked}>
                     {S.review.pin}
                   </button>
                 )}
@@ -673,8 +672,7 @@ export function Variant() {
                   }}
                 >
                   <p className="small muted">
-                    {S.review.at(pinAt.part ?? "—")} ·{" "}
-                    {S.review.atPoint(pinAt.point)}
+                    {S.review.at(pinAt.part ?? "—")} · {S.review.atPoint(pinAt.point)}
                   </p>
                   <textarea
                     aria-label={S.review.textLabel}
@@ -684,18 +682,10 @@ export function Variant() {
                     onChange={(e) => setPinText(e.target.value)}
                   />
                   <div className="commit__actions">
-                    <button
-                      type="submit"
-                      disabled={pinBusy}
-                      aria-busy={pinBusy}
-                    >
+                    <button type="submit" disabled={pinBusy} aria-busy={pinBusy}>
                       {pinBusy ? S.review.sending : S.review.send}
                     </button>
-                    <button
-                      type="button"
-                      className="link"
-                      onClick={() => setPinAt(null)}
-                    >
+                    <button type="button" className="link" onClick={() => setPinAt(null)}>
                       {S.review.cancelPin}
                     </button>
                   </div>
@@ -706,16 +696,11 @@ export function Variant() {
                   {pinErr}
                 </p>
               )}
-              {review.length === 0 && !pinAt && (
-                <p className="muted small">{S.review.empty}</p>
-              )}
+              {review.length === 0 && !pinAt && <p className="muted small">{S.review.empty}</p>}
               {review.length > 0 && (
                 <ul className="review__list">
                   {review.map((r) => (
-                    <li
-                      key={r.id}
-                      className={"review__item review__item--" + r.status}
-                    >
+                    <li key={r.id} className={"review__item review__item--" + r.status}>
                       <button
                         className="ref"
                         onClick={() => {
@@ -730,19 +715,14 @@ export function Variant() {
                         {r.id}
                       </button>{" "}
                       <span>{r.text}</span>
-                      {r.part && (
-                        <span className="muted small"> · {r.part}</span>
-                      )}
+                      {r.part && <span className="muted small"> · {r.part}</span>}
                       {r.answer && (
                         <div className="small ok">
                           {S.review.answer}: {r.answer}
                         </div>
                       )}
                       {r.status === "open" && (
-                        <button
-                          className="link small"
-                          onClick={() => closeItem(r.id)}
-                        >
+                        <button className="link small" onClick={() => closeItem(r.id)}>
                           {S.review.close}
                         </button>
                       )}
@@ -754,17 +734,9 @@ export function Variant() {
             {report && (
               <>
                 <h3>{S.variant.findings}</h3>
-                <Findings
-                  items={report.findings}
-                  onRef={pickRef}
-                  activeRef={activeRef}
-                />
+                <Findings items={report.findings} onRef={pickRef} activeRef={activeRef} />
                 <h3>{S.variant.calc}</h3>
-                <KTable
-                  calc={report.calc}
-                  onRef={pickRef}
-                  activeRef={activeRef}
-                />
+                <KTable calc={report.calc} onRef={pickRef} activeRef={activeRef} />
                 {report.derived && Object.keys(report.derived).length > 0 && (
                   <details>
                     <summary>{S.variant.derived}</summary>

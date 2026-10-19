@@ -7,7 +7,11 @@ import { Variant } from "./Variant";
 vi.mock("../three/Viewer", async () => {
   const React = await import("react");
   return {
-    Viewer: (p: { pins?: unknown[]; onNodes?: (n: string[]) => void; onPick?: (n: string | null, pt?: number[]) => void }) => {
+    Viewer: (p: {
+      pins?: unknown[];
+      onNodes?: (n: string[]) => void;
+      onPick?: (n: string | null, pt?: number[]) => void;
+    }) => {
       const { onNodes } = p;
       React.useEffect(() => {
         onNodes?.(["base_plate", "anchor_a00"]);
@@ -23,10 +27,18 @@ vi.mock("../three/Viewer", async () => {
 });
 
 const report = {
-  project: "bracket", project_title: "Кронштейн", variant: "A_fork", title: "вилка",
+  project: "bracket",
+  project_title: "Кронштейн",
+  variant: "A_fork",
+  title: "вилка",
   summary: { mass_kg: 15.63, K_min: 1.54, findings: { error: 0, warning: 0, info: 0 } },
-  parts: [{ id: "base_plate", name: "Плита", mass_kg: 10 }], welds: [], calc: [], findings: [], assumptions: [],
-  urls: { glb: "/out/bracket/A_fork/A_fork.glb", step: null, svg: {} }, built_at: new Date().toISOString(),
+  parts: [{ id: "base_plate", name: "Плита", mass_kg: 10 }],
+  welds: [],
+  calc: [],
+  findings: [],
+  assumptions: [],
+  urls: { glb: "/out/bracket/A_fork/A_fork.glb", step: null, svg: {} },
+  built_at: new Date().toISOString(),
 };
 
 describe("Замечания агенту", () => {
@@ -39,7 +51,18 @@ describe("Замечания агенту", () => {
         calls.push((init?.method ?? "GET") + " " + url);
         if (url.endsWith("/review") && init?.method === "POST") {
           const b = JSON.parse(init.body as string);
-          items = [{ id: "R1", text: b.text, status: "open", author: "ivanov", created: "", variant: b.variant, part: b.part, point: b.point }];
+          items = [
+            {
+              id: "R1",
+              text: b.text,
+              status: "open",
+              author: "ivanov",
+              created: "",
+              variant: b.variant,
+              part: b.part,
+              point: b.point,
+            },
+          ];
           return new Response(JSON.stringify({ item: items[0] }), { status: 200 });
         }
         if (url.includes("/review")) return new Response(JSON.stringify({ items }), { status: 200 });
@@ -65,7 +88,11 @@ describe("Замечания агенту", () => {
     fireEvent.change(screen.getByLabelText("Текст замечания"), { target: { value: "мало места под ключ" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить агенту" }));
     await waitFor(() => expect(screen.getByText("мало места под ключ")).toBeInTheDocument());
-    const body = JSON.parse((calls.find((c) => c.startsWith("POST") && c.endsWith("/review")) ? (vi.mocked(fetch).mock.calls.find((c) => (c[1] as RequestInit)?.method === "POST")![1] as RequestInit).body : "{}") as string);
+    const body = JSON.parse(
+      (calls.find((c) => c.startsWith("POST") && c.endsWith("/review"))
+        ? (vi.mocked(fetch).mock.calls.find((c) => (c[1] as RequestInit)?.method === "POST")![1] as RequestInit).body
+        : "{}") as string,
+    );
     expect(body).toEqual({ text: "мало места под ключ", variant: "A_fork", part: "anchor_a00", point: [95, 0, -100] });
     expect(screen.getByTestId("viewer")).toHaveTextContent("пометок: 1");
     expect(screen.getByRole("button", { name: "Закрыть самому" })).toBeInTheDocument();

@@ -6,10 +6,7 @@ import { NumbersRow } from "../ui/NumbersRow";
 import { CommitLine } from "../ui/CommitLine";
 import { relativeTime } from "../ui/format";
 
-type State =
-  | { kind: "loading" }
-  | { kind: "error"; message: string }
-  | { kind: "ok"; projects: ProjectOverview[] };
+type State = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ok"; projects: ProjectOverview[] };
 
 export function Projects() {
   const [st, setSt] = useState<State>({ kind: "loading" });
@@ -38,9 +35,7 @@ export function Projects() {
           <button onClick={load}>{S.errors.retry}</button>
         </div>
       )}
-      {st.kind === "ok" && st.projects.length === 0 && (
-        <p className="empty">{S.projects.empty}</p>
-      )}
+      {st.kind === "ok" && st.projects.length === 0 && <p className="empty">{S.projects.empty}</p>}
       {st.kind === "ok" && (
         <ul className="cards" aria-label={S.projects.title}>
           {st.projects.map((p) => (
@@ -61,10 +56,7 @@ function ProjectCard({ p }: { p: ProjectOverview }) {
         <h2 id={`p-${p.name}`}>
           {p.title || p.name} <span className="muted mono">{p.name}</span>
         </h2>
-        <span
-          className={"state state--" + p.state}
-          title={S.projects.state[p.state]}
-        >
+        <span className={"state state--" + p.state} title={S.projects.state[p.state]}>
           {S.projects.state[p.state]}
         </span>
       </header>
@@ -83,25 +75,16 @@ function ProjectCard({ p }: { p: ProjectOverview }) {
               {p.variants.map((v) => (
                 <tr key={v.id}>
                   <th scope="row">
-                    <Link
-                      to={`/p/${encodeURIComponent(p.name)}/${encodeURIComponent(v.id)}`}
-                      className="mono"
-                    >
+                    <Link to={`/p/${encodeURIComponent(p.name)}/${encodeURIComponent(v.id)}`} className="mono">
                       {v.id}
                     </Link>
                     {v.title && <span className="muted"> — {v.title}</span>}
                   </th>
                   <td>
-                    {v.built ? (
-                      <NumbersRow n={v} compact />
-                    ) : (
-                      <span className="muted">{S.projects.notBuilt}</span>
-                    )}
+                    {v.built ? <NumbersRow n={v} compact /> : <span className="muted">{S.projects.notBuilt}</span>}
                   </td>
                   <td className="muted small">
-                    {v.built_at
-                      ? `${S.numbers.builtAt} ${relativeTime(v.built_at)}`
-                      : ""}
+                    {v.built_at ? `${S.numbers.builtAt} ${relativeTime(v.built_at)}` : ""}
                   </td>
                 </tr>
               ))}
@@ -111,11 +94,7 @@ function ProjectCard({ p }: { p: ProjectOverview }) {
       </section>
       <footer className="card__foot">
         <span className="muted">{S.projects.lastChange}: </span>
-        {p.last_commit ? (
-          <CommitLine c={p.last_commit} />
-        ) : (
-          <span className="muted">{S.projects.noCommits}</span>
-        )}
+        {p.last_commit ? <CommitLine c={p.last_commit} /> : <span className="muted">{S.projects.noCommits}</span>}
         <span className="card__links">
           <Link
             to={
@@ -128,36 +107,16 @@ function ProjectCard({ p }: { p: ProjectOverview }) {
           </Link>
           {p.layout && (
             <span
-              className={
-                "badge " +
-                (p.layout.state === "approved" ? "badge--ok" : "badge--warn")
-              }
-              title={
-                p.layout.by
-                  ? S.layout.approvedBy(
-                      p.layout.by,
-                      relativeTime(p.layout.at ?? ""),
-                    )
-                  : undefined
-              }
+              className={"badge " + (p.layout.state === "approved" ? "badge--ok" : "badge--warn")}
+              title={p.layout.by ? S.layout.approvedBy(p.layout.by, relativeTime(p.layout.at ?? "")) : undefined}
             >
               {S.layout.state[p.layout.state]}
             </span>
           )}
-          <Link to={`/p/${encodeURIComponent(p.name)}/commits`}>
-            {S.feed.tab}
-          </Link>
-          {p.unreviewed ? (
-            <span className="badge badge--warn">{p.unreviewed}</span>
-          ) : null}
-          {p.variants.length > 1 && (
-            <Link to={`/p/${encodeURIComponent(p.name)}/compare`}>
-              {S.compare.tab}
-            </Link>
-          )}
-          <Link to={`/p/${encodeURIComponent(p.name)}/agent`}>
-            {S.agent.tab}
-          </Link>
+          <Link to={`/p/${encodeURIComponent(p.name)}/commits`}>{S.feed.tab}</Link>
+          {p.unreviewed ? <span className="badge badge--warn">{p.unreviewed}</span> : null}
+          {p.variants.length > 1 && <Link to={`/p/${encodeURIComponent(p.name)}/compare`}>{S.compare.tab}</Link>}
+          <Link to={`/p/${encodeURIComponent(p.name)}/agent`}>{S.agent.tab}</Link>
         </span>
       </footer>
     </article>

@@ -7,7 +7,8 @@ import { DeltaRow } from "../ui/DeltaRow";
 import { Viewer, type ViewName } from "../three/Viewer";
 import { AgentBanner } from "../ui/AgentBanner";
 
-type State = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ok"; commits: FeedCommit[]; unreviewed: number };
+type State =
+  { kind: "loading" } | { kind: "error"; message: string } | { kind: "ok"; commits: FeedCommit[]; unreviewed: number };
 
 export function Feed() {
   const { project = "" } = useParams();
@@ -95,7 +96,13 @@ export function Feed() {
           <ol className="commits" aria-label={S.feed.title}>
             {st.commits.map((c) => (
               <li key={c.hash}>
-                <CommitCard c={c} project={project} variant={variant} onChanged={load} locked={info?.state === "agent"} />
+                <CommitCard
+                  c={c}
+                  project={project}
+                  variant={variant}
+                  onChanged={load}
+                  locked={info?.state === "agent"}
+                />
               </li>
             ))}
           </ol>
@@ -224,7 +231,8 @@ function CommitCard({
         </button>
         {c.kind === "agent" && (
           <label className="small">
-            <input type="checkbox" checked={!!reviewed} onChange={(e) => toggleReviewed(e.target.checked)} /> {S.feed.reviewed}
+            <input type="checkbox" checked={!!reviewed} onChange={(e) => toggleReviewed(e.target.checked)} />{" "}
+            {S.feed.reviewed}
           </label>
         )}
         {c.kind !== "system" && (
@@ -304,7 +312,11 @@ function CommitCard({
                     />
                     <span className="small">{S.feed.now}</span>
                     {(["main", "left", "top", "iso"] as ViewName[]).map((v) => (
-                      <button key={v} onClick={() => setView({ name: v, nonce: view.nonce + 1 })} aria-pressed={view.name === v}>
+                      <button
+                        key={v}
+                        onClick={() => setView({ name: v, nonce: view.nonce + 1 })}
+                        aria-pressed={view.name === v}
+                      >
                         {S.variant.views[v]}
                       </button>
                     ))}
@@ -379,7 +391,10 @@ function Entities({ d }: { d: CommitDiff }) {
             {e.removed?.length ? `${S.feed.removed}: ${e.removed.join(", ")}; ` : ""}
             {e.changed && Object.keys(e.changed).length
               ? `${S.feed.changed}: ${Object.entries(e.changed)
-                  .map(([id, f]) => `${id} (${Array.isArray(f) ? f.join("→") : typeof f === "object" && f ? Object.keys(f).join(", ") : String(f)})`)
+                  .map(
+                    ([id, f]) =>
+                      `${id} (${Array.isArray(f) ? f.join("→") : typeof f === "object" && f ? Object.keys(f).join(", ") : String(f)})`,
+                  )
                   .join(", ")}`
               : ""}
           </dd>

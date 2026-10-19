@@ -364,6 +364,31 @@ def layout_hash(skeleton: Skeleton, requirements: Requirements) -> str:
     return hashlib.sha1(json.dumps(data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
 
 
+# ---------- эскиз с размерами (M2.1, D18) ----------
+
+
+class SketchDim(BaseModel):
+    """Явный размер на эскизе: между двумя точками модели (`between`) по оси `axis` или размер сущности
+    (`of` + `kind`: thickness | diameter | length). Ссылки: datum:<id>, interface:<id>, surrounding:<id>,
+    part:<id>, part:<id>/hole:<hid>, fastener:<id>, point:x,y,z."""
+
+    view: str | None = None  # main | left | top; None — на всех видах, где размер виден
+    between: tuple[str, str] | None = None
+    axis: Literal["X", "Y", "Z"] | None = None
+    of: str | None = None
+    kind: Literal["thickness", "diameter", "length"] | None = None
+    text: str | None = None
+
+
+class SketchSpec(BaseModel):
+    """Раздел `sketch` проекта или варианта: какие виды показывать, какие автоматические размеры скрыть
+    (по id из <v>_sketch.json), какие размеры добавить."""
+
+    views: list[str] = []
+    hide: list[str] = []
+    dims: list[SketchDim] = []
+
+
 # ---------- узлы и проект ----------
 
 
@@ -409,6 +434,7 @@ class Project(BaseModel):
     assumptions: list[Assumption] = []
     derived: dict[str, Scalar] = {}
     layout: LayoutState | None = Field(default=None, exclude=True)  # согласование компоновки; в YAML не пишется
+    sketch: SketchSpec = Field(default_factory=SketchSpec, exclude=True)  # настройки эскиза (проект + вариант)
 
     # --- навигация ---
     @property

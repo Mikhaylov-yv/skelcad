@@ -34,11 +34,25 @@ const commits = {
   ],
 };
 const projects = {
-  summary: "", templates: [],
-  projects: [{ name: "bracket", title: "Кронштейн", standards: [], state: "constructor", last_commit: null, variants: [{ id: "A_fork", title: "", built: true }] }],
+  summary: "",
+  templates: [],
+  projects: [
+    {
+      name: "bracket",
+      title: "Кронштейн",
+      standards: [],
+      state: "constructor",
+      last_commit: null,
+      variants: [{ id: "A_fork", title: "", built: true }],
+    },
+  ],
 };
 const diff = {
-  variant: "A_fork", a: "a".repeat(40), b: "b".repeat(40), summary: "", cached: true,
+  variant: "A_fork",
+  a: "a".repeat(40),
+  b: "b".repeat(40),
+  summary: "",
+  cached: true,
   entities: { fasteners: { changed: { anchor_a00: { size: ["M16", "M20"] } } } },
   geometry: {},
   deltas: { mass_kg: { a: 15.33, b: 15.63, delta: 0.3 }, K_min: { a: 1.14, b: 1.54, delta: 0.4 } },
@@ -48,7 +62,10 @@ const diff = {
 function mockFetch(calls: string[]) {
   return vi.fn(async (url: string, init?: RequestInit) => {
     calls.push((init?.method ?? "GET") + " " + url);
-    if (url.includes("/commits/") && url.endsWith("/reviewed")) return new Response(JSON.stringify({ reviewed: { by: "ivanov", at: "2026-10-19T12:00:00+00:00" } }), { status: 200 });
+    if (url.includes("/commits/") && url.endsWith("/reviewed"))
+      return new Response(JSON.stringify({ reviewed: { by: "ivanov", at: "2026-10-19T12:00:00+00:00" } }), {
+        status: 200,
+      });
     if (url.includes("/diff?")) return new Response(JSON.stringify(diff), { status: 200 });
     if (url.endsWith("/revert")) return new Response(JSON.stringify({ commit: commits.commits[0] }), { status: 200 });
     if (url.includes("/commits")) return new Response(JSON.stringify(commits), { status: 200 });

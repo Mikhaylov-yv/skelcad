@@ -1,7 +1,15 @@
 import type { Calc } from "../api";
 import { fmtNum } from "./format";
 
-export function KTable({ calc, onRef, activeRef }: { calc: Calc[]; onRef: (ref: string) => void; activeRef: string | null }) {
+export function KTable({
+  calc,
+  onRef,
+  activeRef,
+}: {
+  calc: Calc[];
+  onRef: (ref: string) => void;
+  activeRef: string | null;
+}) {
   return (
     <table className="ktable">
       <thead>

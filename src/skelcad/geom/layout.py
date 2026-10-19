@@ -253,14 +253,27 @@ class Sheet:
             at = (b[0] + (0.5 * fs if right else -0.5 * fs), b[1] + 0.5 * fs)
             self.text("loads", at, label, 0.95 * fs, "start" if right else "end", color=C_LOAD, weight="600", ref=ref)
 
-    def dim(self, p1, p2, label: str, ref: str, dim_id: str, axis: str, value: float, refs: list[str]) -> None:
+    def dim(
+        self,
+        p1,
+        p2,
+        label: str,
+        ref: str,
+        dim_id: str,
+        axis: str,
+        value: float,
+        refs: list[str],
+        level: int | None = None,
+    ) -> None:
         """Линейный размер между двумя точками одного вида (по u или по v); размерная линия — снаружи
-        содержимого, ярусами: горизонтальные снизу, вертикальные слева."""
+        содержимого, ярусами: горизонтальные снизу, вертикальные слева. level — ярус (цепочка размеров
+        делит один ярус), иначе следующий свободный."""
         base = self.base or tuple(self.bb)
         horizontal = abs(p1[1] - p2[1]) <= abs(p1[0] - p2[0])
         key = "h" if horizontal else "v"
-        level = self.levels[key]
-        self.levels[key] += 1
+        if level is None:
+            level = self.levels[key]
+        self.levels[key] = max(self.levels[key], level + 1)
         off = self.gap + level * self.step
         ov = 0.7 * self.fs
         al = 0.9 * self.fs
@@ -294,6 +307,28 @@ class Sheet:
                 "value": round(value, 2),
                 "text": label,
                 "refs": refs,
+            }
+        )
+
+    def callout(self, at, label: str, ref: str, dim_id: str, side: tuple[float, float] = (1.0, 1.0)) -> None:
+        """Выноска: линия от точки `at` под 45° и полка с текстом (диаметр, радиус, сечение трубы, крепёж)."""
+        fs = self.fs
+        knee = (at[0] + side[0] * 1.8 * fs, at[1] + side[1] * 1.8 * fs)
+        w = 0.56 * fs * len(label)
+        end = (knee[0] + side[0] * (w + 0.4 * fs), knee[1])
+        self.line("dims", at, knee, C_DIM, self.lw * 0.5, ref=ref)
+        self.line("dims", knee, end, C_DIM, self.lw * 0.5, ref=ref)
+        x = min(knee[0], end[0]) + 0.2 * fs
+        self.text("dims", (x, knee[1] + 0.3 * fs), label, ref=ref)
+        self.dims.append(
+            {
+                "id": dim_id,
+                "view": self.view,
+                "kind": "callout",
+                "axis": "",
+                "value": None,
+                "text": label,
+                "refs": [ref],
             }
         )
 
@@ -748,31 +783,38 @@ def entities(m: Project) -> list[dict]:
 Projection = tuple[dict[str, tuple[str, tuple[float, float]]], tuple[Vec3, Vec3]]
 
 
-def parts_projection(m: Project, g, views: list[str]) -> Projection:
-    """HLR-проекции сборки по видам (внутренность SVG build123d) и её габарит; координаты проекции даны
-    относительно центра габарита — сдвиг возвращает их в систему модели."""
+def hlr_inner(shape, view: str, c, color: int = 0x8A929B, hidden: bool = True) -> str:
+    """HLR-проекция тела build123d на вид: внутренность SVG (слои visible / hidden) в координатах
+    относительно точки c (центр, в который смотрит камера)."""
     import build123d as bd
 
     from skelcad.render import _svg_via_file
 
+    s = VIEWS[view]
+    eye, up = s["eye"], s["up"]
+    origin = (c[0] + eye[0], c[1] + eye[1], c[2] + eye[2])
+    visible, hid = shape.project_to_viewport(origin, up, look_at=(c[0], c[1], c[2]))
+    exp = bd.ExportSVG(margin=1, line_weight=0.35)
+    if hidden:
+        exp.add_layer("hidden", line_color=0x8A929B, line_weight=0.18, line_type=bd.LineType.ISO_DASH)
+        exp.add_shape(hid, layer="hidden")
+    exp.add_layer("visible", line_color=color, line_weight=0.35)
+    exp.add_shape(visible, layer="visible")
+    svg = exp.get_svg_string() if hasattr(exp, "get_svg_string") else _svg_via_file(exp)
+    mt = re.search(r"<svg[^>]*>(.*)</svg>", svg, re.S)
+    inner = mt.group(1) if mt else ""
+    return re.sub(r'\bid="(hidden|visible)"', r'class="\1"', inner)
+
+
+def parts_projection(m: Project, g, views: list[str]) -> Projection:
+    """HLR-проекции сборки по видам (внутренность SVG build123d) и её габарит; координаты проекции даны
+    относительно центра габарита — сдвиг возвращает их в систему модели."""
     asm = g.assembly(m, with_purchased=True)
     bb = asm.bounding_box()
     c = bb.center()
     out = {}
     for view in views:
-        s = VIEWS[view]
-        eye, up = s["eye"], s["up"]
-        origin = (c.X + eye[0], c.Y + eye[1], c.Z + eye[2])
-        visible, hidden = asm.project_to_viewport(origin, up, look_at=(c.X, c.Y, c.Z))
-        exp = bd.ExportSVG(margin=1, line_weight=0.35)
-        exp.add_layer("hidden", line_color=0x8A929B, line_weight=0.18, line_type=bd.LineType.ISO_DASH)
-        exp.add_layer("visible", line_color=0x8A929B, line_weight=0.35)
-        exp.add_shape(hidden, layer="hidden")
-        exp.add_shape(visible, layer="visible")
-        svg = exp.get_svg_string() if hasattr(exp, "get_svg_string") else _svg_via_file(exp)
-        mt = re.search(r"<svg[^>]*>(.*)</svg>", svg, re.S)
-        inner = mt.group(1) if mt else ""
-        inner = re.sub(r'\bid="(hidden|visible)"', r'class="\1"', inner)
+        inner = hlr_inner(asm, view, (c.X, c.Y, c.Z))
         out[view] = (inner, to_view(view, (c.X, c.Y, c.Z)))
     return out, ((bb.min.X, bb.min.Y, bb.min.Z), (bb.max.X, bb.max.Y, bb.max.Z))
 

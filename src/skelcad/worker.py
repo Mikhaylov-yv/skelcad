@@ -204,6 +204,14 @@ def op_layout(args: dict) -> dict:
     return res
 
 
+def op_sketch(args: dict) -> dict:
+    """Эскиз варианта с размерами по текущему состоянию проекта (без полной сборки)."""
+    from skelcad.geom.sketch import write_sketch
+
+    pd, m, g = _resolved(args)
+    return write_sketch(m, g, Path(args["out_dir"]), m.variant or m.id, args.get("views"), args.get("png", True))
+
+
 def _report_light(pd, m, g) -> dict:
     """Сводка и замечания как в report.json, без экспорта (для diff)."""
     from skelcad.pipeline import analyse
@@ -248,6 +256,7 @@ OPS = {
     "measure": op_measure,
     "render": op_render,
     "layout": op_layout,
+    "sketch": op_sketch,
 }
 
 

@@ -76,7 +76,10 @@ function topLevelName(obj: THREE.Object3D, root: THREE.Object3D): string | null 
 
 /** Сущность модели в GLB: меш либо группа примитивов одной детали (плита из 14 граней → plate_1…plate_14). */
 function isEntity(o: THREE.Object3D): boolean {
-  return (o as THREE.Mesh).isMesh === true || (o.children.length > 0 && o.children.every((c) => (c as THREE.Mesh).isMesh === true));
+  return (
+    (o as THREE.Mesh).isMesh === true ||
+    (o.children.length > 0 && o.children.every((c) => (c as THREE.Mesh).isMesh === true))
+  );
 }
 
 /** Группа, чьи дети — сущности модели: GLB обёрнут в узел сборки (A_fork → base_plate, cheek_L, …).
@@ -162,7 +165,8 @@ function Model({ url, paint, clip, view, primary, pins, onNodes, onPick }: Model
     if (!controls || !primary || !view) return;
     const c = box.getCenter(new THREE.Vector3());
     // дистанция, при которой сфера габарита целиком входит в кадр по вертикали
-    const d = (box.getSize(new THREE.Vector3()).length() / 2 / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.15;
+    const d =
+      (box.getSize(new THREE.Vector3()).length() / 2 / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.15;
     const e = new THREE.Vector3(...EYES[view.name]).normalize().multiplyScalar(d);
     camera.up.set(0, 0, 1);
     camera.position.copy(c.clone().add(e));
@@ -181,7 +185,10 @@ function Model({ url, paint, clip, view, primary, pins, onNodes, onPick }: Model
           {pins.map((p) => (
             <mesh key={p.id} position={[p.point[0], p.point[1], p.point[2]]}>
               <sphereGeometry args={[Math.max(diag(box) / 60, 2), 16, 16]} />
-              <meshStandardMaterial color={p.resolved ? "#1b7f3b" : "#f2b705"} emissive={p.resolved ? "#0a3a1a" : "#5a4200"} />
+              <meshStandardMaterial
+                color={p.resolved ? "#1b7f3b" : "#f2b705"}
+                emissive={p.resolved ? "#0a3a1a" : "#5a4200"}
+              />
             </mesh>
           ))}
         </group>
@@ -197,7 +204,14 @@ function Model({ url, paint, clip, view, primary, pins, onNodes, onPick }: Model
       />
       {/* сетка 50/250 мм в плоскости XY на дне габарита (Grid у drei лежит в XZ — поворачиваем) */}
       <group position={[0, 0, box.min.z - 0.5]} rotation={[Math.PI / 2, 0, 0]}>
-        <Grid infiniteGrid cellSize={50} sectionSize={250} fadeDistance={6000} cellColor="#b0b7c0" sectionColor="#8a929b" />
+        <Grid
+          infiniteGrid
+          cellSize={50}
+          sectionSize={250}
+          fadeDistance={6000}
+          cellColor="#b0b7c0"
+          sectionColor="#8a929b"
+        />
       </group>
     </>
   );
@@ -212,33 +226,33 @@ export function Viewer(props: ViewerProps) {
   const paintWas = useMemo(() => (overlay ? paintOverlay(overlay.changed, overlay.mix, "was") : null), [overlay]);
   return (
     <ErrorBoundary onError={props.onError}>
-    <Canvas
-      camera={{ position: [-500, 500, 400], up: [0, 0, 1], near: 1, far: 100000, fov: 35 }}
-      gl={{ preserveDrawingBuffer: true }}
-      onCreated={({ gl, scene, get }) => {
-        gl.localClippingEnabled = true;
-        (window as unknown as { __skelcad3d?: unknown }).__skelcad3d = { gl, scene, get }; // диагностика из Playwright
-      }}
-      style={{ background: "transparent" }}
-    >
-      <hemisphereLight args={["#ffffff", "#8899aa", 0.9]} />
-      <directionalLight position={[-300, 400, 600]} intensity={1.1} />
-      <directionalLight position={[400, -200, 200]} intensity={0.4} />
-      <Suspense fallback={null}>
-        <Model
-          url={props.url}
-          paint={paintNow}
-          clip={props.clip}
-          view={props.view}
-          primary
-          pins={props.pins}
-          onNodes={props.onNodes}
-          onPick={props.onPick}
-        />
-        {overlay && paintWas && <Model url={overlay.baseUrl} paint={paintWas} clip={props.clip} primary={false} />}
-      </Suspense>
-      <OrbitControls makeDefault enableDamping={false} />
-    </Canvas>
+      <Canvas
+        camera={{ position: [-500, 500, 400], up: [0, 0, 1], near: 1, far: 100000, fov: 35 }}
+        gl={{ preserveDrawingBuffer: true }}
+        onCreated={({ gl, scene, get }) => {
+          gl.localClippingEnabled = true;
+          (window as unknown as { __skelcad3d?: unknown }).__skelcad3d = { gl, scene, get }; // диагностика из Playwright
+        }}
+        style={{ background: "transparent" }}
+      >
+        <hemisphereLight args={["#ffffff", "#8899aa", 0.9]} />
+        <directionalLight position={[-300, 400, 600]} intensity={1.1} />
+        <directionalLight position={[400, -200, 200]} intensity={0.4} />
+        <Suspense fallback={null}>
+          <Model
+            url={props.url}
+            paint={paintNow}
+            clip={props.clip}
+            view={props.view}
+            primary
+            pins={props.pins}
+            onNodes={props.onNodes}
+            onPick={props.onPick}
+          />
+          {overlay && paintWas && <Model url={overlay.baseUrl} paint={paintWas} clip={props.clip} primary={false} />}
+        </Suspense>
+        <OrbitControls makeDefault enableDamping={false} />
+      </Canvas>
     </ErrorBoundary>
   );
 }

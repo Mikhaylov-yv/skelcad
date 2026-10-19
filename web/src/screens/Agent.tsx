@@ -111,7 +111,10 @@ export function Agent() {
           <ul className="tasks">
             {tasks.map((t) => (
               <li key={t.id}>
-                <button className={"tree__item" + (selected === t.id ? " selected" : "")} onClick={() => setSelected(t.id)}>
+                <button
+                  className={"tree__item" + (selected === t.id ? " selected" : "")}
+                  onClick={() => setSelected(t.id)}
+                >
                   <span>
                     <span className={"badge status-" + t.status}>{S.agent.status[t.status]}</span> {t.text.slice(0, 70)}
                   </span>

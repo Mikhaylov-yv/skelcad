@@ -20,7 +20,17 @@ const draft = {
   changes: { "members.gap": 120 },
   file: "variants/A_fork.yaml",
   numbers: { mass_kg: 15.9, k_min: 1.54, errors: 0, warnings: 2 },
-  diff: { variant: "A_fork", a: "x", b: "y", summary: "", cached: false, entities: {}, geometry: {}, deltas: { mass_kg: { a: 15.63, b: 15.9, delta: 0.27 } }, findings: { added: [], removed: [] } },
+  diff: {
+    variant: "A_fork",
+    a: "x",
+    b: "y",
+    summary: "",
+    cached: false,
+    entities: {},
+    geometry: {},
+    deltas: { mass_kg: { a: 15.63, b: 15.9, delta: 0.27 } },
+    findings: { added: [], removed: [] },
+  },
   urls: { glb: "/out/bracket/_drafts/A_fork-abc/A_fork/A_fork.glb", head_glb: "/out/bracket/A_fork/A_fork.glb" },
 };
 
@@ -32,7 +42,8 @@ describe("Параметры", () => {
       vi.fn(async (url: string, init?: RequestInit) => {
         calls.push({ url, body: init?.body as string });
         if (url.endsWith("/draft")) return new Response(JSON.stringify(draft), { status: 200 });
-        if (url.endsWith("/params") && init?.method === "POST") return new Response(JSON.stringify({ commit: { commit: "abc" } }), { status: 200 });
+        if (url.endsWith("/params") && init?.method === "POST")
+          return new Response(JSON.stringify({ commit: { commit: "abc" } }), { status: 200 });
         return new Response(JSON.stringify(fields), { status: 200 });
       }),
     );
@@ -51,8 +62,12 @@ describe("Параметры", () => {
     fireEvent.change(gap, { target: { value: "120" } });
     expect(screen.getByText("было 100")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Собрать черновик" }));
-    expect(await screen.findByText("Черновик собран. Ниже — что изменится по сравнению с текущим состоянием.")).toBeInTheDocument();
-    expect(JSON.parse(calls.find((c) => c.url.endsWith("/draft"))!.body!)).toEqual({ params: { "members.gap": "120" } });
+    expect(
+      await screen.findByText("Черновик собран. Ниже — что изменится по сравнению с текущим состоянием."),
+    ).toBeInTheDocument();
+    expect(JSON.parse(calls.find((c) => c.url.endsWith("/draft"))!.body!)).toEqual({
+      params: { "members.gap": "120" },
+    });
     const msg = screen.getByLabelText("Сообщение (что и зачем)") as HTMLInputElement;
     expect(msg.value).toBe("members.gap 100 → 120");
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));

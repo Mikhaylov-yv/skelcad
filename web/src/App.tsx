@@ -6,7 +6,10 @@ import { S } from "./strings";
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
   useEffect(() => {
-    api.me().then(setMe).catch(() => setMe(null));
+    api
+      .me()
+      .then(setMe)
+      .catch(() => setMe(null));
   }, []);
   return (
     <div className="shell">

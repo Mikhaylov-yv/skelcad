@@ -27,6 +27,7 @@ from skelcad.core.model import (
     Project,
     Requirements,
     Skeleton,
+    SketchSpec,
     Text,
     layout_hash,
 )
@@ -48,6 +49,7 @@ class ProjectSpec(BaseModel):
     assumptions: list[Assumption] = []
     params: dict = {}
     layout: LayoutApproval | None = None  # «Компоновка согласована» (ставит рабочее место конструктора)
+    sketch: SketchSpec = SketchSpec()  # эскиз с размерами: виды, скрытые и явные размеры (общие для вариантов)
 
 
 class VariantSpec(BaseModel):
@@ -56,6 +58,7 @@ class VariantSpec(BaseModel):
     description: Text = ""
     params: dict = {}
     assumptions: list[str] = []
+    sketch: SketchSpec = SketchSpec()  # дополняет sketch проекта
 
 
 def _read(path: Path) -> dict:
@@ -96,6 +99,11 @@ def base_project(s: ProjectSpec, variant: VariantSpec | None = None) -> Project:
         skeleton=s.skeleton.model_copy(deep=True),
         assumptions=[a.model_copy() for a in s.assumptions],
         layout=LayoutState(hash=layout_hash(s.skeleton, s.requirements), approved=s.layout),
+        sketch=SketchSpec(
+            views=variant.sketch.views if variant and variant.sketch.views else s.sketch.views,
+            hide=s.sketch.hide + (variant.sketch.hide if variant else []),
+            dims=s.sketch.dims + (variant.sketch.dims if variant else []),
+        ),
     )
 
 

@@ -8,7 +8,8 @@ import { Viewer, type ViewName } from "../three/Viewer";
 import { useProjectState } from "../ui/useProjectState";
 import { AgentBanner } from "../ui/AgentBanner";
 
-type State = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ok"; fields: ParamField[]; file: string };
+type State =
+  { kind: "loading" } | { kind: "error"; message: string } | { kind: "ok"; fields: ParamField[]; file: string };
 
 function same(a: ParamField["value"], b: string | number | boolean): boolean {
   if (typeof a === "number") return Number(b) === a;
@@ -39,7 +40,9 @@ export function Params() {
       .params(project, variant)
       .then((r) => {
         setSt({ kind: "ok", fields: r.fields, file: r.file });
-        setValues(Object.fromEntries(r.fields.map((f) => [f.path, f.value ?? ""])) as Record<string, string | number | boolean>);
+        setValues(
+          Object.fromEntries(r.fields.map((f) => [f.path, f.value ?? ""])) as Record<string, string | number | boolean>,
+        );
       })
       .catch((e: Error) => setSt({ kind: "error", message: e.message }));
   }, [project, variant]);
@@ -161,7 +164,12 @@ export function Params() {
                     const changed = f.path in changes;
                     const id = "p-" + f.path.replace(/\./g, "-");
                     return (
-                      <div key={f.path} className={"field" + (changed ? " field--changed" : "") + (invalid[f.path] ? " field--bad" : "")}>
+                      <div
+                        key={f.path}
+                        className={
+                          "field" + (changed ? " field--changed" : "") + (invalid[f.path] ? " field--bad" : "")
+                        }
+                      >
                         <label htmlFor={id}>
                           <span className="mono">{f.path.includes(".") ? f.path.slice(head.length + 1) : f.path}</span>
                           <span className={"badge badge--src small " + f.source} title={S.params.source[f.source]}>
@@ -202,13 +210,22 @@ export function Params() {
                 </fieldset>
               ))}
               <div className="commit__actions">
-                <button type="submit" disabled={locked || !hasChanges || Object.keys(invalid).length > 0 || busy !== null} aria-busy={busy !== null}>
+                <button
+                  type="submit"
+                  disabled={locked || !hasChanges || Object.keys(invalid).length > 0 || busy !== null}
+                  aria-busy={busy !== null}
+                >
                   {S.params.draft}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    setValues(Object.fromEntries(fields.map((f) => [f.path, f.value ?? ""])) as Record<string, string | number | boolean>);
+                    setValues(
+                      Object.fromEntries(fields.map((f) => [f.path, f.value ?? ""])) as Record<
+                        string,
+                        string | number | boolean
+                      >,
+                    );
                     setDraft(null);
                   }}
                   disabled={!hasChanges}
@@ -275,7 +292,12 @@ export function Params() {
                         />
                         <span className="small">{S.params.draftLabel}</span>
                         {(["main", "left", "top", "iso"] as ViewName[]).map((v) => (
-                          <button key={v} type="button" onClick={() => setView({ name: v, nonce: view.nonce + 1 })} aria-pressed={view.name === v}>
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setView({ name: v, nonce: view.nonce + 1 })}
+                            aria-pressed={view.name === v}
+                          >
                             {S.variant.views[v]}
                           </button>
                         ))}
@@ -287,15 +309,29 @@ export function Params() {
                           dim={false}
                           clip={{ on: false, axis: "x", pos: 0.5 }}
                           view={view}
-                          overlay={draft.urls.head_glb ? { baseUrl: draft.urls.head_glb, changed: changedNodes, mix } : undefined}
+                          overlay={
+                            draft.urls.head_glb
+                              ? { baseUrl: draft.urls.head_glb, changed: changedNodes, mix }
+                              : undefined
+                          }
                         />
                       </div>
                     </div>
                   )}
                   <div className="save">
                     <label htmlFor="msg">{S.params.message}</label>
-                    <input id="msg" value={message} placeholder={S.params.messageHint} onChange={(e) => setMessage(e.target.value)} />
-                    <button type="button" onClick={save} disabled={locked || !draftFresh || !message.trim() || saving} aria-busy={saving}>
+                    <input
+                      id="msg"
+                      value={message}
+                      placeholder={S.params.messageHint}
+                      onChange={(e) => setMessage(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={save}
+                      disabled={locked || !draftFresh || !message.trim() || saving}
+                      aria-busy={saving}
+                    >
                       {saving ? S.params.saving : S.params.save}
                     </button>
                   </div>

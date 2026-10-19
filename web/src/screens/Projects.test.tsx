@@ -35,7 +35,10 @@ const payload = {
 
 describe("Проекты", () => {
   it("показывает карточку с числами, автором-агентом и несобранным вариантом", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })),
+    );
     mount();
     expect(await screen.findByText("Кронштейн", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("агент (claude-code)")).toBeInTheDocument();
@@ -45,7 +48,10 @@ describe("Проекты", () => {
   });
 
   it("показывает ошибку сервера словами и кнопку «Повторить»", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "нет доступа" }), { status: 401 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: "нет доступа" }), { status: 401 })),
+    );
     mount();
     expect(await screen.findByRole("alert")).toHaveTextContent("нет доступа");
     expect(screen.getByRole("button", { name: "Повторить" })).toBeInTheDocument();

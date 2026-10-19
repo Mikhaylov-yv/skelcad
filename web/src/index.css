@@ -262,3 +262,15 @@ button.danger { color: var(--error); border-color: var(--error); }
 .sketch__hover { margin-left: auto; color: var(--accent); }
 .sketch__foot { padding: 6px 12px; border-top: 1px solid var(--border); background: var(--surface); }
 .approval { display: grid; gap: 6px; margin: 4px 0 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+
+/* --- сравнение: эскизы и наложение --- */
+.cmp__sketch { height: 420px; min-height: 0; position: relative; background: #fff; overflow: hidden; }
+.cmp__overlay { position: relative; height: 520px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.cmp__overlay .sketch { pointer-events: none; }
+.cmp__overlay .sketch--top { pointer-events: auto; }
+.sketch--was .parts line, .sketch--was .parts path, .sketch--was .parts circle { stroke: #2f6fd6; }
+.sketch--now .parts line, .sketch--now .parts path, .sketch--now .parts circle { stroke: #d63a2f; }
+.sketch--now .surroundings, .sketch--now .envelopes, .sketch--now .datums, .sketch--now .interfaces, .sketch--now .loads { display: none; }
+.sketch--bare .dims, .sketch--bare .labels { display: none; }
+.cmp tr.cmp__section th { background: var(--bg); font-weight: 600; text-transform: uppercase; font-size: 12px; letter-spacing: 0.04em; color: var(--muted); }
+.cmp td.diff { font-weight: 600; }

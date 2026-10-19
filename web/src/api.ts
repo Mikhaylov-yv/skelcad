@@ -131,9 +131,7 @@ export async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
     data = null;
   }
   if (!r.ok) {
-    const msg =
-      (data as { error?: string } | null)?.error ??
-      `${r.status} ${r.statusText}`;
+    const msg = (data as { error?: string } | null)?.error ?? `${r.status} ${r.statusText}`;
     throw new ApiError(r.status, msg);
   }
   return data as T;
@@ -227,13 +225,17 @@ export interface Report {
   assumptions: Assumption[];
   derived?: Record<string, string | number>;
   metrics?: { id: string; title: string; value: string | number }[];
-  urls: {
-    glb: string | null;
-    step: string | null;
-    svg: Record<string, string>;
-  };
+  urls: { glb: string | null; step: string | null; svg: Record<string, string>; sketch?: Record<string, string> };
   built_at: string;
   geometry_at?: string | null; // 3D/STEP могут быть старше отчёта: сборка без экспорта переносит ссылки прошлой
+  sketch?: SketchData | null; // эскиз с размерами (M2.1): виды и размеры из <v>_sketch.json
+}
+
+export interface SketchData {
+  views: Record<string, LayoutView>;
+  dims: LayoutDim[];
+  entities: string[];
+  notes: string[];
 }
 
 export type CommitKind = "agent" | "user" | "system" | "revert";
@@ -264,15 +266,9 @@ export interface CommitDiff {
   b: string;
   summary: string;
   cached: boolean;
-  entities: Record<
-    string,
-    { added?: string[]; removed?: string[]; changed?: Record<string, unknown> }
-  >;
+  entities: Record<string, { added?: string[]; removed?: string[]; changed?: Record<string, unknown> }>;
   geometry: Record<string, unknown>;
-  deltas: Record<
-    string,
-    DeltaNum | Record<string, { a: number | null; b: number | null }>
-  >;
+  deltas: Record<string, DeltaNum | Record<string, { a: number | null; b: number | null }>>;
   findings: { added: string[]; removed: string[] };
 }
 
@@ -290,12 +286,28 @@ export interface CompareRow {
 
 export interface CompareVariant extends VariantOverview {
   glb: string | null;
+  sketch?: Record<string, string>; // эскизы по видам
+  sketch_views?: Record<string, LayoutView>;
+}
+
+export interface CompareDimRow {
+  id: string;
+  axis: string;
+  views: string[];
+  values: Record<string, string | null>;
+}
+
+export interface CompareParamRow {
+  path: string;
+  values: Record<string, unknown>;
 }
 
 export interface CompareResponse {
   summary: string;
   variants: CompareVariant[];
   rows: CompareRow[];
+  dim_rows?: CompareDimRow[];
+  param_rows?: CompareParamRow[];
 }
 
 export interface ParamField {
@@ -341,8 +353,7 @@ export interface ReviewItem {
   resolved_at?: string;
 }
 
-export type TaskStatus =
-  "queued" | "running" | "done" | "failed" | "stopped" | "limit";
+export type TaskStatus = "queued" | "running" | "done" | "failed" | "stopped" | "limit";
 
 export interface AgentTask {
   id: string;
@@ -364,15 +375,7 @@ export interface AgentTask {
 
 export interface TaskEvent {
   t: string;
-  type:
-    | "start"
-    | "assistant"
-    | "tool_call"
-    | "tool_result"
-    | "done"
-    | "error"
-    | "stopped"
-    | "limit";
+  type: "start" | "assistant" | "tool_call" | "tool_result" | "done" | "error" | "stopped" | "limit";
   text?: string;
   name?: string;
   args?: Record<string, unknown>;
@@ -391,28 +394,20 @@ export const api = {
   me: () => getJson<Me>("/api/me"),
   projects: () => getJson<ProjectsResponse>("/api/projects"),
   report: (project: string, variant: string) =>
-    getJson<Report>(
-      `/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/report`,
-    ),
-  tokens: () =>
-    getJson<{ tokens: TokenInfo[]; mcp_url: string }>("/api/tokens"),
+    getJson<Report>(`/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/report`),
+  tokens: () => getJson<{ tokens: TokenInfo[]; mcp_url: string }>("/api/tokens"),
   tokenCreate: (name: string) =>
-    getJson<TokenInfo & { token: string; command: string; mcp_url: string }>(
-      "/api/tokens",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      },
-    ),
+    getJson<TokenInfo & { token: string; command: string; mcp_url: string }>("/api/tokens", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }),
   tokenDelete: (name: string) =>
     getJson<{ ok: boolean }>(`/api/tokens/${encodeURIComponent(name)}`, {
       method: "DELETE",
     }),
   tasks: (project: string) =>
-    getJson<{ tasks: AgentTask[]; active: AgentTask | null }>(
-      `/api/projects/${encodeURIComponent(project)}/tasks`,
-    ),
+    getJson<{ tasks: AgentTask[]; active: AgentTask | null }>(`/api/projects/${encodeURIComponent(project)}/tasks`),
   taskCreate: (project: string, text: string, variant?: string) =>
     getJson<AgentTask>(`/api/projects/${encodeURIComponent(project)}/tasks`, {
       method: "POST",
@@ -431,9 +426,7 @@ export const api = {
       method: "POST",
     }),
   review: (project: string) =>
-    getJson<{ items: ReviewItem[] }>(
-      `/api/projects/${encodeURIComponent(project)}/review?status=all`,
-    ),
+    getJson<{ items: ReviewItem[] }>(`/api/projects/${encodeURIComponent(project)}/review?status=all`),
   reviewAdd: (
     project: string,
     body: {
@@ -443,14 +436,11 @@ export const api = {
       point?: number[] | null;
     },
   ) =>
-    getJson<{ item: ReviewItem }>(
-      `/api/projects/${encodeURIComponent(project)}/review`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      },
-    ),
+    getJson<{ item: ReviewItem }>(`/api/projects/${encodeURIComponent(project)}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
   reviewResolve: (project: string, id: string, answer: string) =>
     getJson<{ item: ReviewItem }>(
       `/api/projects/${encodeURIComponent(project)}/review/${encodeURIComponent(id)}/resolve`,
@@ -464,11 +454,7 @@ export const api = {
     getJson<ParamsResponse>(
       `/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/params`,
     ),
-  draft: (
-    project: string,
-    variant: string,
-    params: Record<string, string | number | boolean>,
-  ) =>
+  draft: (project: string, variant: string, params: Record<string, string | number | boolean>) =>
     getJson<DraftResponse>(
       `/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/draft`,
       {
@@ -492,14 +478,9 @@ export const api = {
         body: JSON.stringify({ params, message, draft }),
       },
     ),
-  compare: (project: string) =>
-    getJson<CompareResponse>(
-      `/api/projects/${encodeURIComponent(project)}/compare`,
-    ),
+  compare: (project: string) => getJson<CompareResponse>(`/api/projects/${encodeURIComponent(project)}/compare`),
   commits: (project: string, limit = 50) =>
-    getJson<CommitsResponse>(
-      `/api/projects/${encodeURIComponent(project)}/commits?limit=${limit}`,
-    ),
+    getJson<CommitsResponse>(`/api/projects/${encodeURIComponent(project)}/commits?limit=${limit}`),
   commitDiff: (project: string, hash: string, variant: string) =>
     getJson<CommitDiff>(
       `/api/projects/${encodeURIComponent(project)}/commits/${hash}/diff?variant=${encodeURIComponent(variant)}`,
@@ -518,14 +499,11 @@ export const api = {
       },
     ),
   revert: (project: string, commit: string, message?: string) =>
-    getJson<{ commit: Commit }>(
-      `/api/projects/${encodeURIComponent(project)}/revert`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ commit, message }),
-      },
-    ),
+    getJson<{ commit: Commit }>(`/api/projects/${encodeURIComponent(project)}/revert`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commit, message }),
+    }),
   build: (project: string, variant: string) =>
     getJson<BuildResponse>(
       `/api/projects/${encodeURIComponent(project)}/build?variant=${encodeURIComponent(variant)}`,
@@ -539,12 +517,9 @@ export const api = {
         (variant ? `?variant=${encodeURIComponent(variant)}` : ""),
     ),
   layoutApprove: (project: string) =>
-    getJson<LayoutApproval & { commit: Commit }>(
-      `/api/projects/${encodeURIComponent(project)}/layout/approve`,
-      {
-        method: "POST",
-      },
-    ),
+    getJson<LayoutApproval & { commit: Commit }>(`/api/projects/${encodeURIComponent(project)}/layout/approve`, {
+      method: "POST",
+    }),
   text: async (url: string): Promise<string> => {
     const r = await fetch(url);
     if (!r.ok) throw new ApiError(r.status, `${r.status} ${r.statusText}`);

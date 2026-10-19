@@ -409,6 +409,57 @@ class Tools:
         res["key"] = key
         return res
 
+    def sketch(self, project: str, variant: str, png: bool = True) -> dict:
+        """Эскиз варианта с размерами (все виды): кэш по коммиту HEAD или воркер; out/<p>/_sketch/<hash>-<v>/."""
+        self._fresh(project)
+        head = self.ws.rev(project, "HEAD")[:12]
+        key = f"{head}-{variant}"
+        d = self.srv.out_dir(project) / "_sketch" / key
+        jf = next(d.glob("*_sketch.json"), None) if d.is_dir() else None
+        res = None
+        if jf is not None:
+            try:
+                res = json.loads(jf.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                res = None
+        if res is None:
+            d.mkdir(parents=True, exist_ok=True)
+            res = self.srv.runner.run(
+                "sketch",
+                {"project_dir": str(self.ws.path(project)), "variant": variant, "out_dir": str(d), "png": png},
+            )
+        res["commit"] = head
+        res["key"] = key
+        return res
+
+    def render_sketch(self, project: str, variant: str, view: str = "main") -> dict:
+        """Для агента: PNG эскиза с размерами одного вида + размеры текстом."""
+        res = self.sketch(project, variant)
+        if view not in res["views"]:
+            raise ValueError(f"вид «{view}»; у эскиза есть: {', '.join(res['views'])}")
+        v = res["views"][view]
+        d = self.srv.out_dir(project) / "_sketch" / res["key"]
+        png_b64 = None
+        if v.get("png") and (d / v["png"]).is_file():
+            png_b64 = base64.b64encode((d / v["png"]).read_bytes()).decode()
+        dims = []
+        for x in res["dims"]:
+            if x["view"] == view:
+                dims.append(f"{x['id']} = {x['text']}" + (f" ({x['axis']})" if x.get("axis") else ""))
+        lines = [
+            f"{project}/{variant}: эскиз, {v['title']}",
+            "размеры: " + ("; ".join(dims) or "нет"),
+            *(f"примечание: {n}" for n in res.get("notes") or []),
+        ]
+        links = {k: self.srv.url(project, f"_sketch/{res['key']}/{v[k]}") for k in ("svg", "png") if v.get(k)}
+        return {
+            "summary": "\n".join(lines),
+            "links": links,
+            "png_base64": png_b64,
+            "svg_text": None if png_b64 else (d / v["svg"]).read_text(encoding="utf-8"),
+            "sketch": {k: res[k] for k in ("dims", "entities", "notes", "commit")},
+        }
+
     def render_layout(self, project: str, variant: str | None, view: str = "main") -> dict:
         """Для агента: PNG компоновки одного вида + размеры и легенда текстом."""
         from skelcad.server import layout as L

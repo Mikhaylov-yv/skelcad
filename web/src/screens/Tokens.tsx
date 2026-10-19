@@ -24,7 +24,10 @@ export function Tokens() {
       .catch((e: Error) => setErr(e.message));
   }, []);
   useEffect(() => {
-    api.me().then(setMe).catch(() => setMe(null));
+    api
+      .me()
+      .then(setMe)
+      .catch(() => setMe(null));
     load();
   }, [load]);
 

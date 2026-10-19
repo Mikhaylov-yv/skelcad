@@ -175,16 +175,28 @@ def build_mcp(srv: Server) -> FastMCP:
 
     @mcp.tool()
     async def render(
-        project: str, variant: str | None = None, view: str = "iso", highlight: str | None = None, layout: bool = False
+        project: str,
+        variant: str | None = None,
+        view: str = "iso",
+        highlight: str | None = None,
+        layout: bool = False,
+        sketch: bool = False,
     ) -> list:
         """Посмотреть вариант глазами: PNG-проекция (видимые и скрытые линии). view: iso | main | left | top.
         highlight — подсветить тело красным (part:<id>, fastener:<id>, body:<id>). Файлы SVG/PNG — по ссылкам.
         layout=True — компоновочный эскиз (view: main | left | top): базы и интерфейсы скелета, зоны, обстановка
         (skeleton.surroundings), нагрузки стрелками, размеры положений; детали варианта тонкой линией, если
         генератор работает. Строится по project.yaml без сборки — смотри его, когда описал скелет и обстановку,
-        и перед тем, как просить конструктора согласовать компоновку (состояние — в project_read → layout)."""
+        и перед тем, как просить конструктора согласовать компоновку (состояние — в project_read → layout).
+        sketch=True — эскиз варианта с размерами по модели (view: main | left | top): габариты, толщины «s»,
+        шаги и диаметры отверстий, трубы, крепёж, положения скелета. Размеры возвращаются и текстом — проверяй
+        по ним свою работу перед отчётом конструктору; лишние размеры скрывай через раздел sketch.hide варианта."""
         if layout:
             res = await run(t.render_layout, project, variant, "main" if view == "iso" else view)
+        elif sketch:
+            if not variant:
+                raise ValueError("укажите variant")
+            res = await run(t.render_sketch, project, variant, "main" if view == "iso" else view)
         else:
             if not variant:
                 raise ValueError("укажите variant")

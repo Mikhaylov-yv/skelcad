@@ -52,20 +52,14 @@ export function LayoutPane({
   useEffect(load, [load, reloadNonce]);
 
   const v = data?.views[view];
-  const hoverName = hover
-    ? (data?.entities.find((e) => e.ref === hover)?.name ?? hover)
-    : null;
+  const hoverName = hover ? (data?.entities.find((e) => e.ref === hover)?.name ?? hover) : null;
   const dims = data?.dims.filter((d) => d.view === view) ?? [];
   return (
     <>
       <div className="toolbar">
         <span className="muted small">{S.variant.viewsLabel}:</span>
         {VIEWS.map((name) => (
-          <button
-            key={name}
-            onClick={() => setView(name)}
-            aria-pressed={view === name}
-          >
+          <button key={name} onClick={() => setView(name)} aria-pressed={view === name}>
             {S.variant.views[name]}
           </button>
         ))}
@@ -77,11 +71,7 @@ export function LayoutPane({
           </span>
         )}
       </div>
-      <div
-        className={
-          "canvas canvas--sketch" + (pinMode ? " canvas--pinning" : "")
-        }
-      >
+      <div className={"canvas canvas--sketch" + (pinMode ? " canvas--pinning" : "")}>
         {error && (
           <div className="canvas__empty">
             <p className="level-error" role="alert">
@@ -90,9 +80,7 @@ export function LayoutPane({
             <button onClick={load}>{S.errors.retry}</button>
           </div>
         )}
-        {!data && !error && (
-          <p className="canvas__note muted">{S.layout.loading}</p>
-        )}
+        {!data && !error && <p className="canvas__note muted">{S.layout.loading}</p>}
         {data && v && (
           <Sketch
             url={v.svg_url}
@@ -112,8 +100,7 @@ export function LayoutPane({
           {!data.parts && <span>{S.layout.noParts} </span>}
           {dims.length > 0 && (
             <span>
-              {S.layout.dims}:{" "}
-              {dims.map((d) => `${d.text} (${d.axis})`).join(", ")}.{" "}
+              {S.layout.dims}: {dims.map((d) => `${d.text} (${d.axis})`).join(", ")}.{" "}
             </span>
           )}
           {data.notes.map((n, i) => (
@@ -138,8 +125,7 @@ export function LayoutTree({
   onSelect: (ref: string) => void;
 }) {
   const groups = ["datum", "interface", "envelope", "surrounding"] as const;
-  if (entities.length === 0)
-    return <p className="muted small">{S.layout.empty}</p>;
+  if (entities.length === 0) return <p className="muted small">{S.layout.empty}</p>;
   return (
     <>
       {groups.map((g) => {
@@ -152,23 +138,16 @@ export function LayoutTree({
               {items.map((e) => (
                 <li key={e.ref}>
                   <button
-                    className={
-                      "tree__item" +
-                      (selected.includes(e.ref) ? " selected" : "")
-                    }
+                    className={"tree__item" + (selected.includes(e.ref) ? " selected" : "")}
                     onClick={() => onSelect(e.ref)}
                     aria-pressed={selected.includes(e.ref)}
                     title={e.note || undefined}
                   >
                     <span>
                       <span className="mono">{e.id}</span>
-                      {e.name && e.name !== e.id ? (
-                        <span className="muted"> — {e.name}</span>
-                      ) : null}
+                      {e.name && e.name !== e.id ? <span className="muted"> — {e.name}</span> : null}
                     </span>
-                    <span className="muted small">
-                      {S.layout.kinds[e.kind] ?? e.kind}
-                    </span>
+                    <span className="muted small">{S.layout.kinds[e.kind] ?? e.kind}</span>
                   </button>
                 </li>
               ))}
@@ -223,9 +202,7 @@ export function ApprovalBox({
           {S.layout.title}: {S.layout.state[a.state]}
         </span>
         {a.approved && (
-          <span className="muted small">
-            {S.layout.approvedBy(a.approved.by, relativeTime(a.approved.at))}
-          </span>
+          <span className="muted small">{S.layout.approvedBy(a.approved.by, relativeTime(a.approved.at))}</span>
         )}
       </div>
       {a.state === "invalid" && (
@@ -258,21 +235,12 @@ export function ApprovalBox({
         </p>
       )}
       {ask && (
-        <div
-          className="dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="approve-title"
-        >
+        <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="approve-title">
           <div className="dialog__box">
             <h2 id="approve-title">{S.layout.approveTitle}</h2>
             <p className="small">{S.layout.approveHint}</p>
             <div className="dialog__actions">
-              <button
-                className="link"
-                onClick={() => setAsk(false)}
-                disabled={busy}
-              >
+              <button className="link" onClick={() => setAsk(false)} disabled={busy}>
                 {S.feed.cancel}
               </button>
               <button onClick={approve} disabled={busy} aria-busy={busy}>
