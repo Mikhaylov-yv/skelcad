@@ -38,15 +38,18 @@ def variant_overview(out_dir: Path, project: str, variant: dict) -> dict:
     return item
 
 
-def project_overview(ws: Workspace, out_dir: Path, name: str) -> dict:
+def project_overview(ws: Workspace, out_dir: Path, name: str, tasks=None) -> dict:
     info = ws.info(name)
     info["variants"] = [variant_overview(out_dir, name, v) for v in ws.variants(name)]
-    info["state"] = "constructor"  # «у агента» появится с задачами агенту (M2, шаг 8)
+    active = tasks.active(name) if tasks is not None else None
+    info["state"] = "agent" if active else "constructor"
+    info["task"] = {"id": active["id"], "status": active["status"], "text": active["text"]} if active else None
+    info["unreviewed"] = commits(ws, name, limit=200)["unreviewed"]
     return info
 
 
-def projects_overview(ws: Workspace, out_dir: Path) -> dict:
-    items = [project_overview(ws, out_dir, n) for n in ws.names()]
+def projects_overview(ws: Workspace, out_dir: Path, tasks=None) -> dict:
+    items = [project_overview(ws, out_dir, n, tasks) for n in ws.names()]
     return {
         "summary": f"проектов: {len(items)}" + (": " + ", ".join(i["name"] for i in items) if items else ""),
         "projects": items,

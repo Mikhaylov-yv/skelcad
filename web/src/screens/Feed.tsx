@@ -5,6 +5,7 @@ import { S } from "../strings";
 import { humanAuthor, relativeTime } from "../ui/format";
 import { DeltaRow } from "../ui/DeltaRow";
 import { Viewer, type ViewName } from "../three/Viewer";
+import { AgentBanner } from "../ui/AgentBanner";
 
 type State = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ok"; commits: FeedCommit[]; unreviewed: number };
 
@@ -73,8 +74,12 @@ export function Feed() {
           <Link className="small" to={`/p/${encodeURIComponent(project)}/compare`}>
             {S.compare.tab}
           </Link>
+          <Link className="small" to={`/p/${encodeURIComponent(project)}/agent`}>
+            {S.agent.tab}
+          </Link>
         </div>
       </header>
+      <AgentBanner p={info} />
       <div className="page feed__body">
         {st.kind === "loading" && <p className="muted">{S.feed.loading}</p>}
         {st.kind === "error" && (
@@ -90,7 +95,7 @@ export function Feed() {
           <ol className="commits" aria-label={S.feed.title}>
             {st.commits.map((c) => (
               <li key={c.hash}>
-                <CommitCard c={c} project={project} variant={variant} onChanged={load} />
+                <CommitCard c={c} project={project} variant={variant} onChanged={load} locked={info?.state === "agent"} />
               </li>
             ))}
           </ol>
@@ -105,11 +110,13 @@ function CommitCard({
   project,
   variant,
   onChanged,
+  locked = false,
 }: {
   c: FeedCommit;
   project: string;
   variant: string;
   onChanged: () => void;
+  locked?: boolean;
 }) {
   const a = humanAuthor(c.author);
   const [open, setOpen] = useState(false);
@@ -221,7 +228,7 @@ function CommitCard({
           </label>
         )}
         {c.kind !== "system" && (
-          <button className="danger" onClick={() => setRevertOpen(true)}>
+          <button className="danger" onClick={() => setRevertOpen(true)} disabled={locked}>
             {S.feed.revert}
           </button>
         )}

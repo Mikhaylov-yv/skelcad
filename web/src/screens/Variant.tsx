@@ -8,6 +8,8 @@ import { KTable } from "../ui/KTable";
 import { fmtNum, relativeTime } from "../ui/format";
 import { Viewer, type ClipAxis, type ViewName } from "../three/Viewer";
 import { indexNodes, nodesForRef } from "../three/refs";
+import { useProjectState } from "../ui/useProjectState";
+import { AgentBanner } from "../ui/AgentBanner";
 
 type State =
   | { kind: "loading" }
@@ -17,6 +19,8 @@ type State =
 
 export function Variant() {
   const { project = "", variant = "" } = useParams();
+  const pstate = useProjectState(project);
+  const locked = pstate?.state === "agent";
   const [st, setSt] = useState<State>({ kind: "loading" });
   const [params, setParams] = useSearchParams();
   const [selected, setSelected] = useState<string[]>(() => (params.get("part") ? [params.get("part")!] : []));
@@ -183,6 +187,9 @@ export function Variant() {
             <Link className="small" to={`/p/${encodeURIComponent(project)}/${encodeURIComponent(variant)}/params`}>
               {S.params.tab}
             </Link>
+            <Link className="small" to={`/p/${encodeURIComponent(project)}/agent?variant=${encodeURIComponent(variant)}`}>
+              {S.agent.tab}
+            </Link>
           </div>
         )}
         <div className="variant__actions">
@@ -202,6 +209,7 @@ export function Variant() {
         </div>
       </header>
 
+      <AgentBanner p={pstate} />
       {st.kind === "loading" && <p className="muted page">{S.variant.loading}</p>}
       {st.kind === "error" && (
         <div className="callout callout--error page" role="alert">
@@ -368,7 +376,7 @@ export function Variant() {
             <section className="review" aria-label={S.review.title}>
               <div className="commit__actions">
                 {!pinMode && !pinAt && (
-                  <button onClick={() => setPinMode(true)} aria-pressed={pinMode}>
+                  <button onClick={() => setPinMode(true)} aria-pressed={pinMode} disabled={locked}>
                     {S.review.pin}
                   </button>
                 )}

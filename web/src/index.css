@@ -212,3 +212,22 @@ button.danger { color: var(--error); border-color: var(--error); }
 .review__item--resolved { border-left-color: var(--ok); opacity: 0.85; }
 .review .ref { font-family: var(--mono); font-size: 12px; padding: 1px 6px; }
 .canvas--pinning canvas { cursor: crosshair; }
+
+/* --- агент --- */
+.banner { padding: 8px 20px; border-bottom: 1px solid var(--border); font-size: 14px; }
+.banner--agent { background: color-mix(in srgb, var(--agent) 12%, var(--surface)); }
+.agent { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.agent__body { display: grid; grid-template-columns: minmax(320px, 440px) minmax(0, 1fr); gap: 20px; align-items: start; max-width: 1400px; }
+.agent__body > * { min-width: 0; }
+.log { overflow-wrap: anywhere; }
+.agent__form { display: grid; gap: 8px; }
+.agent__form textarea { font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); resize: vertical; }
+.tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.log { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; max-height: calc(100vh - 220px); overflow: auto; display: grid; gap: 6px; font-size: 14px; }
+.log__line pre { margin: 0; white-space: pre-wrap; color: var(--muted); background: var(--bg); padding: 4px 8px; border-radius: 4px; }
+.log__line p { margin: 0; }
+.status-running, .status-queued { color: var(--agent); border-color: var(--agent); }
+.status-done { color: var(--ok); border-color: var(--ok); }
+.status-failed { color: var(--error); border-color: var(--error); }
+.status-stopped, .status-limit { color: var(--warning); border-color: var(--warning); }
+@media (max-width: 1000px) { .agent__body { grid-template-columns: 1fr; } }

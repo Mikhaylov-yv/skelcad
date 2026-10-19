@@ -97,6 +97,7 @@ function ProjectCard({ p }: { p: ProjectOverview }) {
           <Link to={`/p/${encodeURIComponent(p.name)}/commits`}>{S.feed.tab}</Link>
           {p.unreviewed ? <span className="badge badge--warn">{p.unreviewed}</span> : null}
           {p.variants.length > 1 && <Link to={`/p/${encodeURIComponent(p.name)}/compare`}>{S.compare.tab}</Link>}
+          <Link to={`/p/${encodeURIComponent(p.name)}/agent`}>{S.agent.tab}</Link>
         </span>
       </footer>
     </article>

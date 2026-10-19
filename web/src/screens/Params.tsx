@@ -5,6 +5,8 @@ import { S } from "../strings";
 import { NumbersRow } from "../ui/NumbersRow";
 import { DeltaRow } from "../ui/DeltaRow";
 import { Viewer, type ViewName } from "../three/Viewer";
+import { useProjectState } from "../ui/useProjectState";
+import { AgentBanner } from "../ui/AgentBanner";
 
 type State = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ok"; fields: ParamField[]; file: string };
 
@@ -17,6 +19,8 @@ function same(a: ParamField["value"], b: string | number | boolean): boolean {
 export function Params() {
   const { project = "", variant = "" } = useParams();
   const nav = useNavigate();
+  const pstate = useProjectState(project);
+  const locked = pstate?.state === "agent";
   const [st, setSt] = useState<State>({ kind: "loading" });
   const [values, setValues] = useState<Record<string, string | number | boolean>>({});
   const [draft, setDraft] = useState<DraftResponse | null>(null);
@@ -130,6 +134,7 @@ export function Params() {
           <span className="muted small">{S.params.hint}</span>
         </div>
       </header>
+      <AgentBanner p={pstate} />
       <div className="page params__body">
         {st.kind === "loading" && <p className="muted">{S.params.loading}</p>}
         {st.kind === "error" && (
@@ -197,7 +202,7 @@ export function Params() {
                 </fieldset>
               ))}
               <div className="commit__actions">
-                <button type="submit" disabled={!hasChanges || Object.keys(invalid).length > 0 || busy !== null} aria-busy={busy !== null}>
+                <button type="submit" disabled={locked || !hasChanges || Object.keys(invalid).length > 0 || busy !== null} aria-busy={busy !== null}>
                   {S.params.draft}
                 </button>
                 <button
@@ -290,7 +295,7 @@ export function Params() {
                   <div className="save">
                     <label htmlFor="msg">{S.params.message}</label>
                     <input id="msg" value={message} placeholder={S.params.messageHint} onChange={(e) => setMessage(e.target.value)} />
-                    <button type="button" onClick={save} disabled={!draftFresh || !message.trim() || saving} aria-busy={saving}>
+                    <button type="button" onClick={save} disabled={locked || !draftFresh || !message.trim() || saving} aria-busy={saving}>
                       {saving ? S.params.saving : S.params.save}
                     </button>
                   </div>

@@ -48,6 +48,12 @@ docker compose -f compose/stack.yml --env-file compose/.env up -d   # серве
 `http://127.0.0.1:8000`); сборка `npm run build` кладёт статику в `src/skelcad/server/static/`, сервер отдаёт её
 по `/`. В образе это делает Dockerfile. Вход для браузера — `SKELCAD_AUTH=none|tokens|proxy` (см. `server/auth.py`).
 
+Встроенный агент (задачи из workbench, контейнер `agent`): `skelcad agent --queue /data/tasks`. Провайдер модели —
+любой с OpenAI-совместимым Chat Completions API: `SKELCAD_LLM_BASE_URL`, `SKELCAD_LLM_API_KEY`, `SKELCAD_LLM_MODEL`
+(в compose — `LLM_BASE_URL`, `LLM_MODEL`, ключ в секрете `SKELCAD_LLM_API_KEY`); исполнитель
+`SKELCAD_AGENT_RUNNER=claude-code` запускает headless Claude Code, если команда `claude` есть на машине.
+Инструменты агент берёт из `/mcp` сервера с токеном `SKELCAD_AGENT_TOKEN` (клиент «workbench-agent»).
+
 Как агенту работать с проектом через MCP — [AGENTS.md](AGENTS.md).
 Устройство репозитория и план этапа — в [docs/architecture/03-m0-plan.md](docs/architecture/03-m0-plan.md).
 Проект для SkelCAD — папка с `project.yaml` (требования, скелет, пакеты стандартов, генератор, плагины)

@@ -21,6 +21,8 @@ services:
       SKELCAD_JOBS: /data/jobs
       SKELCAD_TOKENS: ${SKELCAD_TOKENS:?}
       SKELCAD_AUTH: ${SKELCAD_AUTH:-tokens}
+      SKELCAD_AGENT_TOKEN: ${AGENT_TOKEN:?}
+      SKELCAD_TASKS: /data/tasks
       SKELCAD_SEED: ${SKELCAD_SEED:-bracket,pipe_support}
       SKELCAD_JOB_TIMEOUT_S: ${JOB_TIMEOUT_S:-180}
       PUBLIC_URL: ${PUBLIC_URL:?}
@@ -53,6 +55,30 @@ services:
     depends_on:
       server:
         condition: service_started
+
+  # Встроенный агент (задачи из workbench): цикл с моделью любого провайдера по OpenAI-совместимому API,
+  # инструменты — через /mcp сервера с токеном «workbench-agent». Сеть нужна: сервер + провайдер модели.
+  agent:
+    image: skelcad:local
+    container_name: skelcad-agent
+    init: true
+    restart: unless-stopped
+    command: ["skelcad", "agent", "--queue", "/data/tasks"]
+    environment:
+      SKELCAD_AGENT_RUNNER: ${AGENT_RUNNER:-openai}
+      SKELCAD_LLM_BASE_URL: ${LLM_BASE_URL:-}
+      SKELCAD_LLM_API_KEY: ${LLM_API_KEY:-}
+      SKELCAD_LLM_MODEL: ${LLM_MODEL:-}
+      SKELCAD_SERVER_URL: http://server:8000/mcp
+      SKELCAD_AGENT_TOKEN: ${AGENT_TOKEN:?}
+      SKELCAD_AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-60}
+      SSL_CERT_FILE: /certs/ca.crt
+    volumes:
+      - data:/data
+      - /etc/ssl/home_certs/ca.crt:/certs/ca.crt:ro
+    depends_on:
+      server:
+        condition: service_healthy
 
   oauth2-proxy:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.4

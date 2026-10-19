@@ -29,6 +29,7 @@ export interface ProjectOverview {
   variants: VariantOverview[];
   last_commit: Commit | null;
   state: "constructor" | "agent";
+  task?: { id: string; status: TaskStatus; text: string } | null;
   unreviewed?: number;
 }
 
@@ -240,6 +241,38 @@ export interface ReviewItem {
   resolved_at?: string;
 }
 
+export type TaskStatus = "queued" | "running" | "done" | "failed" | "stopped" | "limit";
+
+export interface AgentTask {
+  id: string;
+  project: string;
+  variant: string | null;
+  text: string;
+  user: string;
+  created: string;
+  max_steps: number;
+  status: TaskStatus;
+  started?: string;
+  finished?: string;
+  updated?: string;
+  steps?: number;
+  result?: string | null;
+  error?: string | null;
+  stop_requested?: boolean;
+}
+
+export interface TaskEvent {
+  t: string;
+  type: "start" | "assistant" | "tool_call" | "tool_result" | "done" | "error" | "stopped" | "limit";
+  text?: string;
+  name?: string;
+  args?: Record<string, unknown>;
+  seconds?: number;
+  runner?: string;
+  tools?: number;
+  cost_usd?: number;
+}
+
 export interface BuildResponse {
   summary: string;
   variants: { variant: string; line: string }[];
@@ -250,6 +283,19 @@ export const api = {
   projects: () => getJson<ProjectsResponse>("/api/projects"),
   report: (project: string, variant: string) =>
     getJson<Report>(`/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/report`),
+  tasks: (project: string) =>
+    getJson<{ tasks: AgentTask[]; active: AgentTask | null }>(`/api/projects/${encodeURIComponent(project)}/tasks`),
+  taskCreate: (project: string, text: string, variant?: string) =>
+    getJson<AgentTask>(`/api/projects/${encodeURIComponent(project)}/tasks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, variant }),
+    }),
+  taskEvents: (id: string, since: number) =>
+    getJson<{ events: TaskEvent[]; next: number; total: number; task: AgentTask }>(
+      `/api/tasks/${encodeURIComponent(id)}/events?since=${since}`,
+    ),
+  taskStop: (id: string) => getJson<AgentTask>(`/api/tasks/${encodeURIComponent(id)}/stop`, { method: "POST" }),
   review: (project: string) => getJson<{ items: ReviewItem[] }>(`/api/projects/${encodeURIComponent(project)}/review?status=all`),
   reviewAdd: (project: string, body: { text: string; variant?: string; part?: string | null; point?: number[] | null }) =>
     getJson<{ item: ReviewItem }>(`/api/projects/${encodeURIComponent(project)}/review`, {

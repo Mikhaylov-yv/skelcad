@@ -1,4 +1,4 @@
-"""CLI: skelcad build | check | schema | check-env | standards | serve | worker."""
+"""CLI: skelcad build | check | schema | check-env | standards | serve | worker | agent."""
 
 from __future__ import annotations
 
@@ -131,6 +131,15 @@ def cmd_worker(args) -> int:
     return worker(argv)
 
 
+def cmd_agent(args) -> int:
+    from skelcad.agent import main as agent
+
+    argv = ["--queue", args.queue]
+    if args.once:
+        argv.append("--once")
+    return agent(argv)
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="skelcad", description="SkelCAD — среда совместного конструирования")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -171,6 +180,11 @@ def main(argv: list[str] | None = None) -> None:
     w.add_argument("--cpu", type=int, help="лимит CPU-времени подпроцесса, с")
     w.add_argument("--mem", type=int, help="лимит памяти подпроцесса, МБ")
     w.set_defaults(fn=cmd_worker)
+
+    ag = sub.add_parser("agent", help="встроенный агент: задачи из workbench (--queue <папка>), см. skelcad.agent")
+    ag.add_argument("--queue", required=True)
+    ag.add_argument("--once", action="store_true")
+    ag.set_defaults(fn=cmd_agent)
 
     args = ap.parse_args(argv)
     sys.exit(args.fn(args))

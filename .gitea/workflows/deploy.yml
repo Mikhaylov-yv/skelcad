@@ -50,8 +50,13 @@ jobs:
             echo "SKELCAD_TOKENS=${{ secrets.SKELCAD_TOKENS }}"
             echo "OIDC_CLIENT_SECRET=${{ secrets.OIDC_CLIENT_SECRET }}"
             echo "COOKIE_SECRET=${{ secrets.COOKIE_SECRET }}"
+            echo "LLM_API_KEY=${{ secrets.SKELCAD_LLM_API_KEY }}"
           } | ssh -i ~/.ssh/deploy_key ${{ vars.CLOUD_USER }}@${{ vars.CLOUD_HOST }} \
-            "umask 077 && cat > \$HOME/$SRV/compose/.env"
+            "umask 077 && cat > \$HOME/$SRV/compose/.env
+             # токен встроенного агента — локальный для хоста, создаётся один раз
+             mkdir -p \$HOME/.config/skelcad
+             test -s \$HOME/.config/skelcad/agent.token || openssl rand -hex 24 > \$HOME/.config/skelcad/agent.token
+             echo AGENT_TOKEN=\$(cat \$HOME/.config/skelcad/agent.token) >> \$HOME/$SRV/compose/.env"
 
       - name: Validate, build, deploy
         run: |

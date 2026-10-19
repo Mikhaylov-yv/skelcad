@@ -5,6 +5,8 @@
   SKELCAD_TOKENS     токены клиентов «имя:токен;имя2:токен2»; имя попадает в автора коммитов.
                      Не задано — доступ без токена под именем anonymous (только для разработки).
   SKELCAD_AUTH       вход для браузера (/, /api, /out): none | tokens | proxy — см. auth.py
+  SKELCAD_AGENT_TOKEN токен встроенного агента (клиент «workbench-agent», контейнер agent)
+  SKELCAD_TASKS      папка очереди задач агенту (по умолчанию <SKELCAD_DATA>/tasks)
   SKELCAD_JOBS       папка файловой очереди воркера; не задано — воркер подпроцессом здесь же
   SKELCAD_SEED       проекты-примеры, которые завести при старте (по умолчанию bracket,pipe_support)
   SKELCAD_TEMPLATES  папка шаблонов проектов (по умолчанию examples/ репозитория)
@@ -26,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from skelcad.server import api
 from skelcad.server.auth import CURRENT_PRINCIPAL, client_for, parse_tokens, resolve, web_mode
 from skelcad.server.mcp import CURRENT_CLIENT, build_mcp
+from skelcad.server.tasks import TaskError, TaskStore
 from skelcad.server.tools import Server, ToolError, Tools
 
 __all__ = ["client_for", "create_app", "main", "parse_tokens"]
@@ -42,7 +45,10 @@ PLACEHOLDER = """<!doctype html><html lang="ru"><meta charset="utf-8"><title>Ske
 def create_app(srv: Server | None = None) -> FastAPI:
     srv = srv or Server.from_env()
     tokens = parse_tokens(os.environ.get("SKELCAD_TOKENS"))
+    if agent_token := os.environ.get("SKELCAD_AGENT_TOKEN"):
+        tokens[agent_token] = "workbench-agent"
     mode = web_mode(tokens)
+    tasks = TaskStore(Path(os.environ.get("SKELCAD_TASKS") or (srv.workspace.root / "tasks")))
     if not tokens:
         log.warning("SKELCAD_TOKENS не задан — доступ без токена (режим разработки)")
     log.info("вход для браузера: SKELCAD_AUTH=%s", mode)
@@ -63,6 +69,7 @@ def create_app(srv: Server | None = None) -> FastAPI:
         title="SkelCAD", version="0.1", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json"
     )
     app.state.server = srv
+    app.state.tasks = tasks
 
     @app.middleware("http")
     async def auth(request: Request, call_next):
@@ -99,7 +106,37 @@ def create_app(srv: Server | None = None) -> FastAPI:
 
     @app.get("/api/projects")
     async def api_projects():
-        return await to_thread.run_sync(api.projects_overview, srv.workspace, srv.workspace.out_dir)
+        return await to_thread.run_sync(api.projects_overview, srv.workspace, srv.workspace.out_dir, tasks)
+
+    def guard(project: str) -> None:
+        """Правки из workbench закрыты, пока проект у агента (D6: очерёдность)."""
+        if (a := tasks.active(project)) is not None:
+            raise HTTPException(409, f"проект у агента (задача {a['id']}, {a['status']}); остановите её или дождитесь")
+
+    # ---------- задачи агенту
+    @app.get("/api/projects/{name}/tasks")
+    async def api_tasks(name: str, limit: int = 20):
+        return {"tasks": await to_thread.run_sync(tasks.list, name, limit), "active": tasks.active(name)}
+
+    @app.post("/api/projects/{name}/tasks")
+    async def api_task_create(name: str, request: Request):
+        b = await request.json()
+        if name not in srv.workspace.names():
+            raise HTTPException(400, f"нет проекта «{name}»")
+        who = request.state.principal.name
+        return await to_thread.run_sync(tasks.create, name, b.get("text", ""), who, b.get("variant"))
+
+    @app.get("/api/tasks/{task_id}")
+    async def api_task(task_id: str):
+        return await to_thread.run_sync(tasks.get, task_id)
+
+    @app.get("/api/tasks/{task_id}/events")
+    async def api_task_events(task_id: str, since: int = 0):
+        return await to_thread.run_sync(tasks.events, task_id, since)
+
+    @app.post("/api/tasks/{task_id}/stop")
+    async def api_task_stop(task_id: str):
+        return await to_thread.run_sync(tasks.stop, task_id)
 
     @app.get("/api/projects/{name}")
     async def api_project(name: str):
@@ -118,11 +155,13 @@ def create_app(srv: Server | None = None) -> FastAPI:
 
     @app.post("/api/projects/{name}/variants/{variant}/draft")
     async def api_variant_draft(name: str, variant: str, request: Request):
+        guard(name)
         body = await request.json()
         return await to_thread.run_sync(api.variant_draft, srv, name, variant, body.get("params") or {})
 
     @app.post("/api/projects/{name}/variants/{variant}/params")
     async def api_variant_save(name: str, variant: str, request: Request):
+        guard(name)
         body = await request.json()
         return await to_thread.run_sync(
             api.variant_save, srv, name, variant, body.get("params") or {}, body.get("message") or "", body.get("draft")
@@ -134,6 +173,7 @@ def create_app(srv: Server | None = None) -> FastAPI:
 
     @app.post("/api/projects/{name}/review")
     async def api_review_add(name: str, request: Request):
+        guard(name)
         b = await request.json()
         return await to_thread.run_sync(
             tools.review_add, name, b.get("text", ""), b.get("variant"), b.get("part"), b.get("point"), "workbench"
@@ -169,6 +209,7 @@ def create_app(srv: Server | None = None) -> FastAPI:
 
     @app.post("/api/projects/{name}/revert")
     async def api_revert(name: str, request: Request):
+        guard(name)
         body = await request.json()
         return await to_thread.run_sync(tools.revert, name, body["commit"], body.get("message"), "workbench")
 
@@ -183,7 +224,7 @@ def create_app(srv: Server | None = None) -> FastAPI:
     async def tool_error(_: Request, e: Exception):
         return JSONResponse({"error": str(e)}, status_code=400)
 
-    for exc in ToolError:
+    for exc in (*ToolError, TaskError):
         app.add_exception_handler(exc, tool_error)
 
     @app.exception_handler(HTTPException)
