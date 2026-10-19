@@ -41,7 +41,7 @@
 ## 2. Разработка SkelCAD в этом репозитории
 
 - Документы: `docs/architecture/01-vision-and-architecture.md` (замысел), `02-decisions.md`
-  (журнал решений), `03-m0-plan.md`, `04-m1-plan.md` (планы этапов со статусом).
+  (журнал решений), `03-m0-plan.md`, `04-m1-plan.md`, `05-m2-plan.md` (планы этапов со статусом).
 - Код: `src/skelcad/core` (модель), `geom` (OCCT), `rules` (плагины), `pipeline.py`, `server/`
   (FastAPI + MCP + git-проекты), `worker.py` (изолированное исполнение кода проектов),
   `measure.py`, `render.py`, `diff.py`. Пакет стандарта — `packages/std-gost`.
@@ -50,4 +50,6 @@
 - Деплой: push в `main` на git.br → `.gitea/workflows/deploy.yml` → cloud (`~/srv/skelcad`,
   `docker compose`, nginx `skelcad.br`). Локально: `uv run skelcad serve` (без токенов — режим
   разработки) и `uv run skelcad worker --queue <папка>` или подпроцесс-воркер по умолчанию.
+- Интерфейс (workbench, `web/`): проектируем по ISO 9241-110, каждое изменение экрана проверяем
+  по чеклисту `docs/ui/checklist.md` и записываем ревью в `docs/ui/reviews/` (см. `05-m2-plan.md`).
 - Тексты, сообщения правил и документация — по-русски; идентификаторы — по-английски.
