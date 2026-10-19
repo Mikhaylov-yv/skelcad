@@ -146,7 +146,37 @@ def op_compare(args: dict) -> dict:
     return {"page": str(page), "reports": reports}
 
 
-OPS = {"query": op_query, "build": op_build, "check": op_check, "compare": op_compare}
+def _resolved(args: dict):
+    from skelcad.geom.generator import generate
+
+    pd = _project_dir(args)
+    m = pd.resolve(args.get("variant"))
+    return pd, m, generate(m, pd.ctx)
+
+
+def op_measure(args: dict) -> Any:
+    from skelcad.measure import measure
+
+    pd, m, g = _resolved(args)
+    return measure(m, g, pd.ctx, args.get("op_name") or "list", args.get("op_args") or {})
+
+
+def op_render(args: dict) -> Any:
+    from skelcad.render import render
+
+    pd, m, g = _resolved(args)
+    out = Path(args["out_dir"]) / (m.variant or m.id)
+    return render(m, g, args.get("view") or "iso", out, args.get("highlight"), int(args.get("width") or 1200))
+
+
+OPS = {
+    "query": op_query,
+    "build": op_build,
+    "check": op_check,
+    "compare": op_compare,
+    "measure": op_measure,
+    "render": op_render,
+}
 
 
 def handle(request: dict) -> dict:

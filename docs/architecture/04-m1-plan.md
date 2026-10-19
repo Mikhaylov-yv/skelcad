@@ -159,9 +159,9 @@ tests/               test_tools.py (in-process клиент SDK), test_worker.py
 
 | # | Шаг | Результат | Статус |
 |---|---|---|---|
-| 1 | Каркас сервера: FastAPI, `/mcp` через `mcp` 1.x, токены, `workspace.py` (проекты, git), инструменты `project_list/create/read`, `model_query`, `files_read/write`, `history`, `revert`, `context_*`, `standards_list`; тесты через in-process клиент SDK | агент читает и правит проект, история в git | |
-| 2 | Воркер и очередь: `worker.py`, `jobs.py`, лимиты; `build`, `check`, `compare` через воркер; `/out` статика; тесты на таймаут и запись вне `out/` | сборка в изоляции, зависший генератор не роняет сервер | |
-| 3 | Образ, `docker-compose.yml` (server + worker + том), деплой на `cloud` по `home-cicd`, `skelcad.br`, регистрация в Claude Code | точка MCP доступна по сети | |
+| 1 | Каркас сервера: FastAPI, `/mcp` через `mcp` 1.x, токены, `workspace.py` (проекты, git), инструменты `project_list/create/read`, `model_query`, `files_read/write`, `history`, `revert`, `context_*`, `standards_list`; тесты через in-process клиент SDK | агент читает и правит проект, история в git | сделано 2026-10-19 |
+| 2 | Воркер и очередь: `worker.py`, `jobs.py`, лимиты; `build`, `check`, `compare` через воркер; `/out` статика; тесты на таймаут и запись вне `out/` | сборка в изоляции, зависший генератор не роняет сервер | сделано 2026-10-19 |
+| 3 | Образ, `docker-compose.yml` (server + worker + том), деплой на `cloud` по `home-cicd`, `skelcad.br`, регистрация в Claude Code | точка MCP доступна по сети | сделано 2026-10-19 (сертификат: SAN skelcad.br добавляется вручную, см. итог) |
 | 4 | `measure.py`, `render.py`; инструменты `measure`, `render` | агент измеряет и смотрит виды | |
 | 5 | `diff.py`: модель + геометрия + сводка между коммитами; инструмент `diff` и CLI | видно, что меняет каждый коммит | |
 | 6 | Синхронизация с `origin` (pull перед задачей, push после коммита), конфликты как ошибка инструмента | конструктор работает в своём клоне через git.br | |

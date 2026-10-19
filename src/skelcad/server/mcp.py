@@ -5,11 +5,12 @@
 
 from __future__ import annotations
 
+import base64
 from contextvars import ContextVar
 from functools import partial
 
 from anyio import to_thread
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Image
 from mcp.server.transport_security import TransportSecuritySettings
 
 from skelcad.server.tools import Server, Tools
@@ -135,5 +136,29 @@ def build_mcp(srv: Server) -> FastMCP:
         """Сравнить варианты по метрикам (масса, швы, K_min, метрики проекта); страница compare.html.
         Берёт готовые отчёты сборки, недостающие строит; rebuild=True — перестроить все."""
         return await run(t.compare, project, variants, rebuild)
+
+    # ---------------- измерения и виды
+    @mcp.tool()
+    async def measure(project: str, variant: str, op: str, args: dict | None = None) -> dict:
+        """Измерить на геометрии варианта. op и args:
+        list — какие тела есть; mass {a?} — масса деталей (кг); cog {a?} — центр тяжести;
+        bbox {a?} — габарит (мм); distance / clearance {a, b} — расстояние между телами и ближайшие точки;
+        interference {a, b} — объём пересечения (мм³);
+        section {a?, origin:[x,y,z], normal:[nx,ny,nz]} — площадь сечения;
+        part {a} — сводка по детали (объём, масса, ЦТ, габарит, модель).
+        Ссылки a/b: part:<id> | fastener:<id> | body:<id> | assembly | assembly+ (с крепежом и телами)."""
+        return await run(t.measure, project, variant, op, args)
+
+    @mcp.tool()
+    async def render(project: str, variant: str, view: str = "iso", highlight: str | None = None) -> list:
+        """Посмотреть вариант глазами: PNG-проекция (видимые и скрытые линии). view: iso | main | left | top.
+        highlight — подсветить тело красным (part:<id>, fastener:<id>, body:<id>). Файлы SVG/PNG — по ссылкам."""
+        res = await run(t.render, project, variant, view, highlight)
+        out: list = [res["summary"]]
+        if res.get("png_base64"):
+            out.append(Image(data=base64.b64decode(res["png_base64"]), format="png"))
+        elif res.get("svg_text"):
+            out.append(res["svg_text"][:20000])
+        return out
 
     return mcp

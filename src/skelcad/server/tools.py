@@ -296,6 +296,38 @@ class Tools:
             "page": self.srv.url(project, "compare.html"),
         }
 
+    # ---------------------------------------------------------------- измерения и виды
+
+    def measure(self, project: str, variant: str | None, op: str, args: dict | None = None) -> dict:
+        res = self.srv.runner.run(
+            "measure",
+            {"project_dir": str(self.ws.path(project)), "variant": variant, "op_name": op, "op_args": args or {}},
+        )
+        parts = {k: v for k, v in res.items() if k not in ("model", "note")}
+        return {"summary": f"{op} {args or ''}: {parts}"[:400], "result": res}
+
+    def render(self, project: str, variant: str | None, view: str = "iso", highlight: str | None = None) -> dict:
+        res = self.srv.runner.run(
+            "render",
+            {
+                "project_dir": str(self.ws.path(project)),
+                "variant": variant,
+                "view": view,
+                "highlight": highlight,
+                "out_dir": str(self.srv.out_dir(project)),
+            },
+        )
+        links = {k: self.srv.url(project, res[k]) for k in ("svg", "png") if res.get(k)}
+        summary = f"{project}/{variant}: вид {view}" + (f", подсветка {highlight}" if highlight else "") + f" — {links}"
+        if res.get("note"):
+            summary += f" ({res['note']})"
+        return {
+            "summary": summary,
+            "links": links,
+            "png_base64": res.get("png_base64"),
+            "svg_text": res.get("svg_text"),
+        }
+
 
 def local_server(data: Path) -> Server:
     """Сервер для CLI и тестов: подпроцесс-воркер, данные в папке."""
