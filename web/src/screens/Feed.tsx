@@ -70,6 +70,9 @@ export function Feed() {
               {S.feed.toVariant(variant)}
             </Link>
           )}
+          <Link className="small" to={`/p/${encodeURIComponent(project)}/compare`}>
+            {S.compare.tab}
+          </Link>
         </div>
       </header>
       <div className="page feed__body">

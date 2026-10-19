@@ -166,3 +166,19 @@ button.danger { color: var(--error); border-color: var(--error); }
 .dialog__box h2 { margin: 0; }
 .dialog__actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
 .card__links { margin-left: 12px; display: inline-flex; gap: 6px; align-items: center; }
+
+/* --- сравнение --- */
+.compare { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.compare__body { max-width: 1200px; display: grid; gap: 16px; }
+.cmp { border-collapse: collapse; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.cmp th, .cmp td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+.cmp thead th { vertical-align: top; }
+.cmp tbody th { font-weight: 500; }
+.cmp td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.cmp td.best { font-weight: 700; color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.cmp__title { font-weight: 400; }
+.cmp__models { display: grid; gap: 12px; }
+.cmp__model { margin: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+.cmp__model figcaption { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.canvas--cmp { height: 360px; min-height: 0; background: var(--bg); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

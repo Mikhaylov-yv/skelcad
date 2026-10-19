@@ -189,3 +189,28 @@ def commit_model(srv, project: str, commit: str, variant: str) -> dict:
     if not files.get("gltf"):
         raise LookupError("сборка не дала glTF")
     return {"url": f"/out/{project}/_commits/{full[:12]}/{files['gltf']}", "commit": full, "built": built}
+
+
+# ---------------------------------------------------------------- сравнение вариантов
+
+
+def compare(tools, out_dir: Path, project: str, variants: list[str] | None = None) -> dict:
+    """Таблица метрик по вариантам (как инструмент compare) + числа и ссылки на GLB каждого варианта."""
+    res = tools.compare(project, variants)
+    ws = tools.ws
+    cols = []
+    for v in res["variants"]:
+        item = variant_overview(out_dir, project, {"id": v, "title": ""})
+        rep = out_dir / project / v / "report.json"
+        glb = None
+        if rep.is_file():
+            r = json.loads(rep.read_text(encoding="utf-8"))
+            item["title"] = r.get("title", "")
+            files = r.get("files") or {}
+            glb = f"/out/{project}/{files['gltf']}" if files.get("gltf") else None
+        item["glb"] = glb
+        cols.append(item)
+    titles = {v["id"]: v.get("title", "") for v in ws.variants(project)}
+    for c in cols:
+        c["title"] = c["title"] or titles.get(c["id"], "")
+    return {"summary": res["summary"], "variants": cols, "rows": res["rows"]}

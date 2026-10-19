@@ -5,6 +5,7 @@ import { App } from "./App";
 import { Projects } from "./screens/Projects";
 import { Variant } from "./screens/Variant";
 import { Feed } from "./screens/Feed";
+import { Compare } from "./screens/Compare";
 import "./index.css";
 
 const router = createBrowserRouter([
@@ -14,6 +15,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Projects /> },
       { path: "p/:project/commits", element: <Feed /> },
+      { path: "p/:project/compare", element: <Compare /> },
       { path: "p/:project/:variant", element: <Variant /> },
     ],
   },

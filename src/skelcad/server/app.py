@@ -112,6 +112,11 @@ def create_app(srv: Server | None = None) -> FastAPI:
         except api.NotBuilt as e:
             raise HTTPException(404, str(e)) from e
 
+    @app.get("/api/projects/{name}/compare")
+    async def api_compare(name: str, variants: str | None = None):
+        vs = [v for v in (variants or "").split(",") if v] or None
+        return await to_thread.run_sync(api.compare, tools, srv.workspace.out_dir, name, vs)
+
     @app.get("/api/projects/{name}/commits")
     async def api_commits(name: str, limit: int = 50):
         return await to_thread.run_sync(api.commits, srv.workspace, name, limit)

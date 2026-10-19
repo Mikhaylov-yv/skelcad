@@ -187,6 +187,22 @@ export interface CommitModel {
   built: boolean;
 }
 
+export interface CompareRow {
+  metric: string;
+  values: Record<string, number | string | null>;
+  best: string[];
+}
+
+export interface CompareVariant extends VariantOverview {
+  glb: string | null;
+}
+
+export interface CompareResponse {
+  summary: string;
+  variants: CompareVariant[];
+  rows: CompareRow[];
+}
+
 export interface BuildResponse {
   summary: string;
   variants: { variant: string; line: string }[];
@@ -197,6 +213,7 @@ export const api = {
   projects: () => getJson<ProjectsResponse>("/api/projects"),
   report: (project: string, variant: string) =>
     getJson<Report>(`/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/report`),
+  compare: (project: string) => getJson<CompareResponse>(`/api/projects/${encodeURIComponent(project)}/compare`),
   commits: (project: string, limit = 50) =>
     getJson<CommitsResponse>(`/api/projects/${encodeURIComponent(project)}/commits?limit=${limit}`),
   commitDiff: (project: string, hash: string, variant: string) =>

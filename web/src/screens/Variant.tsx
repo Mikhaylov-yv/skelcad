@@ -120,6 +120,9 @@ export function Variant() {
             <Link className="small" to={`/p/${encodeURIComponent(project)}/commits?variant=${encodeURIComponent(variant)}`}>
               {S.feed.tab}
             </Link>
+            <Link className="small" to={`/p/${encodeURIComponent(project)}/compare`}>
+              {S.compare.tab}
+            </Link>
           </div>
         )}
         <div className="variant__actions">
