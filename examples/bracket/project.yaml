@@ -32,6 +32,9 @@ skeleton:
       name: "Посадка оси"
       datum: axle_axis
       params: {d: 50, fit_hole: H8, fit_shaft: f7, overhang: 30}
+  # обстановка: тела вокруг изделия — на компоновочном эскизе и в проверках (деталь не должна врезаться)
+  surroundings:
+    - {id: wall_body, kind: plane, role: wall, name: "Стена", material: "бетон B25", origin: [0, 0, 0], normal: [0, 1, 0], extent: 300, thickness: 250}
 
 # параметры по умолчанию для всех вариантов; variants/*.yaml перекрывают их
 params:

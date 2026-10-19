@@ -6,7 +6,7 @@ import build123d as bd
 
 from skelcad.context import Context
 from skelcad.core.findings import Finding
-from skelcad.core.model import PlatePart, Project
+from skelcad.core.model import PlatePart, Project, text
 from skelcad.core.vec import dot, unit
 from skelcad.geom.generator import Geometry, any_perp, plane
 
@@ -193,4 +193,80 @@ def c_interface_bodies(m: Project, g: Geometry, ctx: Context) -> list[Finding]:
     return out
 
 
-CHECKS = [c_interference, c_weld_contact, c_shaft_seat, c_interface_bodies, c_wrench]
+def c_surroundings(m: Project, g: Geometry, ctx: Context) -> list[Finding]:
+    """Детали не врезаются в обстановку (стена, пол, соседний узел); крепёж не проверяется — анкеры уходят в стену."""
+    out = []
+    for b in m.skeleton.surroundings:
+        body = g.surroundings.get(b.id)
+        if body is None:
+            continue
+        name = text(b.name) or b.id
+        bad = {pid: v for pid, s in g.parts.items() if (v := common_volume(body, s)) > TOL_VOL}
+        for pid, v in bad.items():
+            out.append(
+                F(
+                    "error",
+                    "C-SURROUND",
+                    f"surrounding:{b.id}+part:{pid}",
+                    f"Деталь врезается в «{name}», объём {v:.0f} мм³",
+                )
+            )
+    if m.skeleton.surroundings and not out:
+        out.append(
+            F(
+                "info",
+                "C-SURROUND",
+                "skeleton",
+                f"Обстановка не задета: тел {len(m.skeleton.surroundings)}, деталей {len(g.parts)}",
+            )
+        )
+    return out
+
+
+def c_envelopes(m: Project, g: Geometry, ctx: Context) -> list[Finding]:
+    """Зоны скелета: деталь в keep_out — ошибка; деталь за пределами keep_in — предупреждение."""
+    out = []
+    for e in m.skeleton.envelopes:
+        name = text(e.name) or e.id
+        box = bd.Box(*(max(e.max[i] - e.min[i], 0.01) for i in range(3))).moved(
+            bd.Location(tuple((e.max[i] + e.min[i]) / 2 for i in range(3)))
+        )
+        if e.kind == "keep_out":
+            for pid, s in g.parts.items():
+                v = common_volume(box, s)
+                if v > TOL_VOL:
+                    out.append(
+                        F(
+                            "error",
+                            "C-KEEP-OUT",
+                            f"envelope:{e.id}+part:{pid}",
+                            f"Деталь в запретной зоне «{name}», объём {v:.0f} мм³",
+                        )
+                    )
+        else:
+            for pid, s in g.parts.items():
+                bb = s.bounding_box()
+                over = max(
+                    0.0,
+                    e.min[0] - bb.min.X,
+                    e.min[1] - bb.min.Y,
+                    e.min[2] - bb.min.Z,
+                    bb.max.X - e.max[0],
+                    bb.max.Y - e.max[1],
+                    bb.max.Z - e.max[2],
+                )
+                if over > 0.5:
+                    out.append(
+                        F(
+                            "warning",
+                            "C-KEEP-IN",
+                            f"envelope:{e.id}+part:{pid}",
+                            f"Деталь выходит за отведённый объём «{name}» на {over:.0f} мм",
+                        )
+                    )
+    if m.skeleton.envelopes and not out:
+        out.append(F("info", "C-ENVELOPE", "skeleton", f"Зоны скелета соблюдены: {len(m.skeleton.envelopes)}"))
+    return out
+
+
+CHECKS = [c_interference, c_weld_contact, c_shaft_seat, c_interface_bodies, c_wrench, c_surroundings, c_envelopes]

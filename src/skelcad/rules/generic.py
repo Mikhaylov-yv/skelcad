@@ -118,4 +118,26 @@ def r_wrench(m: Project, ctx: Context) -> list[Finding]:
     return out
 
 
-RULES = [r_bore_wall, r_free_edge, r_fit, r_wrench]
+def r_layout(m: Project, ctx: Context) -> list[Finding]:
+    """Согласование компоновки: предупреждение, если скелет, обстановка или требования менялись после «Компоновка
+    согласована»; без отметки — справка (согласовать можно в рабочем месте, агент видит состояние в project_read)."""
+    st = m.layout
+    if st is None:
+        return []
+    if st.approved is None:
+        return [F("info", "R-LAYOUT", "skeleton", "Компоновка не согласована конструктором")]
+    who = f"{st.approved.by}, {st.approved.at[:10]}"
+    if st.changed:
+        return [
+            F(
+                "warning",
+                "R-LAYOUT",
+                "skeleton",
+                f"Компоновка изменена после согласования ({who}): скелет, обстановка или требования — "
+                "согласуйте заново",
+            )
+        ]
+    return [F("info", "R-LAYOUT", "skeleton", f"Компоновка согласована: {who}")]
+
+
+RULES = [r_bore_wall, r_free_edge, r_fit, r_wrench, r_layout]

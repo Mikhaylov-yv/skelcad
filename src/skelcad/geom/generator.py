@@ -10,7 +10,16 @@ from dataclasses import dataclass, field
 import build123d as bd
 
 from skelcad.context import Context
-from skelcad.core.model import Cylinder, Fastener, PlatePart, Project, TubePart, text
+from skelcad.core.model import (
+    Cylinder,
+    CylinderBody,
+    Fastener,
+    PlatePart,
+    Project,
+    Surrounding,
+    TubePart,
+    text,
+)
 
 BIG = 5000.0
 C_FASTENER = "#5b5f66"
@@ -23,6 +32,9 @@ class Geometry:
     parts: dict[str, bd.Solid]  # изготавливаемые детали по id
     fasteners: dict[str, bd.Compound] = field(default_factory=dict)  # крепёж: стержень + шайба + гайка
     bodies: dict[str, bd.Solid] = field(default_factory=dict)  # опорные тела интерфейсов (вал, ось)
+    surroundings: dict[str, bd.Solid] = field(
+        default_factory=dict
+    )  # обстановка (стена, пол, соседний узел) — не в сборке
 
     def assembly(self, project: Project, with_purchased: bool = True) -> bd.Compound:
         children = []
@@ -100,6 +112,15 @@ def cylinder_solid(c: Cylinder) -> bd.Solid:
     return single_solid(s)
 
 
+def surrounding_solid(b: Surrounding) -> bd.Solid:
+    if isinstance(b, CylinderBody):
+        return cylinder_solid(Cylinder(center=b.center, axis=b.axis, diameter=b.diameter, length=b.length))
+    lo, hi = b.bbox()
+    size = tuple(max(hi[i] - lo[i], 0.01) for i in range(3))
+    center = tuple((hi[i] + lo[i]) / 2 for i in range(3))
+    return single_solid(bd.Box(*size).moved(bd.Location(center)))
+
+
 def fastener_solid(f: Fastener, ctx: Context) -> bd.Compound:
     """Стержень (шпилька/болт), шайба и гайка вдоль оси крепежа от точки `position`."""
     c = ctx.fastener(f.size)
@@ -136,4 +157,10 @@ def generate(project: Project, ctx: Context) -> Geometry:
             raise ValueError(f"деталь {p.id} ({text(p.name)}): {e}") from e
     fasteners = {f.id: fastener_solid(f, ctx) for f in project.fasteners}
     bodies = {i.id: cylinder_solid(i.body) for i in project.skeleton.interfaces if i.body}
-    return Geometry(parts=parts, fasteners=fasteners, bodies=bodies)
+    surroundings = {}
+    for b in project.skeleton.surroundings:
+        try:
+            surroundings[b.id] = surrounding_solid(b)
+        except Exception as e:  # noqa: BLE001 — обстановка не должна валить сборку изделия
+            raise ValueError(f"обстановка {b.id} ({text(b.name)}): {e}") from e
+    return Geometry(parts=parts, fasteners=fasteners, bodies=bodies, surroundings=surroundings)

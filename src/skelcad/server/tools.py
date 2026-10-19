@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import base64
+import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -82,16 +84,18 @@ class Tools:
             return {"summary": f"{project}: раздел {section}", "section": section, "data": data}
         files = self.ws.files(project)
         vnames = ", ".join(v["id"] for v in variants) or "нет"
-        from skelcad.server import review
+        from skelcad.server import layout, review
 
         open_items = review.list_items(self.ws, project, "open")
         note = f"; открытых замечаний конструктора: {len(open_items)} (см. review_list)" if open_items else ""
+        lay = layout.state(self.ws, project)
         return {
-            "summary": f"{project}: «{spec.get('title', '')}», варианты: {vnames}{note}",
+            "summary": f"{project}: «{spec.get('title', '')}», варианты: {vnames}{note}; {layout.describe(lay)}",
             "spec": spec,
             "variants": variants,
             "files": files,
             "review_open": len(open_items),
+            "layout": lay,
         }
 
     def _fresh(self, project: str) -> str:
@@ -376,6 +380,61 @@ class Tools:
             "links": links,
             "png_base64": res.get("png_base64"),
             "svg_text": res.get("svg_text"),
+        }
+
+    def layout(self, project: str, variant: str | None = None, png: bool = True) -> dict:
+        """Компоновочный эскиз (все виды) из кэша по коммиту HEAD или через воркер: out/<p>/_layout/<hash>[-<v>]/."""
+        self._fresh(project)
+        head = self.ws.rev(project, "HEAD")[:12]
+        key = head + (f"-{variant}" if variant else "")
+        d = self.srv.out_dir(project) / "_layout" / key
+        jf = next(d.glob("*_layout.json"), None) if d.is_dir() else None
+        res = None
+        if jf is not None:
+            try:
+                res = json.loads(jf.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                res = None
+        if res is None:
+            res = self.srv.runner.run(
+                "layout",
+                {"project_dir": str(self.ws.path(project)), "variant": variant, "out_dir": str(d), "png": png},
+            )
+        rel = f"_layout/{key}/"
+        for v in res["views"].values():
+            v["svg_url"] = f"/out/{project}/{rel}{v['svg']}"
+            v["png_url"] = f"/out/{project}/{rel}{v['png']}" if v.get("png") else None
+        res["commit"] = head
+        res["key"] = key
+        return res
+
+    def render_layout(self, project: str, variant: str | None, view: str = "main") -> dict:
+        """Для агента: PNG компоновки одного вида + размеры и легенда текстом."""
+        from skelcad.server import layout as L
+
+        res = self.layout(project, variant)
+        if view not in res["views"]:
+            raise ValueError(f"вид «{view}»; у компоновки есть: {', '.join(res['views'])}")
+        v = res["views"][view]
+        d = self.srv.out_dir(project) / "_layout" / res["key"]
+        png_b64 = None
+        if v.get("png") and (d / v["png"]).is_file():
+            png_b64 = base64.b64encode((d / v["png"]).read_bytes()).decode()
+        dims = [f"{x['id']} = {x['text']} ({x['axis']})" for x in res["dims"] if x["view"] == view]
+        state = L.describe(L.state(self.ws, project))
+        lines = [
+            f"{project}/{variant or 'база'}: компоновка, {v['title']}; {state}",
+            "размеры: " + ("; ".join(dims) or "нет"),
+            *res["legend"],
+            *(f"примечание: {n}" for n in res.get("notes") or []),
+        ]
+        links = {k: self.srv.url(project, f"_layout/{res['key']}/{v[k]}") for k in ("svg", "png") if v.get(k)}
+        return {
+            "summary": "\n".join(lines),
+            "links": links,
+            "png_base64": png_b64,
+            "svg_text": None if png_b64 else (d / v["svg"]).read_text(encoding="utf-8"),
+            "layout": {k: res[k] for k in ("dims", "entities", "loads", "legend", "parts", "notes", "commit")},
         }
 
     def diff(self, project: str, variant: str | None, a: str = "HEAD~1", b: str = "HEAD") -> dict:

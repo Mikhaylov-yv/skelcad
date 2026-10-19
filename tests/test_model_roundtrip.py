@@ -13,7 +13,8 @@ def test_roundtrip_bracket(bracket_dir: Path, tmp_path: Path):
     f = tmp_path / "model.yaml"
     save_model(m, f)
     back = Project.model_validate(yaml.safe_load(f.read_text(encoding="utf-8")))
-    assert back == m
+    assert m.layout is not None and back.layout is None  # состояние компоновки в model.yaml не пишется
+    assert back == m.model_copy(update={"layout": None})
     assert back.unit("bracket").part("hub").kind == "tube"
     assert back.skeleton.interface("axle").body is not None
 

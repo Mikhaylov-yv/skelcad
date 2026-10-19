@@ -1,0 +1,8 @@
+id: B_wide
+title: "B. Планка 160×80×12, отверстия 120×50"
+description: >
+  Широкий вариант: больше кромка у отверстий и толще (длина свинчивания 1,2·d),
+  но планка выходит за отведённое место (зона keep_in) — для сравнения.
+params:
+  plate: {length: 160, width: 80, thickness: 12, corner_radius: 8}
+  holes: {pitch_x: 120, pitch_y: 50}

@@ -23,7 +23,7 @@ services:
       SKELCAD_AUTH: ${SKELCAD_AUTH:-tokens}
       SKELCAD_AGENT_TOKEN: ${AGENT_TOKEN:?}
       SKELCAD_TASKS: /data/tasks
-      SKELCAD_SEED: ${SKELCAD_SEED:-bracket,pipe_support}
+      SKELCAD_SEED: ${SKELCAD_SEED:-bracket,pipe_support,plate}
       SKELCAD_JOB_TIMEOUT_S: ${JOB_TIMEOUT_S:-180}
       PUBLIC_URL: ${PUBLIC_URL:?}
     volumes:

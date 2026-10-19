@@ -1,0 +1,49 @@
+# Третий пилот SkelCAD: изделие из одной детали — планка с четырьмя резьбовыми отверстиями M10.
+id: plate
+title: "Планка с 4 резьбовыми отверстиями M10"
+description: >
+  Прямоугольная стальная планка с четырьмя сквозными резьбовыми отверстиями M10 по прямоугольнику —
+  монтажная планка под ответную деталь. Одна деталь, без швов и крепежа: простые изделия проходят тот же
+  цикл, что и сварные узлы (модель → геометрия → компоновка и эскиз → выдача).
+lang: ru
+coordinate_system: "X — вдоль планки, Y — поперёк, Z — по толщине (вверх); Z=0 — нижняя плоскость, начало — центр планки"
+standards: [gost]
+generator: generators/plate.py
+plugins: []
+# локальная таблица крепежа: в пакете gost нет M10 (есть M12…M20); локальная таблица подменяет таблицу целиком
+tables:
+  fasteners:
+    M10: {d: 10, pitch: 1.5, As: 58.0, tap_drill: 8.5, hole: 11, nut_s: 16, nut_e: 18.5, nut_m: 8.4, washer_d: 20, washer_s: 2, socket_od: 24}
+
+requirements:
+  purpose: "Монтажная планка: четыре резьбовых отверстия M10 под крепление ответной детали"
+  loads: {}
+  safety_required: 1.5
+  environment: {location: "помещение"}
+  constraints: {edge_min: "кромка от оси отверстия ≥ 1,5·d"}
+
+skeleton:
+  datums:
+    - {id: base, kind: plane, origin: [0, 0, 0], direction: [0, 0, 1], name: "Нижняя плоскость планки (опорная)"}
+  envelopes:
+    - {id: place, kind: keep_in, min: [-75, -40, 0], max: [75, 40, 20], name: "Место под планку"}
+  interfaces:
+    - id: mount
+      kind: mount_plane
+      name: "Крепление ответной детали (4 × M10)"
+      datum: base
+      params: {thread: M10, count: 4}
+  surroundings:
+    - {id: mating, kind: box, role: mating_part, name: "Ответная деталь (условно)", min: [-60, -30, 12], max: [60, 30, 42]}
+
+# параметры по умолчанию; variants/*.yaml перекрывают их
+params:
+  material: St3sp
+  plate: {length: 120, width: 60, thickness: 10, corner_radius: 5}
+  holes: {pitch_x: 90, pitch_y: 30}
+
+assumptions:
+  - {id: G1, topic: thread, text: "Резьба M10-6H по ГОСТ 24705 (шаг 1,5), сквозная; сверло под резьбу Ø8,5 по ГОСТ 19257; в модели отверстие показано по диаметру сверла."}
+  - {id: G2, topic: thread, text: "Толщина планки ≥ 0,8·d — длина свинчивания достаточна для стальной детали."}
+  - {id: G3, topic: material, text: "Материал Ст3сп, листовой прокат по сортаменту пакета gost; эксплуатация в помещении."}
+  - {id: G4, topic: loads, text: "Нагрузки не заданы — расчёт не выполняется, только геометрия, правила и зоны скелета."}

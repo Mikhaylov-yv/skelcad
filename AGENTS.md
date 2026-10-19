@@ -19,6 +19,11 @@
 
 1. `project_list`, `project_read` — что за изделие, какие варианты, какие стандарты; `review_list` —
    открытые замечания конструктора (пометки на модели), на каждое нужен `review_resolve` с ответом.
+   Новое изделие начинай с компоновки: в `project.yaml` опиши требования (нагрузки `Fv`/`Fh`/`Fa`/`Fx`…),
+   скелет (`datums`, `interfaces`, `envelopes` keep_in / keep_out) и обстановку `skeleton.surroundings`
+   (стена, пол, труба, ответная деталь, соседнее оборудование — plane / box / cylinder с ролью и именем),
+   посмотри `render(layout=true)` и дождись согласования конструктора (`project_read` → `layout`:
+   none / approved / changed). Детали — после согласования; изменил скелет — согласуй заново.
 2. `check` или `build` — текущее состояние: замечания (error / warning / info), запасы K, масса.
 3. Заземлиться: `measure` (расстояния, зазоры, пересечения, массы, ЦТ), `context_search` /
    `context_lookup` (каталоги: крепёж, анкеры, материалы, трубы), `render` (посмотреть вид).
@@ -44,9 +49,10 @@
 ## 2. Разработка SkelCAD в этом репозитории
 
 - Документы: `docs/architecture/01-vision-and-architecture.md` (замысел), `02-decisions.md`
-  (журнал решений), `03-m0-plan.md`, `04-m1-plan.md`, `05-m2-plan.md` (планы этапов со статусом).
-- Код: `src/skelcad/core` (модель), `geom` (OCCT), `rules` (плагины), `pipeline.py`, `server/`
-  (FastAPI + MCP + git-проекты; `api.py`, `auth.py`, `params.py`, `review.py`, `tasks.py`, `tokens.py`),
+  (журнал решений), `03-m0-plan.md`, `04-m1-plan.md`, `05-m2-plan.md`, `06-m2-1-sketches-plan.md` (планы этапов со статусом).
+- Код: `src/skelcad/core` (модель), `geom` (OCCT; `layout.py` — компоновочный эскиз), `rules` (плагины),
+  `pipeline.py`, `server/` (FastAPI + MCP + git-проекты; `api.py`, `auth.py`, `layout.py` (согласование
+  компоновки), `params.py`, `review.py`, `tasks.py`, `tokens.py`),
   `worker.py` (изолированное исполнение кода проектов), `agent.py` (встроенный агент из workbench),
   `measure.py`, `render.py`, `diff.py`. Workbench — `web/` (Vite + React + TS, three.js). Пакет стандарта — `packages/std-gost`.
 - Проверки перед коммитом: `uv run ruff check src tests && uv run ruff format src tests &&

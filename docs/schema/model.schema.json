@@ -61,6 +61,115 @@
       "title": "Assumption",
       "type": "object"
     },
+    "BoxBody": {
+      "description": "Параллелепипед: соседнее оборудование, ответная деталь, зона обслуживания.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "role": {
+          "default": "",
+          "title": "Role",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "default": "",
+          "title": "Name"
+        },
+        "material": {
+          "default": "",
+          "title": "Material",
+          "type": "string"
+        },
+        "kind": {
+          "const": "box",
+          "default": "box",
+          "title": "Kind",
+          "type": "string"
+        },
+        "min": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Min",
+          "type": "array"
+        },
+        "max": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Max",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "min",
+        "max"
+      ],
+      "title": "BoxBody",
+      "type": "object"
+    },
     "Cylinder": {
       "description": "Цилиндр по центру и оси — опорное тело интерфейса (вал, ось, труба соседнего узла).",
       "properties": {
@@ -114,6 +223,125 @@
         "length"
       ],
       "title": "Cylinder",
+      "type": "object"
+    },
+    "CylinderBody": {
+      "description": "Цилиндр: труба, вал, колонна рядом с изделием.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "role": {
+          "default": "",
+          "title": "Role",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "default": "",
+          "title": "Name"
+        },
+        "material": {
+          "default": "",
+          "title": "Material",
+          "type": "string"
+        },
+        "kind": {
+          "const": "cylinder",
+          "default": "cylinder",
+          "title": "Kind",
+          "type": "string"
+        },
+        "center": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Center",
+          "type": "array"
+        },
+        "axis": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Axis",
+          "type": "array"
+        },
+        "diameter": {
+          "title": "Diameter",
+          "type": "number"
+        },
+        "length": {
+          "title": "Length",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "center",
+        "axis",
+        "diameter",
+        "length"
+      ],
+      "title": "CylinderBody",
       "type": "object"
     },
     "Datum": {
@@ -607,6 +835,60 @@
       "title": "Interface",
       "type": "object"
     },
+    "LayoutApproval": {
+      "description": "Отметка конструктора «Компоновка согласована»: кто, когда, на каком коммите; hash — скелет с обстановкой\nи требования на момент согласования (см. layout_hash).",
+      "properties": {
+        "by": {
+          "title": "By",
+          "type": "string"
+        },
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "commit": {
+          "default": "",
+          "title": "Commit",
+          "type": "string"
+        },
+        "hash": {
+          "title": "Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "by",
+        "at",
+        "hash"
+      ],
+      "title": "LayoutApproval",
+      "type": "object"
+    },
+    "LayoutState": {
+      "description": "Состояние компоновки разрешённого проекта: текущий хеш и отметка согласования (если была).",
+      "properties": {
+        "hash": {
+          "title": "Hash",
+          "type": "string"
+        },
+        "approved": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LayoutApproval"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "hash"
+      ],
+      "title": "LayoutState",
+      "type": "object"
+    },
     "Outline": {
       "description": "Контур пластины: выпуклая оболочка точек и окружностей (как эскиз в САПР).",
       "properties": {
@@ -721,6 +1003,125 @@
         "normal"
       ],
       "title": "Placement",
+      "type": "object"
+    },
+    "PlaneBody": {
+      "description": "Плоская поверхность (стена, пол, потолок): квадрат 2·extent в плоскости, тело толщиной thickness за ней\n(против нормали); нормаль смотрит к изделию.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "default": "human",
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "approved",
+          "enum": [
+            "draft",
+            "proposed",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "role": {
+          "default": "",
+          "title": "Role",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "default": "",
+          "title": "Name"
+        },
+        "material": {
+          "default": "",
+          "title": "Material",
+          "type": "string"
+        },
+        "kind": {
+          "const": "plane",
+          "default": "plane",
+          "title": "Kind",
+          "type": "string"
+        },
+        "origin": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Origin",
+          "type": "array"
+        },
+        "normal": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Normal",
+          "type": "array"
+        },
+        "extent": {
+          "default": 500.0,
+          "title": "Extent",
+          "type": "number"
+        },
+        "thickness": {
+          "default": 100.0,
+          "title": "Thickness",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "origin",
+        "normal"
+      ],
+      "title": "PlaneBody",
       "type": "object"
     },
     "PlatePart": {
@@ -948,6 +1349,32 @@
             "$ref": "#/$defs/Interface"
           },
           "title": "Interfaces",
+          "type": "array"
+        },
+        "surroundings": {
+          "default": [],
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "box": "#/$defs/BoxBody",
+                "cylinder": "#/$defs/CylinderBody",
+                "plane": "#/$defs/PlaneBody"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/PlaneBody"
+              },
+              {
+                "$ref": "#/$defs/BoxBody"
+              },
+              {
+                "$ref": "#/$defs/CylinderBody"
+              }
+            ]
+          },
+          "title": "Surroundings",
           "type": "array"
         }
       },
@@ -1505,7 +1932,8 @@
       "default": {
         "datums": [],
         "envelopes": [],
-        "interfaces": []
+        "interfaces": [],
+        "surroundings": []
       }
     },
     "units": {
@@ -1541,6 +1969,17 @@
       "default": {},
       "title": "Derived",
       "type": "object"
+    },
+    "layout": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LayoutState"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

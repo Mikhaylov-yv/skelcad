@@ -6,10 +6,11 @@ from skelcad.core.project import ProjectDir
 from skelcad.pipeline import build_variant
 
 # из out/<variant>/report.json пилота (2026-10-11): масса, габарит, длина швов, K_min, замечания
+# info: +2 с M2.1 — R-LAYOUT (компоновка не согласована) и C-SURROUND (обстановка не задета)
 PILOT = {
-    "A_fork": (15.33, [270, 250, 290], 848, 1.14, {"error": 0, "warning": 3, "info": 27}),
-    "B_hub": (14.05, [240, 238, 290], 1166, 1.14, {"error": 0, "warning": 3, "info": 25}),
-    "C_box": (18.6, [270, 253, 290], 1911, 1.14, {"error": 0, "warning": 1, "info": 21}),
+    "A_fork": (15.33, [270, 250, 290], 848, 1.14, {"error": 0, "warning": 3, "info": 29}),
+    "B_hub": (14.05, [240, 238, 290], 1166, 1.14, {"error": 0, "warning": 3, "info": 27}),
+    "C_box": (18.6, [270, 253, 290], 1911, 1.14, {"error": 0, "warning": 1, "info": 23}),
 }
 
 

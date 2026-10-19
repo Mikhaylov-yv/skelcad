@@ -39,8 +39,11 @@ def variant_overview(out_dir: Path, project: str, variant: dict) -> dict:
 
 
 def project_overview(ws: Workspace, out_dir: Path, name: str, tasks=None) -> dict:
+    from skelcad.server import layout
+
     info = ws.info(name)
     info["variants"] = [variant_overview(out_dir, name, v) for v in ws.variants(name)]
+    info["layout"] = layout.brief(ws, name)
     active = tasks.active(name) if tasks is not None else None
     info["state"] = "agent" if active else "constructor"
     info["task"] = {"id": active["id"], "status": active["status"], "text": active["text"]} if active else None
@@ -86,6 +89,25 @@ def variant_report(ws: Workspace, out_dir: Path, project: str, variant: str) -> 
     if glb and glb.is_file():
         r["geometry_at"] = datetime.fromtimestamp(glb.stat().st_mtime, tz=UTC).isoformat(timespec="seconds")
     return r
+
+
+# ---------------------------------------------------------------- компоновка
+
+
+def layout_view(tools, project: str, variant: str | None) -> dict:
+    """Компоновочный эскиз (кэш по коммиту) и состояние согласования."""
+    from skelcad.server import layout
+
+    res = tools.layout(project, variant or None)
+    res["approval"] = layout.state(tools.ws, project)
+    return res
+
+
+def layout_approve(ws: Workspace, project: str) -> dict:
+    """«Компоновка согласована» — коммит от имени пользователя рабочего места."""
+    from skelcad.server import layout
+
+    return layout.approve(ws, project, current_actor("workbench"))
 
 
 # ---------------------------------------------------------------- лента коммитов

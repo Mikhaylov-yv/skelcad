@@ -25,7 +25,9 @@ Python) — источник истины, геометрия и чертежи 
 Любое изменение — files_write с осмысленным сообщением: один вызов = один коммит в git под твоим именем.
 Конструктор видит историю (history) и откатывает лишнее; тупиковый шаг отменяй сам (revert).
 
-Цикл: project_read → check/build → measure/context_search → files_write → build → diff → … → compare.
+Цикл: project_read → (скелет и обстановка → render(layout=True) → согласование конструктором) → check/build →
+measure/context_search → files_write → build → diff → … → compare. Компоновку (skeleton: datums, interfaces,
+envelopes, surroundings; requirements) конструктор согласовывает в рабочем месте; её состояние — в project_read.
 Сводка — первая строка ответа; большие данные запрашивай срезами (model_query path=...).
 Единицы: мм, кН, кг. Замечания уровня error блокируют приёмку — не оставляй их.
 """
@@ -172,10 +174,21 @@ def build_mcp(srv: Server) -> FastMCP:
         return await run(t.measure, project, variant, op, args)
 
     @mcp.tool()
-    async def render(project: str, variant: str, view: str = "iso", highlight: str | None = None) -> list:
+    async def render(
+        project: str, variant: str | None = None, view: str = "iso", highlight: str | None = None, layout: bool = False
+    ) -> list:
         """Посмотреть вариант глазами: PNG-проекция (видимые и скрытые линии). view: iso | main | left | top.
-        highlight — подсветить тело красным (part:<id>, fastener:<id>, body:<id>). Файлы SVG/PNG — по ссылкам."""
-        res = await run(t.render, project, variant, view, highlight)
+        highlight — подсветить тело красным (part:<id>, fastener:<id>, body:<id>). Файлы SVG/PNG — по ссылкам.
+        layout=True — компоновочный эскиз (view: main | left | top): базы и интерфейсы скелета, зоны, обстановка
+        (skeleton.surroundings), нагрузки стрелками, размеры положений; детали варианта тонкой линией, если
+        генератор работает. Строится по project.yaml без сборки — смотри его, когда описал скелет и обстановку,
+        и перед тем, как просить конструктора согласовать компоновку (состояние — в project_read → layout)."""
+        if layout:
+            res = await run(t.render_layout, project, variant, "main" if view == "iso" else view)
+        else:
+            if not variant:
+                raise ValueError("укажите variant")
+            res = await run(t.render, project, variant, view, highlight)
         out: list = [res["summary"]]
         if res.get("png_base64"):
             out.append(Image(data=base64.b64decode(res["png_base64"]), format="png"))

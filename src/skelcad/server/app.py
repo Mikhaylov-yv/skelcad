@@ -8,7 +8,7 @@
   SKELCAD_AGENT_TOKEN токен встроенного агента (клиент «workbench-agent», контейнер agent)
   SKELCAD_TASKS      папка очереди задач агенту (по умолчанию <SKELCAD_DATA>/tasks)
   SKELCAD_JOBS       папка файловой очереди воркера; не задано — воркер подпроцессом здесь же
-  SKELCAD_SEED       проекты-примеры, которые завести при старте (по умолчанию bracket,pipe_support)
+  SKELCAD_SEED       проекты-примеры, которые завести при старте (по умолчанию bracket,pipe_support,plate)
   SKELCAD_TEMPLATES  папка шаблонов проектов (по умолчанию examples/ репозитория)
   PUBLIC_URL         внешний адрес для ссылок на артефакты
 """
@@ -61,7 +61,7 @@ def create_app(srv: Server | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        seed = [s.strip() for s in os.environ.get("SKELCAD_SEED", "bracket,pipe_support").split(",")]
+        seed = [s.strip() for s in os.environ.get("SKELCAD_SEED", "bracket,pipe_support,plate").split(",")]
         made = await to_thread.run_sync(srv.workspace.seed, seed)
         if made:
             log.info("заведены проекты-примеры: %s", ", ".join(made))
@@ -183,6 +183,15 @@ def create_app(srv: Server | None = None) -> FastAPI:
             return await to_thread.run_sync(api.variant_report, srv.workspace, srv.workspace.out_dir, name, variant)
         except api.NotBuilt as e:
             raise HTTPException(404, str(e)) from e
+
+    @app.get("/api/projects/{name}/layout")
+    async def api_layout(name: str, variant: str | None = None):
+        return await to_thread.run_sync(api.layout_view, tools, name, variant)
+
+    @app.post("/api/projects/{name}/layout/approve")
+    async def api_layout_approve(name: str):
+        guard(name)
+        return await to_thread.run_sync(api.layout_approve, srv.workspace, name)
 
     @app.get("/api/projects/{name}/variants/{variant}/params")
     async def api_variant_params(name: str, variant: str):

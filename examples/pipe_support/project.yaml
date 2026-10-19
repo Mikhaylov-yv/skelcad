@@ -33,6 +33,9 @@ skeleton:
       name: "Опирание трубы"
       datum: pipe_axis
       params: {od: 108, length: 300, lateral_gap: 3}   # внешний диаметр трубы, длина опорного тела, зазор до направляющих
+  # обстановка: тела вокруг изделия — на компоновочном эскизе и в проверках (деталь не должна врезаться)
+  surroundings:
+    - {id: floor_body, kind: plane, role: floor, name: "Пол", material: "бетон B25", origin: [0, 0, 0], normal: [0, 0, 1], extent: 300, thickness: 200}
 
 params:
   material: St3sp

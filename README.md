@@ -5,7 +5,7 @@ Open source, Apache-2.0. Стадия: M0 (обобщение пилота) за
 сервер с точкой MCP, проекты в git, изолированный воркер, измерения, рендер, diff) закрыт 19.10.2026,
 см. [docs/architecture/04-m1-plan.md](docs/architecture/04-m1-plan.md); M2 (рабочее место конструктора в браузере:
 вход через Keycloak, 3D, лента изменений с откатом, параметры с черновиком, задачи агенту) закрыт 19.10.2026,
-см. [docs/architecture/05-m2-plan.md](docs/architecture/05-m2-plan.md). Следующий этап — M2.1 (эскизы с размерами и сравнение, предложение), затем M3, мост к САПР.
+см. [docs/architecture/05-m2-plan.md](docs/architecture/05-m2-plan.md). Идёт M2.1 (компоновка, эскизы с размерами, сравнение), затем M3, мост к САПР.
 
 *SkelCAD is an open-source environment where an AI agent and a design engineer develop a product
 together, top-down (skeleton → units → parts → drawings). The product model, not the CAD file, is
@@ -71,7 +71,7 @@ JSON Schema спецификации проекта, варианта и раз�
 | [docs/architecture/02-decisions.md](docs/architecture/02-decisions.md) | Журнал решений D1–D21: принятые, обсуждаемые, отложенные |
 | [docs/architecture/03-m0-plan.md](docs/architecture/03-m0-plan.md) | План этапа M0: устройство репозитория, что переезжает из пилота, шаги и статус |
 | [docs/architecture/05-m2-plan.md](docs/architecture/05-m2-plan.md) | План этапа M2: workbench в браузере, принципы интерфейса (ISO 9241-110, чеклист Нильсена), вход, задача агенту |
-| [docs/architecture/06-m2-1-sketches-plan.md](docs/architecture/06-m2-1-sketches-plan.md) | План этапа M2.1 (предложение): компоновочный эскиз по скелету и обстановке для согласования, эскизы с размерами по модели, сравнение вариантов в одном масштабе и наложением |
+| [docs/architecture/06-m2-1-sketches-plan.md](docs/architecture/06-m2-1-sketches-plan.md) | План этапа M2.1 (в работе): компоновочный эскиз по скелету и обстановке для согласования, эскизы с размерами по модели, сравнение вариантов в одном масштабе и наложением |
 | [docs/ui/checklist.md](docs/ui/checklist.md) | Чеклист ревью интерфейса; ревью экранов — `docs/ui/reviews/` |
 | [docs/guide-workbench.md](docs/guide-workbench.md) | Руководство конструктора: рабочее место в браузере без терминала и git |
 | [docs/architecture/04-m1-plan.md](docs/architecture/04-m1-plan.md) | План этапа M1: сервер с точкой MCP, изменения агента как коммиты, воркер с лимитами, diff, сценарий приёмки |

@@ -10,6 +10,8 @@ Units (узлы) → Parts (детали из заготовок) и Joints (с�
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 from typing import Annotated, Literal
 
@@ -36,6 +38,14 @@ def cross(a: Vec3, b: Vec3) -> Vec3:
 
 def dist3(a: Vec3, b: Vec3) -> float:
     return math.dist(a, b)
+
+
+def axis_index(vec: Vec3 | None) -> int | None:
+    """Номер оси (0, 1, 2), вдоль которой направлен вектор (в любую сторону), или None, если он наклонный."""
+    if not vec:
+        return None
+    n = math.sqrt(sum(c * c for c in vec)) or 1.0
+    return next((i for i in range(3) if abs(abs(vec[i]) / n - 1.0) < 1e-6), None)
 
 
 class Kinded(BaseModel):
@@ -217,6 +227,74 @@ class Envelope(Entity, Kinded):
     name: Text = ""
 
 
+class SurroundingBase(Entity, Kinded):
+    """Тело обстановки: не изготавливается, но ограничивает изделие и показывается на компоновочном эскизе
+    (стена, пол, труба, ответная деталь, соседнее оборудование, зона обслуживания)."""
+
+    role: str = ""  # wall | floor | ceiling | pipe | shaft | equipment | service_zone | mating_part | other
+    name: Text = ""
+    material: str = ""
+
+
+class PlaneBody(SurroundingBase):
+    """Плоская поверхность (стена, пол, потолок): квадрат 2·extent в плоскости, тело толщиной thickness за ней
+    (против нормали); нормаль смотрит к изделию."""
+
+    kind: Literal["plane"] = "plane"
+    origin: Vec3
+    normal: Vec3
+    extent: float = 500.0
+    thickness: float = 100.0
+
+    def bbox(self) -> tuple[Vec3, Vec3]:
+        """Габарит тела: квадрат 2·extent в плоскости, толщина против нормали (осевая нормаль);
+        наклонная плоскость — описывающий бокс квадрата с толщиной во все стороны."""
+        lo = [self.origin[i] - self.extent for i in range(3)]
+        hi = [self.origin[i] + self.extent for i in range(3)]
+        ax = axis_index(self.normal)
+        if ax is not None:
+            if self.normal[ax] > 0:
+                lo[ax], hi[ax] = self.origin[ax] - self.thickness, self.origin[ax]
+            else:
+                lo[ax], hi[ax] = self.origin[ax], self.origin[ax] + self.thickness
+        return (lo[0], lo[1], lo[2]), (hi[0], hi[1], hi[2])
+
+
+class BoxBody(SurroundingBase):
+    """Параллелепипед: соседнее оборудование, ответная деталь, зона обслуживания."""
+
+    kind: Literal["box"] = "box"
+    min: Vec3
+    max: Vec3
+
+    def bbox(self) -> tuple[Vec3, Vec3]:
+        return self.min, self.max
+
+
+class CylinderBody(SurroundingBase):
+    """Цилиндр: труба, вал, колонна рядом с изделием."""
+
+    kind: Literal["cylinder"] = "cylinder"
+    center: Vec3
+    axis: Vec3
+    diameter: float
+    length: float
+
+    def bbox(self) -> tuple[Vec3, Vec3]:
+        """Точный описывающий бокс цилиндра: по оси i полуразмер (L/2)·|a_i| + (d/2)·√(1 − a_i²)."""
+        n = math.sqrt(sum(c * c for c in self.axis)) or 1.0
+        a = [c / n for c in self.axis]
+        half = [
+            self.length / 2 * abs(a[i]) + self.diameter / 2 * math.sqrt(max(0.0, 1 - a[i] * a[i])) for i in range(3)
+        ]
+        lo = tuple(self.center[i] - half[i] for i in range(3))
+        hi = tuple(self.center[i] + half[i] for i in range(3))
+        return lo, hi
+
+
+Surrounding = Annotated[PlaneBody | BoxBody | CylinderBody, Field(discriminator="kind")]
+
+
 class Interface(Entity):
     """Посадочное место к соседнему узлу: что приходит снаружи (стена, вал, фланец) и с какой нагрузкой."""
 
@@ -232,9 +310,13 @@ class Skeleton(BaseModel):
     datums: list[Datum] = []
     envelopes: list[Envelope] = []
     interfaces: list[Interface] = []
+    surroundings: list[Surrounding] = []  # обстановка: тела вокруг изделия (стена, пол, труба, соседний узел)
 
     def interface(self, iid: str) -> Interface:
         return next(i for i in self.interfaces if i.id == iid)
+
+    def datum(self, did: str) -> Datum | None:
+        return next((d for d in self.datums if d.id == did), None)
 
 
 class Requirements(BaseModel):
@@ -245,6 +327,41 @@ class Requirements(BaseModel):
     environment: dict[str, Scalar] = {}
     constraints: dict[str, Scalar] = {}
     standards: list[str] = []  # пакеты стандартов, которые нужны проекту: gost, iso
+
+
+# ---------- согласование компоновки ----------
+
+
+class LayoutApproval(BaseModel):
+    """Отметка конструктора «Компоновка согласована»: кто, когда, на каком коммите; hash — скелет с обстановкой
+    и требования на момент согласования (см. layout_hash)."""
+
+    by: str
+    at: str
+    commit: str = ""
+    hash: str
+
+
+class LayoutState(BaseModel):
+    """Состояние компоновки разрешённого проекта: текущий хеш и отметка согласования (если была)."""
+
+    hash: str
+    approved: LayoutApproval | None = None
+
+    @property
+    def changed(self) -> bool:
+        """Скелет, обстановка или требования менялись после согласования."""
+        return self.approved is not None and self.approved.hash != self.hash
+
+
+def layout_hash(skeleton: Skeleton, requirements: Requirements) -> str:
+    """Хеш того, что показывает компоновочный эскиз: скелет (базы, зоны, интерфейсы, обстановка) и требования
+    (без списка пакетов стандартов — он собирается из двух мест спецификации)."""
+    data = {
+        "skeleton": skeleton.model_dump(mode="json", exclude_defaults=True),
+        "requirements": requirements.model_dump(mode="json", exclude_defaults=True, exclude={"standards"}),
+    }
+    return hashlib.sha1(json.dumps(data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
 
 
 # ---------- узлы и проект ----------
@@ -291,6 +408,7 @@ class Project(BaseModel):
     units: list[Unit] = []
     assumptions: list[Assumption] = []
     derived: dict[str, Scalar] = {}
+    layout: LayoutState | None = Field(default=None, exclude=True)  # согласование компоновки; в YAML не пишется
 
     # --- навигация ---
     @property

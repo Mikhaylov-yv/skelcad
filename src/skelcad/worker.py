@@ -1,6 +1,6 @@
 """Рабочий процесс: исполняет код проекта (генератор, плагины, OCCT) отдельно от сервера.
 
-Запрос — JSON на stdin: {"op": "query|build|check|compare", "args": {...}}.
+Запрос — JSON на stdin: {"op": "query|build|check|compare|measure|render|layout|diff", "args": {...}}.
 Ответ — JSON на stdout: {"ok": true, "result": ...} или {"ok": false, "error": "...", "traceback": "..."}.
 Всё, что печатает код проекта, уходит в stderr, чтобы не портить ответ.
 
@@ -169,6 +169,41 @@ def op_render(args: dict) -> Any:
     return render(m, g, args.get("view") or "iso", out, args.get("highlight"), int(args.get("width") or 1200))
 
 
+def op_layout(args: dict) -> dict:
+    """Компоновочный эскиз по project.yaml; детали собранного варианта — тонкой линией, если генератор работает.
+    Сломанный генератор или плагин компоновку не отменяет: она строится по спецификации, причина — в notes."""
+    from skelcad.core.project import ProjectDir, base_project, read_spec, read_variant
+    from skelcad.geom.layout import write_layout
+
+    root = Path(args["project_dir"])
+    variant = args.get("variant") or None
+    notes: list[str] = []
+    pd = None
+    try:
+        pd = ProjectDir(root)
+    except Exception as e:  # noqa: BLE001 — код проекта не загрузился: компоновка по спецификации
+        notes.append(f"код проекта не загрузился: {type(e).__name__}: {e}")
+    spec = pd.spec if pd else read_spec(root)
+    m = g = None
+    if pd is not None and pd.generator is not None:
+        try:
+            m = pd.resolve(variant)
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"генератор не выполнился: {type(e).__name__}: {e}")
+    if m is None:
+        m = base_project(spec, read_variant(root, variant) if variant else None)
+    if m.parts and pd is not None:
+        try:
+            from skelcad.geom.generator import generate
+
+            g = generate(m, pd.ctx)
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"геометрия не построена: {type(e).__name__}: {e}")
+    res = write_layout(m, g, Path(args["out_dir"]), m.variant or m.id, args.get("views"), args.get("png", True))
+    res["notes"] = notes + res["notes"]
+    return res
+
+
 def _report_light(pd, m, g) -> dict:
     """Сводка и замечания как в report.json, без экспорта (для diff)."""
     from skelcad.pipeline import analyse
@@ -212,6 +247,7 @@ OPS = {
     "compare": op_compare,
     "measure": op_measure,
     "render": op_render,
+    "layout": op_layout,
 }
 
 

@@ -185,6 +185,21 @@ def test_variant_report_endpoint(client: TestClient):
     assert client.get("/api/projects/bracket/variants/A_fork/report", headers=h).json()["geometry_at"]
 
 
+def test_layout_endpoints(client: TestClient):
+    h = {"Authorization": "Bearer secret1"}
+    r = client.get("/api/projects/bracket/layout?variant=A_fork", headers=h)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert set(d["views"]) == {"main", "left", "top"} and d["approval"]["state"] == "none"
+    assert d["views"]["main"]["svg_url"].startswith("/out/bracket/_layout/") and d["dims"]
+    assert client.get(d["views"]["main"]["svg_url"], headers=h).status_code == 200
+    r = client.post("/api/projects/bracket/layout/approve", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["state"] == "approved" and r.json()["commit"]["message"].startswith("Компоновка согласована")
+    assert client.get("/api/projects", headers=h).json()["projects"][0]["layout"]["state"] == "approved"
+    assert client.get("/api/projects/bracket/layout", headers=h).json()["approval"]["state"] == "approved"
+
+
 def test_commits_reviewed_and_revert(client: TestClient):
     h = {"Authorization": "Bearer secret1"}
     r = client.get("/api/projects/bracket/commits", headers=h).json()
