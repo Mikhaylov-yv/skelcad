@@ -21,6 +21,7 @@ const router = createBrowserRouter([
       { path: "p/:project/commits", element: <Feed /> },
       { path: "p/:project/compare", element: <Compare /> },
       { path: "p/:project/agent", element: <Agent /> },
+      { path: "p/:project/layout", element: <Variant /> },
       { path: "p/:project/:variant/params", element: <Params /> },
       { path: "p/:project/:variant", element: <Variant /> },
     ],

@@ -396,6 +396,7 @@ class Tools:
             except (OSError, ValueError):
                 res = None
         if res is None:
+            d.mkdir(parents=True, exist_ok=True)  # воркер пишет только внутрь out_dir — родителей создаёт сервер
             res = self.srv.runner.run(
                 "layout",
                 {"project_dir": str(self.ws.path(project)), "variant": variant, "out_dir": str(d), "png": png},

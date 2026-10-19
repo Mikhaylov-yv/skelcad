@@ -1,0 +1,287 @@
+// Режим «Компоновка» экрана «Вариант»: эскиз по скелету и обстановке (без сборки), состав компоновки,
+// состояние согласования и кнопка «Компоновка согласована».
+import { useCallback, useEffect, useState } from "react";
+import { api, type LayoutEntity, type LayoutResponse } from "../api";
+import { S } from "../strings";
+import { relativeTime } from "../ui/format";
+import { Sketch, type SketchPin } from "./Sketch";
+
+const VIEWS = ["main", "left", "top"] as const;
+type ViewName = (typeof VIEWS)[number];
+
+export interface LayoutPaneProps {
+  project: string;
+  variant?: string;
+  selected: string[];
+  pins?: SketchPin[];
+  pinMode?: boolean;
+  reloadNonce?: number;
+  onPick?: (ref: string | null, point?: [number, number, number]) => void;
+  onData?: (layout: LayoutResponse | null) => void;
+}
+
+export function LayoutPane({
+  project,
+  variant,
+  selected,
+  pins,
+  pinMode,
+  reloadNonce,
+  onPick,
+  onData,
+}: LayoutPaneProps) {
+  const [data, setData] = useState<LayoutResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<ViewName>("main");
+  const [fit, setFit] = useState(0);
+  const [hover, setHover] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setError(null);
+    api
+      .layout(project, variant || undefined)
+      .then((d) => {
+        setData(d);
+        onData?.(d);
+      })
+      .catch((e: Error) => {
+        setError(e.message);
+        onData?.(null);
+      });
+  }, [project, variant, onData]);
+  useEffect(load, [load, reloadNonce]);
+
+  const v = data?.views[view];
+  const hoverName = hover
+    ? (data?.entities.find((e) => e.ref === hover)?.name ?? hover)
+    : null;
+  const dims = data?.dims.filter((d) => d.view === view) ?? [];
+  return (
+    <>
+      <div className="toolbar">
+        <span className="muted small">{S.variant.viewsLabel}:</span>
+        {VIEWS.map((name) => (
+          <button
+            key={name}
+            onClick={() => setView(name)}
+            aria-pressed={view === name}
+          >
+            {S.variant.views[name]}
+          </button>
+        ))}
+        <button onClick={() => setFit((n) => n + 1)}>{S.layout.fit}</button>
+        <span className="muted small">{S.layout.zoomHint}</span>
+        {hoverName && (
+          <span className="small sketch__hover" aria-live="polite">
+            {hoverName}
+          </span>
+        )}
+      </div>
+      <div
+        className={
+          "canvas canvas--sketch" + (pinMode ? " canvas--pinning" : "")
+        }
+      >
+        {error && (
+          <div className="canvas__empty">
+            <p className="level-error" role="alert">
+              {S.errors.load}: {error}
+            </p>
+            <button onClick={load}>{S.errors.retry}</button>
+          </div>
+        )}
+        {!data && !error && (
+          <p className="canvas__note muted">{S.layout.loading}</p>
+        )}
+        {data && v && (
+          <Sketch
+            url={v.svg_url}
+            view={v}
+            selected={selected}
+            pins={pins}
+            pinMode={pinMode}
+            fitNonce={fit}
+            onPick={onPick}
+            onHover={setHover}
+          />
+        )}
+        {pinMode && <p className="canvas__note muted">{S.layout.pinHere}</p>}
+      </div>
+      {data && (
+        <div className="sketch__foot small muted">
+          {!data.parts && <span>{S.layout.noParts} </span>}
+          {dims.length > 0 && (
+            <span>
+              {S.layout.dims}:{" "}
+              {dims.map((d) => `${d.text} (${d.axis})`).join(", ")}.{" "}
+            </span>
+          )}
+          {data.notes.map((n, i) => (
+            <span key={i} className="level-warning">
+              {n}{" "}
+            </span>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Состав компоновки: базы, интерфейсы, зоны, обстановка — клик выделяет сущность на эскизе. */
+export function LayoutTree({
+  entities,
+  selected,
+  onSelect,
+}: {
+  entities: LayoutEntity[];
+  selected: string[];
+  onSelect: (ref: string) => void;
+}) {
+  const groups = ["datum", "interface", "envelope", "surrounding"] as const;
+  if (entities.length === 0)
+    return <p className="muted small">{S.layout.empty}</p>;
+  return (
+    <>
+      {groups.map((g) => {
+        const items = entities.filter((e) => e.group === g);
+        if (items.length === 0) return null;
+        return (
+          <section key={g}>
+            <h3>{S.layout.groups[g]}</h3>
+            <ul className="tree">
+              {items.map((e) => (
+                <li key={e.ref}>
+                  <button
+                    className={
+                      "tree__item" +
+                      (selected.includes(e.ref) ? " selected" : "")
+                    }
+                    onClick={() => onSelect(e.ref)}
+                    aria-pressed={selected.includes(e.ref)}
+                    title={e.note || undefined}
+                  >
+                    <span>
+                      <span className="mono">{e.id}</span>
+                      {e.name && e.name !== e.id ? (
+                        <span className="muted"> — {e.name}</span>
+                      ) : null}
+                    </span>
+                    <span className="muted small">
+                      {S.layout.kinds[e.kind] ?? e.kind}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </>
+  );
+}
+
+/** Состояние согласования и кнопка «Компоновка согласована» (коммит от имени конструктора). */
+export function ApprovalBox({
+  project,
+  layout,
+  locked,
+  onApproved,
+}: {
+  project: string;
+  layout: LayoutResponse;
+  locked: boolean;
+  onApproved: () => void;
+}) {
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const a = layout.approval;
+  const approve = () => {
+    setBusy(true);
+    setErr(null);
+    api
+      .layoutApprove(project)
+      .then(() => {
+        setAsk(false);
+        setDone(true);
+        onApproved();
+      })
+      .catch((e: Error) => setErr(e.message))
+      .finally(() => setBusy(false));
+  };
+  const cls = {
+    none: "badge--warn",
+    approved: "badge--ok",
+    changed: "badge--warn",
+    invalid: "badge--warn",
+  }[a.state];
+  return (
+    <section className="approval" aria-label={S.layout.title}>
+      <div className="commit__actions">
+        <span className={"badge " + cls} role="status">
+          {S.layout.title}: {S.layout.state[a.state]}
+        </span>
+        {a.approved && (
+          <span className="muted small">
+            {S.layout.approvedBy(a.approved.by, relativeTime(a.approved.at))}
+          </span>
+        )}
+      </div>
+      {a.state === "invalid" && (
+        <p className="level-error small" role="alert">
+          {S.layout.invalid} {a.error}
+        </p>
+      )}
+      {a.state === "changed" && a.diff && (
+        <p className="small">
+          {S.layout.changedSince}{" "}
+          {[
+            ...a.diff.added.map((x) => `+ ${x}`),
+            ...a.diff.removed.map((x) => `− ${x}`),
+            ...a.diff.changed.map((x) => `~ ${x}`),
+            ...(a.diff.requirements ? [S.layout.requirementsChanged] : []),
+          ].join(", ")}
+        </p>
+      )}
+      {a.state !== "invalid" && a.state !== "approved" && (
+        <div className="commit__actions">
+          <button onClick={() => setAsk(true)} disabled={locked || busy}>
+            {a.state === "changed" ? S.layout.approveAgain : S.layout.approve}
+          </button>
+          {done && <span className="ok small">{S.layout.approveDone}</span>}
+        </div>
+      )}
+      {err && (
+        <p className="level-error small" role="alert">
+          {err}
+        </p>
+      )}
+      {ask && (
+        <div
+          className="dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="approve-title"
+        >
+          <div className="dialog__box">
+            <h2 id="approve-title">{S.layout.approveTitle}</h2>
+            <p className="small">{S.layout.approveHint}</p>
+            <div className="dialog__actions">
+              <button
+                className="link"
+                onClick={() => setAsk(false)}
+                disabled={busy}
+              >
+                {S.feed.cancel}
+              </button>
+              <button onClick={approve} disabled={busy} aria-busy={busy}>
+                {busy ? S.layout.approving : S.layout.approveConfirm}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}

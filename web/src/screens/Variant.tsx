@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { api, ApiError, type Report, type ReviewItem } from "../api";
+import {
+  api,
+  ApiError,
+  type LayoutResponse,
+  type Report,
+  type ReviewItem,
+} from "../api";
 import { S } from "../strings";
 import { NumbersRow } from "../ui/NumbersRow";
 import { Findings } from "../ui/Findings";
@@ -10,6 +16,7 @@ import { Viewer, type ClipAxis, type ViewName } from "../three/Viewer";
 import { indexNodes, nodesForRef } from "../three/refs";
 import { useProjectState } from "../ui/useProjectState";
 import { AgentBanner } from "../ui/AgentBanner";
+import { ApprovalBox, LayoutPane, LayoutTree } from "../sketch/LayoutPane";
 
 type State =
   | { kind: "loading" }
@@ -23,23 +30,53 @@ export function Variant() {
   const locked = pstate?.state === "agent";
   const [st, setSt] = useState<State>({ kind: "loading" });
   const [params, setParams] = useSearchParams();
-  const [selected, setSelected] = useState<string[]>(() => (params.get("part") ? [params.get("part")!] : []));
+  const [selected, setSelected] = useState<string[]>(() =>
+    params.get("part") ? [params.get("part")!] : [],
+  );
   const [activeRef, setActiveRef] = useState<string | null>(null);
   const [topLevel, setTopLevel] = useState<string[]>([]);
   const [dim, setDim] = useState(true);
-  const [clip, setClip] = useState<{ on: boolean; axis: ClipAxis; pos: number }>({ on: false, axis: "x", pos: 0.5 });
-  const [view, setView] = useState<{ name: ViewName; nonce: number }>({ name: "iso", nonce: 0 });
+  const [clip, setClip] = useState<{
+    on: boolean;
+    axis: ClipAxis;
+    pos: number;
+  }>({ on: false, axis: "x", pos: 0.5 });
+  const [view, setView] = useState<{ name: ViewName; nonce: number }>({
+    name: "iso",
+    nonce: 0,
+  });
   const [building, setBuilding] = useState<number | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
+  // режим центрального окна: 3D или компоновка (эскиз по скелету и обстановке; работает и без сборки)
+  const mode: "3d" | "layout" =
+    !variant || params.get("mode") === "layout" ? "layout" : "3d";
+  const setMode = (m: "3d" | "layout") => {
+    const p = new URLSearchParams(params);
+    if (m === "layout") p.set("mode", "layout");
+    else p.delete("mode");
+    setParams(p, { replace: true });
+  };
+  const [layout, setLayout] = useState<LayoutResponse | null>(null);
+  const [layoutSel, setLayoutSel] = useState<string[]>([]);
+  const [layoutNonce, setLayoutNonce] = useState(0);
+  const onLayoutData = useCallback(
+    (d: LayoutResponse | null) => setLayout(d),
+    [],
+  );
 
   const load = useCallback(() => {
+    if (!variant) {
+      setSt({ kind: "notbuilt", message: "" });
+      return;
+    }
     setSt({ kind: "loading" });
     api
       .report(project, variant)
       .then((report) => setSt({ kind: "ok", report }))
       .catch((e: Error) => {
-        if (e instanceof ApiError && e.status === 404) setSt({ kind: "notbuilt", message: e.message });
+        if (e instanceof ApiError && e.status === 404)
+          setSt({ kind: "notbuilt", message: e.message });
         else setSt({ kind: "error", message: e.message });
       });
   }, [project, variant]);
@@ -49,7 +86,10 @@ export function Variant() {
     setBuildError(null);
     setBuilding(0);
     const t0 = Date.now();
-    timer.current = window.setInterval(() => setBuilding(Math.round((Date.now() - t0) / 1000)), 1000);
+    timer.current = window.setInterval(
+      () => setBuilding(Math.round((Date.now() - t0) / 1000)),
+      1000,
+    );
     api
       .build(project, variant)
       .then(() => load())
@@ -69,7 +109,10 @@ export function Variant() {
   }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const report = st.kind === "ok" ? st.report : null;
-  const idx = useMemo(() => (report ? indexNodes(report, topLevel) : null), [report, topLevel]);
+  const idx = useMemo(
+    () => (report ? indexNodes(report, topLevel) : null),
+    [report, topLevel],
+  );
 
   const pickRef = (ref: string) => {
     if (!report || !idx) return;
@@ -86,7 +129,10 @@ export function Variant() {
   // замечания агенту: пометки на модели
   const [review, setReview] = useState<ReviewItem[]>([]);
   const [pinMode, setPinMode] = useState(false);
-  const [pinAt, setPinAt] = useState<{ part: string | null; point: [number, number, number] } | null>(null);
+  const [pinAt, setPinAt] = useState<{
+    part: string | null;
+    point: [number, number, number];
+  } | null>(null);
   const [pinText, setPinText] = useState("");
   const [pinBusy, setPinBusy] = useState(false);
   const [pinErr, setPinErr] = useState<string | null>(null);
@@ -111,6 +157,17 @@ export function Variant() {
     },
     [pinMode],
   );
+  const onSketchPick = useCallback(
+    (ref: string | null, point?: [number, number, number]) => {
+      if (pinMode && point) {
+        setPinAt({ part: ref, point });
+        setPinMode(false);
+        return;
+      }
+      setLayoutSel(ref ? [ref] : []);
+    },
+    [pinMode],
+  );
   const sendPin = () => {
     if (!pinText.trim()) {
       setPinErr(S.review.needText);
@@ -119,7 +176,12 @@ export function Variant() {
     setPinBusy(true);
     setPinErr(null);
     api
-      .reviewAdd(project, { text: pinText, variant, part: pinAt?.part ?? null, point: pinAt?.point ?? null })
+      .reviewAdd(project, {
+        text: pinText,
+        variant,
+        part: pinAt?.part ?? null,
+        point: pinAt?.point ?? null,
+      })
       .then(() => {
         setPinText("");
         setPinAt(null);
@@ -136,25 +198,43 @@ export function Variant() {
       .catch((e: Error) => setPinErr(e.message));
   };
   const pins = useMemo(
-    () =>
-      [
-        ...review.filter((r) => r.point && (!r.variant || r.variant === variant)).map((r) => ({ id: r.id, point: r.point!, resolved: r.status === "resolved" })),
-        ...(pinAt ? [{ id: "_new", point: pinAt.point }] : []),
-      ],
+    () => [
+      ...review
+        .filter((r) => r.point && (!r.variant || r.variant === variant))
+        .map((r) => ({
+          id: r.id,
+          point: r.point!,
+          resolved: r.status === "resolved",
+        })),
+      ...(pinAt ? [{ id: "_new", point: pinAt.point }] : []),
+    ],
     [review, variant, pinAt],
   );
 
-  const title = report ? `${report.project_title || project} · ${report.title || variant}` : `${project} · ${variant}`;
+  const tail = variant ? ` · ${variant}` : "";
+  const title = report
+    ? `${report.project_title || project} · ${report.title || variant}`
+    : layout
+      ? `${layout.title}${tail}`
+      : `${project}${tail}`;
   // геометрия старше отчёта больше чем на минуту — после сборки была ещё сборка без экспорта
   const geometryStale =
-    !!report?.urls.glb && !!report.geometry_at && Date.parse(report.built_at) - Date.parse(report.geometry_at) > 60_000;
+    !!report?.urls.glb &&
+    !!report.geometry_at &&
+    Date.parse(report.built_at) - Date.parse(report.geometry_at) > 60_000;
 
   return (
     <main className="variant">
       <header className="variant__head">
         <nav aria-label="Путь">
-          <Link to="/">{S.variant.back}</Link> <span className="muted">/</span> <span className="mono">{project}</span>{" "}
-          <span className="muted">/</span> <strong className="mono">{variant}</strong>
+          <Link to="/">{S.variant.back}</Link> <span className="muted">/</span>{" "}
+          <span className="mono">{project}</span>{" "}
+          <span className="muted">/</span>{" "}
+          {variant ? (
+            <strong className="mono">{variant}</strong>
+          ) : (
+            <strong>{S.layout.title}</strong>
+          )}
         </nav>
         <h1>{title}</h1>
         {report && (
@@ -202,53 +282,81 @@ export function Variant() {
                     (v) =>
                       report.urls.svg[v] && (
                         <li key={v}>
-                          <a href={report.urls.svg[v]} target="_blank" rel="noreferrer">
+                          <a
+                            href={report.urls.svg[v]}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
                             {S.export.svg[v]}
                           </a>
                         </li>
                       ),
                   )}
                   <li>
-                    <a href={`/out/${encodeURIComponent(project)}/${encodeURIComponent(variant)}/report.json`} target="_blank" rel="noreferrer">
+                    <a
+                      href={`/out/${encodeURIComponent(project)}/${encodeURIComponent(variant)}/report.json`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       {S.export.report}
                     </a>
                   </li>
                 </ul>
               </details>
             )}
-            <Link className="small" to={`/p/${encodeURIComponent(project)}/commits?variant=${encodeURIComponent(variant)}`}>
+            <Link
+              className="small"
+              to={`/p/${encodeURIComponent(project)}/commits?variant=${encodeURIComponent(variant)}`}
+            >
               {S.feed.tab}
             </Link>
-            <Link className="small" to={`/p/${encodeURIComponent(project)}/compare`}>
+            <Link
+              className="small"
+              to={`/p/${encodeURIComponent(project)}/compare`}
+            >
               {S.compare.tab}
             </Link>
-            <Link className="small" to={`/p/${encodeURIComponent(project)}/${encodeURIComponent(variant)}/params`}>
+            <Link
+              className="small"
+              to={`/p/${encodeURIComponent(project)}/${encodeURIComponent(variant)}/params`}
+            >
               {S.params.tab}
             </Link>
-            <Link className="small" to={`/p/${encodeURIComponent(project)}/agent?variant=${encodeURIComponent(variant)}`}>
+            <Link
+              className="small"
+              to={`/p/${encodeURIComponent(project)}/agent?variant=${encodeURIComponent(variant)}`}
+            >
               {S.agent.tab}
             </Link>
           </div>
         )}
-        <div className="variant__actions">
-          <button onClick={build} disabled={building !== null} aria-busy={building !== null}>
-            {report ? S.variant.rebuild : S.variant.build}
-          </button>
-          {building !== null && (
-            <span className="muted" aria-live="polite">
-              {S.variant.building(building)}
-            </span>
-          )}
-          {buildError && (
-            <span className="level-error" role="alert">
-              {S.variant.buildFailed}: {buildError}
-            </span>
-          )}
-        </div>
+        {variant && (
+          <div className="variant__actions">
+            <button
+              onClick={build}
+              disabled={building !== null}
+              aria-busy={building !== null}
+            >
+              {report ? S.variant.rebuild : S.variant.build}
+            </button>
+            {building !== null && (
+              <span className="muted" aria-live="polite">
+                {S.variant.building(building)}
+              </span>
+            )}
+            {buildError && (
+              <span className="level-error" role="alert">
+                {S.variant.buildFailed}: {buildError}
+              </span>
+            )}
+          </div>
+        )}
       </header>
 
       <AgentBanner p={pstate} />
-      {st.kind === "loading" && <p className="muted page">{S.variant.loading}</p>}
+      {st.kind === "loading" && (
+        <p className="muted page">{S.variant.loading}</p>
+      )}
       {st.kind === "error" && (
         <div className="callout callout--error page" role="alert">
           <p>
@@ -257,162 +365,271 @@ export function Variant() {
           <button onClick={load}>{S.errors.retry}</button>
         </div>
       )}
-      {st.kind === "notbuilt" && (
+      {st.kind === "notbuilt" && mode === "3d" && (
         <div className="empty page">
           <p>{S.variant.notBuilt}</p>
           <p className="small">{S.variant.notBuiltHint}</p>
         </div>
       )}
 
-      {report && idx && (
+      {(mode === "layout" || (report && idx)) && (
         <div className="variant__body">
-          <aside className="pane pane--tree" aria-label={S.variant.tree}>
-            <h3>{S.variant.parts}</h3>
-            <ul className="tree">
-              {report.parts.map((p) => (
-                <li key={p.id}>
-                  <button
-                    className={"tree__item" + (selected.includes(p.id) ? " selected" : "")}
-                    onClick={() => toggleNode(p.id)}
-                    aria-pressed={selected.includes(p.id)}
-                  >
-                    <span>{p.name || p.id}</span>
-                    <span className="muted small">{p.mass_kg !== undefined ? `${fmtNum(p.mass_kg)} кг` : ""}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {report.welds.length > 0 && (
-              <>
-                <h3>{S.variant.welds}</h3>
-                <ul className="tree">
-                  {report.welds.map((w) => (
-                    <li key={w.id}>
-                      <button className="tree__item" onClick={() => pickRef("weld:" + w.id)} title={w.note}>
-                        <span className="mono">{w.id}</span>
-                        <span className="muted small">
-                          {w.leg !== undefined ? `к${fmtNum(w.leg)} · ` : ""}
-                          {w.length !== undefined ? `${fmtNum(w.length)} мм` : ""}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-            {idx.fasteners.length > 0 && (
-              <>
-                <h3>{S.variant.fasteners}</h3>
-                <ul className="tree">
-                  {idx.fasteners.map((id) => (
-                    <li key={id}>
-                      <button
-                        className={"tree__item" + (selected.includes(id) ? " selected" : "")}
-                        onClick={() => toggleNode(id)}
-                        aria-pressed={selected.includes(id)}
-                      >
-                        <span className="mono">{id}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-            {idx.other.length > 0 && (
-              <>
-                <h3>{S.variant.other}</h3>
-                <ul className="tree">
-                  {idx.other.map((id) => (
-                    <li key={id}>
-                      <button
-                        className={"tree__item" + (selected.includes(id) ? " selected" : "")}
-                        onClick={() => toggleNode(id)}
-                        aria-pressed={selected.includes(id)}
-                      >
-                        <span className="mono">{id}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
+          <aside
+            className="pane pane--tree"
+            aria-label={mode === "layout" ? S.layout.entities : S.variant.tree}
+          >
+            {mode === "layout" ? (
+              <LayoutTree
+                entities={layout?.entities ?? []}
+                selected={layoutSel}
+                onSelect={(r) =>
+                  setLayoutSel((cur) => (cur.includes(r) ? [] : [r]))
+                }
+              />
+            ) : (
+              report &&
+              idx && (
+                <>
+                  <h3>{S.variant.parts}</h3>
+                  <ul className="tree">
+                    {report.parts.map((p) => (
+                      <li key={p.id}>
+                        <button
+                          className={
+                            "tree__item" +
+                            (selected.includes(p.id) ? " selected" : "")
+                          }
+                          onClick={() => toggleNode(p.id)}
+                          aria-pressed={selected.includes(p.id)}
+                        >
+                          <span>{p.name || p.id}</span>
+                          <span className="muted small">
+                            {p.mass_kg !== undefined
+                              ? `${fmtNum(p.mass_kg)} кг`
+                              : ""}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {report.welds.length > 0 && (
+                    <>
+                      <h3>{S.variant.welds}</h3>
+                      <ul className="tree">
+                        {report.welds.map((w) => (
+                          <li key={w.id}>
+                            <button
+                              className="tree__item"
+                              onClick={() => pickRef("weld:" + w.id)}
+                              title={w.note}
+                            >
+                              <span className="mono">{w.id}</span>
+                              <span className="muted small">
+                                {w.leg !== undefined
+                                  ? `к${fmtNum(w.leg)} · `
+                                  : ""}
+                                {w.length !== undefined
+                                  ? `${fmtNum(w.length)} мм`
+                                  : ""}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {idx.fasteners.length > 0 && (
+                    <>
+                      <h3>{S.variant.fasteners}</h3>
+                      <ul className="tree">
+                        {idx.fasteners.map((id) => (
+                          <li key={id}>
+                            <button
+                              className={
+                                "tree__item" +
+                                (selected.includes(id) ? " selected" : "")
+                              }
+                              onClick={() => toggleNode(id)}
+                              aria-pressed={selected.includes(id)}
+                            >
+                              <span className="mono">{id}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {idx.other.length > 0 && (
+                    <>
+                      <h3>{S.variant.other}</h3>
+                      <ul className="tree">
+                        {idx.other.map((id) => (
+                          <li key={id}>
+                            <button
+                              className={
+                                "tree__item" +
+                                (selected.includes(id) ? " selected" : "")
+                              }
+                              onClick={() => toggleNode(id)}
+                              aria-pressed={selected.includes(id)}
+                            >
+                              <span className="mono">{id}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </>
+              )
             )}
           </aside>
 
-          <section className="pane pane--3d" aria-label="3D">
-            <div className="toolbar">
-              <span className="muted small">{S.variant.viewsLabel}:</span>
-              {(["main", "left", "top", "iso"] as ViewName[]).map((v) => (
-                <button key={v} onClick={() => setView({ name: v, nonce: view.nonce + 1 })} aria-pressed={view.name === v}>
-                  {S.variant.views[v]}
-                </button>
-              ))}
-              <button onClick={() => setView((v) => ({ ...v, nonce: v.nonce + 1 }))}>{S.variant.fit}</button>
-              <label className="small">
-                <input type="checkbox" checked={dim} onChange={(e) => setDim(e.target.checked)} /> {S.variant.dim}
-              </label>
-              <label className="small">
-                <input type="checkbox" checked={clip.on} onChange={(e) => setClip({ ...clip, on: e.target.checked })} />{" "}
-                {S.variant.clip}
-              </label>
-              {clip.on && (
-                <>
-                  <select
-                    aria-label={S.variant.clipAxis}
-                    value={clip.axis}
-                    onChange={(e) => setClip({ ...clip, axis: e.target.value as ClipAxis })}
+          <section
+            className="pane pane--3d"
+            aria-label={mode === "layout" ? S.layout.title : "3D"}
+          >
+            <div className="modebar" role="tablist" aria-label="Окно">
+              <button
+                role="tab"
+                aria-selected={mode === "3d"}
+                onClick={() => setMode("3d")}
+                disabled={!variant}
+              >
+                {S.layout.mode3d}
+              </button>
+              <button
+                role="tab"
+                aria-selected={mode === "layout"}
+                onClick={() => setMode("layout")}
+              >
+                {S.layout.tab}
+              </button>
+            </div>
+            {mode === "layout" ? (
+              <LayoutPane
+                project={project}
+                variant={variant || undefined}
+                selected={layoutSel}
+                pins={pins}
+                pinMode={pinMode}
+                reloadNonce={layoutNonce}
+                onPick={onSketchPick}
+                onData={onLayoutData}
+              />
+            ) : report ? (
+              <>
+                <div className="toolbar">
+                  <span className="muted small">{S.variant.viewsLabel}:</span>
+                  {(["main", "left", "top", "iso"] as ViewName[]).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() =>
+                        setView({ name: v, nonce: view.nonce + 1 })
+                      }
+                      aria-pressed={view.name === v}
+                    >
+                      {S.variant.views[v]}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() =>
+                      setView((v) => ({ ...v, nonce: v.nonce + 1 }))
+                    }
                   >
-                    <option value="x">X</option>
-                    <option value="y">Y</option>
-                    <option value="z">Z</option>
-                  </select>
-                  <input
-                    type="range"
-                    aria-label={S.variant.clipPos}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={clip.pos}
-                    onChange={(e) => setClip({ ...clip, pos: Number(e.target.value) })}
-                  />
-                </>
-              )}
-              {selected.length > 0 && (
-                <button className="link" onClick={() => onPick(null)}>
-                  {S.variant.clear} ({selected.length})
-                </button>
-              )}
-            </div>
-            <div className={"canvas" + (pinMode ? " canvas--pinning" : "")}>
-              {report.urls.glb ? (
-                <>
-                  {topLevel.length === 0 && !glbError && <p className="canvas__note muted">{S.variant.glbLoading}</p>}
-                  {glbError && (
-                    <p className="canvas__note level-error" role="alert">
-                      {glbError}
-                    </p>
-                  )}
-                  <Viewer
-                    url={report.urls.glb}
-                    selected={selected}
-                    dim={dim}
-                    clip={clip}
-                    view={view}
-                    pins={pins}
-                    onNodes={onNodes}
-                    onPick={onPick}
-                    onError={setGlbError}
-                  />
-                </>
-              ) : (
-                <div className="canvas__empty">
-                  <p className="muted">{S.variant.glbMissing}</p>
-                  <p className="muted small">{S.variant.glbMissingHint}</p>
-                  <button onClick={build} disabled={building !== null} aria-busy={building !== null}>
-                    {S.variant.rebuild}
+                    {S.variant.fit}
                   </button>
+                  <label className="small">
+                    <input
+                      type="checkbox"
+                      checked={dim}
+                      onChange={(e) => setDim(e.target.checked)}
+                    />{" "}
+                    {S.variant.dim}
+                  </label>
+                  <label className="small">
+                    <input
+                      type="checkbox"
+                      checked={clip.on}
+                      onChange={(e) =>
+                        setClip({ ...clip, on: e.target.checked })
+                      }
+                    />{" "}
+                    {S.variant.clip}
+                  </label>
+                  {clip.on && (
+                    <>
+                      <select
+                        aria-label={S.variant.clipAxis}
+                        value={clip.axis}
+                        onChange={(e) =>
+                          setClip({ ...clip, axis: e.target.value as ClipAxis })
+                        }
+                      >
+                        <option value="x">X</option>
+                        <option value="y">Y</option>
+                        <option value="z">Z</option>
+                      </select>
+                      <input
+                        type="range"
+                        aria-label={S.variant.clipPos}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={clip.pos}
+                        onChange={(e) =>
+                          setClip({ ...clip, pos: Number(e.target.value) })
+                        }
+                      />
+                    </>
+                  )}
+                  {selected.length > 0 && (
+                    <button className="link" onClick={() => onPick(null)}>
+                      {S.variant.clear} ({selected.length})
+                    </button>
+                  )}
                 </div>
-              )}
-            </div>
+                <div className={"canvas" + (pinMode ? " canvas--pinning" : "")}>
+                  {report.urls.glb ? (
+                    <>
+                      {topLevel.length === 0 && !glbError && (
+                        <p className="canvas__note muted">
+                          {S.variant.glbLoading}
+                        </p>
+                      )}
+                      {glbError && (
+                        <p className="canvas__note level-error" role="alert">
+                          {glbError}
+                        </p>
+                      )}
+                      <Viewer
+                        url={report.urls.glb}
+                        selected={selected}
+                        dim={dim}
+                        clip={clip}
+                        view={view}
+                        pins={pins}
+                        onNodes={onNodes}
+                        onPick={onPick}
+                        onError={setGlbError}
+                      />
+                    </>
+                  ) : (
+                    <div className="canvas__empty">
+                      <p className="muted">{S.variant.glbMissing}</p>
+                      <p className="muted small">{S.variant.glbMissingHint}</p>
+                      <button
+                        onClick={build}
+                        disabled={building !== null}
+                        aria-busy={building !== null}
+                      >
+                        {S.variant.rebuild}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : null}
           </section>
 
           <aside className="pane pane--info">
@@ -420,14 +637,18 @@ export function Variant() {
             <section className="review" aria-label={S.review.title}>
               <div className="commit__actions">
                 {!pinMode && !pinAt && (
-                  <button onClick={() => setPinMode(true)} aria-pressed={pinMode} disabled={locked}>
+                  <button
+                    onClick={() => setPinMode(true)}
+                    aria-pressed={pinMode}
+                    disabled={locked}
+                  >
                     {S.review.pin}
                   </button>
                 )}
                 {pinMode && (
                   <>
                     <span className="muted small" aria-live="polite">
-                      {S.review.pinning}
+                      {mode === "layout" ? S.layout.pinHere : S.review.pinning}
                     </span>
                     <button className="link" onClick={() => setPinMode(false)}>
                       {S.review.cancelPin}
@@ -444,7 +665,8 @@ export function Variant() {
                   }}
                 >
                   <p className="small muted">
-                    {S.review.at(pinAt.part ?? "—")} · {S.review.atPoint(pinAt.point)}
+                    {S.review.at(pinAt.part ?? "—")} ·{" "}
+                    {S.review.atPoint(pinAt.point)}
                   </p>
                   <textarea
                     aria-label={S.review.textLabel}
@@ -454,10 +676,18 @@ export function Variant() {
                     onChange={(e) => setPinText(e.target.value)}
                   />
                   <div className="commit__actions">
-                    <button type="submit" disabled={pinBusy} aria-busy={pinBusy}>
+                    <button
+                      type="submit"
+                      disabled={pinBusy}
+                      aria-busy={pinBusy}
+                    >
                       {pinBusy ? S.review.sending : S.review.send}
                     </button>
-                    <button type="button" className="link" onClick={() => setPinAt(null)}>
+                    <button
+                      type="button"
+                      className="link"
+                      onClick={() => setPinAt(null)}
+                    >
                       {S.review.cancelPin}
                     </button>
                   </div>
@@ -468,30 +698,43 @@ export function Variant() {
                   {pinErr}
                 </p>
               )}
-              {review.length === 0 && !pinAt && <p className="muted small">{S.review.empty}</p>}
+              {review.length === 0 && !pinAt && (
+                <p className="muted small">{S.review.empty}</p>
+              )}
               {review.length > 0 && (
                 <ul className="review__list">
                   {review.map((r) => (
-                    <li key={r.id} className={"review__item review__item--" + r.status}>
+                    <li
+                      key={r.id}
+                      className={"review__item review__item--" + r.status}
+                    >
                       <button
                         className="ref"
                         onClick={() => {
                           setActiveRef(null);
-                          if (r.part) setSelected([r.part]);
+                          if (r.part) {
+                            setSelected([r.part]);
+                            setLayoutSel(r.part.includes(":") ? [r.part] : []);
+                          }
                         }}
                         title={r.point ? S.review.atPoint(r.point) : undefined}
                       >
                         {r.id}
                       </button>{" "}
                       <span>{r.text}</span>
-                      {r.part && <span className="muted small"> · {r.part}</span>}
+                      {r.part && (
+                        <span className="muted small"> · {r.part}</span>
+                      )}
                       {r.answer && (
                         <div className="small ok">
                           {S.review.answer}: {r.answer}
                         </div>
                       )}
                       {r.status === "open" && (
-                        <button className="link small" onClick={() => closeItem(r.id)}>
+                        <button
+                          className="link small"
+                          onClick={() => closeItem(r.id)}
+                        >
                           {S.review.close}
                         </button>
                       )}
@@ -500,36 +743,56 @@ export function Variant() {
                 </ul>
               )}
             </section>
-            <h3>{S.variant.findings}</h3>
-            <Findings items={report.findings} onRef={pickRef} activeRef={activeRef} />
-            <h3>{S.variant.calc}</h3>
-            <KTable calc={report.calc} onRef={pickRef} activeRef={activeRef} />
-            {report.derived && Object.keys(report.derived).length > 0 && (
-              <details>
-                <summary>{S.variant.derived}</summary>
-                <dl className="kv">
-                  {Object.entries(report.derived).map(([k, v]) => (
-                    <div key={k}>
-                      <dt>{k}</dt>
-                      <dd>{String(v)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </details>
+            {mode === "layout" && layout && (
+              <ApprovalBox
+                project={project}
+                layout={layout}
+                locked={locked}
+                onApproved={() => setLayoutNonce((n) => n + 1)}
+              />
             )}
-            {report.assumptions.length > 0 && (
-              <details>
-                <summary>
-                  {S.variant.assumptions} · {report.assumptions.length}
-                </summary>
-                <ul className="assumptions">
-                  {report.assumptions.map((a) => (
-                    <li key={a.id}>
-                      <span className="mono muted">{a.id}</span> {a.text}
-                    </li>
-                  ))}
-                </ul>
-              </details>
+            {report && (
+              <>
+                <h3>{S.variant.findings}</h3>
+                <Findings
+                  items={report.findings}
+                  onRef={pickRef}
+                  activeRef={activeRef}
+                />
+                <h3>{S.variant.calc}</h3>
+                <KTable
+                  calc={report.calc}
+                  onRef={pickRef}
+                  activeRef={activeRef}
+                />
+                {report.derived && Object.keys(report.derived).length > 0 && (
+                  <details>
+                    <summary>{S.variant.derived}</summary>
+                    <dl className="kv">
+                      {Object.entries(report.derived).map(([k, v]) => (
+                        <div key={k}>
+                          <dt>{k}</dt>
+                          <dd>{String(v)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </details>
+                )}
+                {report.assumptions.length > 0 && (
+                  <details>
+                    <summary>
+                      {S.variant.assumptions} · {report.assumptions.length}
+                    </summary>
+                    <ul className="assumptions">
+                      {report.assumptions.map((a) => (
+                        <li key={a.id}>
+                          <span className="mono muted">{a.id}</span> {a.text}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </>
             )}
           </aside>
         </div>
