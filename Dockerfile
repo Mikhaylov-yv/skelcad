@@ -1,4 +1,14 @@
 # SkelCAD — один образ для сервера (`skelcad serve`) и воркера (`skelcad worker --queue /data/jobs`).
+
+# 1. Workbench (web/) → статика; отдаётся сервером по «/».
+FROM node:22-alpine AS web
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web ./
+RUN npm run build -- --outDir /web/dist --emptyOutDir
+
+# 2. Сервер.
 FROM python:3.12-slim
 
 # git — проекты-репозитории; libGL/X11 — зависимости OCCT (OCP), без них импорт build123d падает.
@@ -19,6 +29,7 @@ RUN uv sync --frozen --no-dev --all-extras --no-install-project --no-install-wor
 
 COPY src ./src
 COPY examples ./examples
+COPY --from=web /web/dist ./src/skelcad/server/static
 RUN uv sync --frozen --no-dev --all-extras
 
 RUN useradd -m -u 1000 skelcad && mkdir -p /data && chown skelcad:skelcad /data

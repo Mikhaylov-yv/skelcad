@@ -10,3 +10,6 @@ docs
 tests
 compose
 nginx
+web/node_modules
+web/dist
+src/skelcad/server/static

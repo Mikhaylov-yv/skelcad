@@ -3,8 +3,8 @@
 **Среда совместного конструирования «ИИ-агент + инженер-конструктор», сверху вниз.**
 Open source, Apache-2.0. Стадия: M0 (обобщение пилота) закрыт 16.10.2026; M1 (агентный контур:
 сервер с точкой MCP, проекты в git, изолированный воркер, измерения, рендер, diff) закрыт 19.10.2026,
-см. [docs/architecture/04-m1-plan.md](docs/architecture/04-m1-plan.md). Следующий этап — M2,
-рабочее место конструктора в браузере.
+см. [docs/architecture/04-m1-plan.md](docs/architecture/04-m1-plan.md). Идёт M2 — рабочее место конструктора
+в браузере, план и статус шагов: [docs/architecture/05-m2-plan.md](docs/architecture/05-m2-plan.md).
 
 *SkelCAD is an open-source environment where an AI agent and a design engineer develop a product
 together, top-down (skeleton → units → parts → drawings). The product model, not the CAD file, is
@@ -43,6 +43,11 @@ claude mcp add --transport http skelcad https://skelcad.br/mcp --header "Authori
 docker compose -f compose/stack.yml --env-file compose/.env up -d   # сервер + изолированный воркер
 ```
 
+Рабочее место в браузере (M2, в работе): папка `web/` (Vite + React + TypeScript, three.js). Разработка:
+`cd web && npm ci && npm run dev` — прокси на локальный `skelcad serve` (`SKELCAD_BACKEND`, по умолчанию
+`http://127.0.0.1:8000`); сборка `npm run build` кладёт статику в `src/skelcad/server/static/`, сервер отдаёт её
+по `/`. В образе это делает Dockerfile. Вход для браузера — `SKELCAD_AUTH=none|tokens|proxy` (см. `server/auth.py`).
+
 Как агенту работать с проектом через MCP — [AGENTS.md](AGENTS.md).
 Устройство репозитория и план этапа — в [docs/architecture/03-m0-plan.md](docs/architecture/03-m0-plan.md).
 Проект для SkelCAD — папка с `project.yaml` (требования, скелет, пакеты стандартов, генератор, плагины)
@@ -55,8 +60,10 @@ JSON Schema спецификации проекта, варианта и раз�
 | Файл | Что это |
 |---|---|
 | [docs/architecture/01-vision-and-architecture.md](docs/architecture/01-vision-and-architecture.md) | Замысел, принципы, архитектура (C4), проектная модель, режимы выдачи, дорожная карта, риски |
-| [docs/architecture/02-decisions.md](docs/architecture/02-decisions.md) | Журнал решений D1–D10: принятые, обсуждаемые, отложенные |
+| [docs/architecture/02-decisions.md](docs/architecture/02-decisions.md) | Журнал решений D1–D17: принятые, обсуждаемые, отложенные |
 | [docs/architecture/03-m0-plan.md](docs/architecture/03-m0-plan.md) | План этапа M0: устройство репозитория, что переезжает из пилота, шаги и статус |
+| [docs/architecture/05-m2-plan.md](docs/architecture/05-m2-plan.md) | План этапа M2: workbench в браузере, принципы интерфейса (ISO 9241-110, чеклист Нильсена), вход, задача агенту |
+| [docs/ui/checklist.md](docs/ui/checklist.md) | Чеклист ревью интерфейса; ревью экранов — `docs/ui/reviews/` |
 | [docs/architecture/04-m1-plan.md](docs/architecture/04-m1-plan.md) | План этапа M1: сервер с точкой MCP, изменения агента как коммиты, воркер с лимитами, diff, сценарий приёмки |
 | [docs/architecture/c4.png](docs/architecture/c4.png) | C4-схема: контекст и контейнеры |
 | [docs/research/reports/](docs/research/reports/) | Обзор мира: open source и коммерческие инструменты, бенчмарки, форматы обмена, пакеты стандартов, UX, дистрибуция |

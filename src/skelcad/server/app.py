@@ -4,6 +4,7 @@
   SKELCAD_DATA       папка данных: projects/, out/ (по умолчанию .tmp/data)
   SKELCAD_TOKENS     токены клиентов «имя:токен;имя2:токен2»; имя попадает в автора коммитов.
                      Не задано — доступ без токена под именем anonymous (только для разработки).
+  SKELCAD_AUTH       вход для браузера (/, /api, /out): none | tokens | proxy — см. auth.py
   SKELCAD_JOBS       папка файловой очереди воркера; не задано — воркер подпроцессом здесь же
   SKELCAD_SEED       проекты-примеры, которые завести при старте (по умолчанию bracket,pipe_support)
   SKELCAD_TEMPLATES  папка шаблонов проектов (по умолчанию examples/ репозитория)
@@ -12,52 +13,39 @@
 
 from __future__ import annotations
 
-import hmac
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from anyio import to_thread
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from skelcad.server import api
+from skelcad.server.auth import client_for, parse_tokens, resolve, web_mode
 from skelcad.server.mcp import CURRENT_CLIENT, build_mcp
 from skelcad.server.tools import Server, ToolError, Tools
 
+__all__ = ["client_for", "create_app", "main", "parse_tokens"]
+
 log = logging.getLogger("skelcad.server")
-
-
-def parse_tokens(raw: str | None) -> dict[str, str]:
-    """«claude-code:abc;cursor:def» -> {token: client}."""
-    out = {}
-    for item in (raw or "").replace(",", ";").split(";"):
-        item = item.strip()
-        if not item:
-            continue
-        name, _, token = item.partition(":")
-        if not token:
-            raise ValueError(f"SKELCAD_TOKENS: ожидалось «имя:токен», получено «{item[:20]}»")
-        out[token.strip()] = name.strip()
-    return out
-
-
-def client_for(request: Request, tokens: dict[str, str]) -> str | None:
-    auth = request.headers.get("authorization", "")
-    if not auth.startswith("Bearer "):
-        return None
-    given = auth[7:].strip().encode()
-    for token, name in tokens.items():
-        if hmac.compare_digest(given, token.encode()):
-            return name
-    return None
+STATIC = Path(__file__).parent / "static"
+PLACEHOLDER = """<!doctype html><html lang="ru"><meta charset="utf-8"><title>SkelCAD</title>
+<body style="font:15px system-ui;padding:2em;max-width:40em"><h1>SkelCAD</h1>
+<p>Рабочее место не собрано. Соберите его: <code>cd web &amp;&amp; npm ci &amp;&amp; npm run build</code>
+(в образе это делает Dockerfile).
+Точка MCP для агентов: <code>/mcp</code>, REST: <code>/api/docs</code>.</p></body></html>"""
 
 
 def create_app(srv: Server | None = None) -> FastAPI:
     srv = srv or Server.from_env()
     tokens = parse_tokens(os.environ.get("SKELCAD_TOKENS"))
+    mode = web_mode(tokens)
     if not tokens:
         log.warning("SKELCAD_TOKENS не задан — доступ без токена (режим разработки)")
+    log.info("вход для браузера: SKELCAD_AUTH=%s", mode)
     mcp = build_mcp(srv)
     mcp_app = mcp.streamable_http_app()
     tools = Tools(srv)
@@ -79,15 +67,14 @@ def create_app(srv: Server | None = None) -> FastAPI:
     @app.middleware("http")
     async def auth(request: Request, call_next):
         path = request.url.path
-        if path == "/health" or path.startswith("/out/"):
+        if path == "/health":
             return await call_next(request)
-        if tokens:
-            name = client_for(request, tokens)
-            if not name:
-                return JSONResponse({"error": "нужен Bearer-токен клиента SkelCAD"}, status_code=401)
-        else:
-            name = "anonymous"
-        token = CURRENT_CLIENT.set(name)
+        who = resolve(request, tokens, mode)
+        if who is None:
+            msg = "нужен Bearer-токен клиента SkelCAD" if path == "/mcp" or mode == "tokens" else "нужен вход"
+            return JSONResponse({"error": msg}, status_code=401)
+        request.state.principal = who
+        token = CURRENT_CLIENT.set(who.name)
         try:
             return await call_next(request)
         finally:
@@ -97,9 +84,14 @@ def create_app(srv: Server | None = None) -> FastAPI:
     async def health():
         return {"ok": True, "projects": srv.workspace.names()}
 
+    @app.get("/api/me")
+    async def api_me(request: Request):
+        who = request.state.principal
+        return {"name": who.name, "kind": who.kind, "email": who.email, "auth": mode}
+
     @app.get("/api/projects")
     async def api_projects():
-        return await to_thread.run_sync(tools.project_list)
+        return await to_thread.run_sync(api.projects_overview, srv.workspace, srv.workspace.out_dir)
 
     @app.get("/api/projects/{name}")
     async def api_project(name: str):
@@ -124,6 +116,22 @@ def create_app(srv: Server | None = None) -> FastAPI:
         return JSONResponse({"error": e.detail}, status_code=e.status_code)
 
     app.mount("/out", StaticFiles(directory=str(srv.workspace.out_dir), html=True), name="out")
+    if (STATIC / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=str(STATIC / "assets")), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    async def workbench(path: str):
+        """Статика workbench; неизвестный путь — index.html (маршруты в браузере). Только GET: POST /mcp идёт в MCP."""
+        if path.startswith(("api/", "out/", "mcp")):
+            raise HTTPException(404, "нет такого пути")
+        index = STATIC / "index.html"
+        if not index.is_file():
+            return HTMLResponse(PLACEHOLDER)
+        f = STATIC / path
+        if path and f.is_file() and f.resolve().is_relative_to(STATIC.resolve()):
+            return FileResponse(f)
+        return FileResponse(index, headers={"Cache-Control": "no-cache"})
+
     # MCP-приложение последним: его маршрут /mcp, остальное FastAPI уже разобрал выше.
     app.mount("/", mcp_app)
     return app

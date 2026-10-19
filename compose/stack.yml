@@ -1,5 +1,5 @@
 # skelcad.br — сервер SkelCAD с точкой MCP для агентов (README, docs/architecture/04-m1-plan.md).
-#   server — FastAPI: /mcp (Bearer-токен), /api, /out (артефакты); проекты — git-репозитории в /data/projects
+#   server — FastAPI: / (workbench), /mcp (Bearer-токен), /api, /out (артефакты); проекты — git-репозитории в /data/projects
 #   worker — тот же образ, цикл по файловой очереди /data/jobs; исполняет код проектов (генераторы, OCCT)
 #            в подпроцессах с лимитами; без сети, с ограничением CPU/памяти/процессов
 # Наружу — только loopback; маршруты раздаёт host-nginx (nginx/skelcad.br.conf).
@@ -17,6 +17,7 @@ services:
       SKELCAD_DATA: /data
       SKELCAD_JOBS: /data/jobs
       SKELCAD_TOKENS: ${SKELCAD_TOKENS:?}
+      SKELCAD_AUTH: ${SKELCAD_AUTH:-tokens}
       SKELCAD_SEED: ${SKELCAD_SEED:-bracket,pipe_support}
       SKELCAD_JOB_TIMEOUT_S: ${JOB_TIMEOUT_S:-180}
       PUBLIC_URL: ${PUBLIC_URL:?}

@@ -100,4 +100,39 @@ def test_out_static(client: TestClient):
     out = client.app.state.server.workspace.out_dir / "bracket"
     out.mkdir(parents=True, exist_ok=True)
     (out / "x.txt").write_text("hi", encoding="utf-8")
-    assert client.get("/out/bracket/x.txt").text == "hi"
+    assert client.get("/out/bracket/x.txt").status_code == 401  # артефакты — за входом (M2)
+    assert client.get("/out/bracket/x.txt", headers={"Authorization": "Bearer secret1"}).text == "hi"
+
+
+def test_workbench_static_and_me(client: TestClient):
+    h = {"Authorization": "Bearer secret1"}
+    assert client.get("/").status_code == 401  # режим tokens: браузер без токена не пускаем
+    r = client.get("/", headers=h)
+    assert r.status_code == 200 and "text/html" in r.headers["content-type"]
+    r = client.get("/p/bracket/A_fork", headers=h)  # маршрут браузера → index.html (или заглушка)
+    assert r.status_code == 200 and "text/html" in r.headers["content-type"]
+    assert client.get("/api/nope", headers=h).status_code == 404
+    me = client.get("/api/me", headers=h).json()
+    assert me == {"name": "claude-code", "kind": "agent", "email": None, "auth": "tokens"}
+    p = client.get("/api/projects", headers=h).json()["projects"][0]
+    assert p["name"] == "bracket" and p["state"] == "constructor"
+    assert {v["id"] for v in p["variants"]} >= {"A_fork"} and all("built" in v for v in p["variants"])
+
+
+def test_auth_modes(tmp_path, monkeypatch):
+    from skelcad.server.auth import Principal, resolve
+
+    class R:
+        def __init__(self, path, headers):
+            self.url = type("U", (), {"path": path})()
+            self.headers = headers
+
+    tokens = {"t1": "claude-code"}
+    assert resolve(R("/mcp", {}), tokens, "proxy") is None
+    assert resolve(R("/mcp", {"authorization": "Bearer t1"}), tokens, "proxy") == Principal("claude-code", "agent")
+    assert resolve(R("/", {}), tokens, "proxy") is None
+    u = resolve(R("/api/projects", {"x-forwarded-user": "ivanov", "x-forwarded-email": "i@x.ru"}), tokens, "proxy")
+    assert u == Principal("ivanov", "user", "i@x.ru")
+    assert resolve(R("/", {}), tokens, "none") == Principal("constructor", "user")
+    assert resolve(R("/", {}), {}, "none") == Principal("constructor", "user")
+    assert resolve(R("/mcp", {}), {}, "none") == Principal("anonymous", "agent")
