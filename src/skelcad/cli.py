@@ -1,4 +1,4 @@
-"""CLI: skelcad build | check | compare | schema | check-env | standards."""
+"""CLI: skelcad build | check | schema | check-env | standards | serve | worker."""
 
 from __future__ import annotations
 
@@ -109,6 +109,19 @@ def cmd_check_env(args) -> int:
     return 0
 
 
+def cmd_serve(args) -> int:
+    from skelcad.server.app import main as serve
+
+    serve(host=args.host, port=args.port)
+    return 0
+
+
+def cmd_worker(args) -> int:
+    from skelcad.worker import main as worker
+
+    return worker(args.rest)
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="skelcad", description="SkelCAD — среда совместного конструирования")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -137,6 +150,15 @@ def main(argv: list[str] | None = None) -> None:
     e = sub.add_parser("check-env", help="проверка среды (куб -> STEP, glTF)")
     e.add_argument("-o", "--out", default=".tmp/envcheck")
     e.set_defaults(fn=cmd_check_env)
+
+    sv = sub.add_parser("serve", help="сервер: /mcp для агента, /api, /out (см. skelcad.server.app)")
+    sv.add_argument("--host", default="0.0.0.0")
+    sv.add_argument("--port", type=int, default=8000)
+    sv.set_defaults(fn=cmd_serve)
+
+    w = sub.add_parser("worker", help="рабочий процесс: --once (stdin/stdout) или --queue <папка>")
+    w.add_argument("rest", nargs=argparse.REMAINDER)
+    w.set_defaults(fn=cmd_worker)
 
     args = ap.parse_args(argv)
     sys.exit(args.fn(args))

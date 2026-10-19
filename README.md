@@ -2,7 +2,8 @@
 
 **Среда совместного конструирования «ИИ-агент + инженер-конструктор», сверху вниз.**
 Open source, Apache-2.0. Стадия: M0 (обобщение пилота) закрыт 16.10.2026: ядро, CLI, пакет `std-gost`,
-примеры `bracket` и `pipe_support`. Следующий этап — M1, агентный контур (MCP).
+примеры `bracket` и `pipe_support`. Текущий этап — M1, агентный контур (MCP-сервер), план в
+[docs/architecture/04-m1-plan.md](docs/architecture/04-m1-plan.md).
 
 *SkelCAD is an open-source environment where an AI agent and a design engineer develop a product
 together, top-down (skeleton → units → parts → drawings). The product model, not the CAD file, is
@@ -45,6 +46,7 @@ JSON Schema спецификации проекта, варианта и раз�
 | [docs/architecture/01-vision-and-architecture.md](docs/architecture/01-vision-and-architecture.md) | Замысел, принципы, архитектура (C4), проектная модель, режимы выдачи, дорожная карта, риски |
 | [docs/architecture/02-decisions.md](docs/architecture/02-decisions.md) | Журнал решений D1–D10: принятые, обсуждаемые, отложенные |
 | [docs/architecture/03-m0-plan.md](docs/architecture/03-m0-plan.md) | План этапа M0: устройство репозитория, что переезжает из пилота, шаги и статус |
+| [docs/architecture/04-m1-plan.md](docs/architecture/04-m1-plan.md) | План этапа M1: сервер с точкой MCP, изменения агента как коммиты, воркер с лимитами, diff, сценарий приёмки |
 | [docs/architecture/c4.png](docs/architecture/c4.png) | C4-схема: контекст и контейнеры |
 | [docs/research/reports/](docs/research/reports/) | Обзор мира: open source и коммерческие инструменты, бенчмарки, форматы обмена, пакеты стандартов, UX, дистрибуция |
 | [docs/research/research_notes/](docs/research/research_notes/) | Исходные заметки исследования со ссылками |
