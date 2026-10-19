@@ -1,6 +1,14 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { Projects } from "./Projects";
+
+const mount = () =>
+  render(
+    <MemoryRouter>
+      <Projects />
+    </MemoryRouter>,
+  );
 
 const payload = {
   summary: "проектов: 1",
@@ -28,7 +36,7 @@ const payload = {
 describe("Проекты", () => {
   it("показывает карточку с числами, автором-агентом и несобранным вариантом", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })));
-    render(<Projects />);
+    mount();
     expect(await screen.findByText("Кронштейн", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("агент (claude-code)")).toBeInTheDocument();
     expect(screen.getByText("анкеры M20: K_NV 1.14 → 1.74")).toBeInTheDocument();
@@ -38,7 +46,7 @@ describe("Проекты", () => {
 
   it("показывает ошибку сервера словами и кнопку «Повторить»", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "нет доступа" }), { status: 401 })));
-    render(<Projects />);
+    mount();
     expect(await screen.findByRole("alert")).toHaveTextContent("нет доступа");
     expect(screen.getByRole("button", { name: "Повторить" })).toBeInTheDocument();
   });

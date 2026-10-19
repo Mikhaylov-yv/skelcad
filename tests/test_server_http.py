@@ -160,3 +160,16 @@ def test_proxy_user_commits_as_person(tmp_path_factory, monkeypatch):
     finally:
         CURRENT_PRINCIPAL.reset(tok)
     assert current_actor("claude-code").name == "SkelCAD agent (claude-code)"
+
+
+def test_variant_report_endpoint(client: TestClient):
+    h = {"Authorization": "Bearer secret1"}
+    r = client.get("/api/projects/bracket/variants/A_fork/report", headers=h)
+    assert r.status_code == 404 and "не собран" in r.json()["error"]
+    assert client.get("/api/projects/bracket/variants/nope/report", headers=h).status_code == 400
+    out = client.app.state.server.workspace.out_dir / "bracket" / "A_fork"
+    out.mkdir(parents=True, exist_ok=True)
+    rep = {"variant": "A_fork", "summary": {"mass_kg": 1}, "findings": [], "files": {"gltf": "A_fork/A_fork.glb"}}
+    (out / "report.json").write_text(json.dumps(rep), encoding="utf-8")
+    r = client.get("/api/projects/bracket/variants/A_fork/report", headers=h).json()
+    assert r["urls"]["glb"] == "/out/bracket/A_fork/A_fork.glb" and r["built_at"]

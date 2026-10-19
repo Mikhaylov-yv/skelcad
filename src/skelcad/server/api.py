@@ -48,3 +48,29 @@ def projects_overview(ws: Workspace, out_dir: Path) -> dict:
         "projects": items,
         "templates": ws.templates_list(),
     }
+
+
+class NotBuilt(LookupError):
+    """Вариант ещё не собран: нет out/<project>/<variant>/report.json."""
+
+
+def variant_report(ws: Workspace, out_dir: Path, project: str, variant: str) -> dict:
+    """Полный отчёт последней сборки варианта + ссылки на артефакты (относительно /out/<project>/)."""
+    if project not in ws.names():
+        raise LookupError(f"нет проекта «{project}»")
+    ids = [v["id"] for v in ws.variants(project)]
+    if variant not in ids:
+        raise LookupError(f"нет варианта «{variant}» в проекте «{project}»; есть: {', '.join(ids) or 'нет'}")
+    rep = out_dir / project / variant / "report.json"
+    if not rep.is_file():
+        raise NotBuilt(f"вариант «{variant}» ещё не собран")
+    r = json.loads(rep.read_text(encoding="utf-8"))
+    files = r.get("files") or {}
+    base = f"/out/{project}/"
+    r["urls"] = {
+        "glb": base + files["gltf"] if files.get("gltf") else None,
+        "step": base + files["assembly_step"] if files.get("assembly_step") else None,
+        "svg": {k: base + v for k, v in (files.get("svg") or {}).items()},
+    }
+    r["built_at"] = datetime.fromtimestamp(rep.stat().st_mtime, tz=UTC).isoformat(timespec="seconds")
+    return r

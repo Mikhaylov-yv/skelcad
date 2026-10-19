@@ -105,6 +105,13 @@ def create_app(srv: Server | None = None) -> FastAPI:
     async def api_project(name: str):
         return await to_thread.run_sync(tools.project_read, name)
 
+    @app.get("/api/projects/{name}/variants/{variant}/report")
+    async def api_variant_report(name: str, variant: str):
+        try:
+            return await to_thread.run_sync(api.variant_report, srv.workspace, srv.workspace.out_dir, name, variant)
+        except api.NotBuilt as e:
+            raise HTTPException(404, str(e)) from e
+
     @app.get("/api/projects/{name}/history")
     async def api_history(name: str, limit: int = 20):
         return await to_thread.run_sync(tools.history, name, limit)

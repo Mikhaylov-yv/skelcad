@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, type ProjectOverview } from "../api";
 import { S } from "../strings";
 import { NumbersRow } from "../ui/NumbersRow";
@@ -70,7 +71,9 @@ function ProjectCard({ p }: { p: ProjectOverview }) {
               {p.variants.map((v) => (
                 <tr key={v.id}>
                   <th scope="row">
-                    <span className="mono">{v.id}</span>
+                    <Link to={`/p/${encodeURIComponent(p.name)}/${encodeURIComponent(v.id)}`} className="mono">
+                      {v.id}
+                    </Link>
                     {v.title && <span className="muted"> — {v.title}</span>}
                   </th>
                   <td>
