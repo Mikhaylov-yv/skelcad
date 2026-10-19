@@ -119,7 +119,16 @@ def cmd_serve(args) -> int:
 def cmd_worker(args) -> int:
     from skelcad.worker import main as worker
 
-    return worker(args.rest)
+    argv = []
+    if args.once:
+        argv.append("--once")
+    if args.queue:
+        argv += ["--queue", args.queue]
+    if args.cpu:
+        argv += ["--cpu", str(args.cpu)]
+    if args.mem:
+        argv += ["--mem", str(args.mem)]
+    return worker(argv)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -157,7 +166,10 @@ def main(argv: list[str] | None = None) -> None:
     sv.set_defaults(fn=cmd_serve)
 
     w = sub.add_parser("worker", help="рабочий процесс: --once (stdin/stdout) или --queue <папка>")
-    w.add_argument("rest", nargs=argparse.REMAINDER)
+    w.add_argument("--once", action="store_true", help="один запрос из stdin, ответ в stdout")
+    w.add_argument("--queue", help="папка файловой очереди (цикл контейнера-воркера)")
+    w.add_argument("--cpu", type=int, help="лимит CPU-времени подпроцесса, с")
+    w.add_argument("--mem", type=int, help="лимит памяти подпроцесса, МБ")
     w.set_defaults(fn=cmd_worker)
 
     args = ap.parse_args(argv)

@@ -102,8 +102,14 @@ class QueueRunner:
         for d in ("new", "claimed", "done"):
             (self.q / d).mkdir(parents=True, exist_ok=True)
 
+    def alive(self, max_age_s: float = 30) -> bool:
+        hb = self.q / "heartbeat"
+        return hb.exists() and time.time() - hb.stat().st_mtime < max_age_s
+
     def run(self, op: str, args: dict, timeout_s: int | None = None) -> Any:
         timeout_s = timeout_s or self.limits.timeout_s
+        if not self.alive():
+            raise JobError(f"воркер не запущен или не отвечает (нет heartbeat в {self.q}); проверьте контейнер worker")
         jid = f"{int(time.time())}-{uuid.uuid4().hex[:8]}"
         tmp = self.q / "new" / f".{jid}.json.tmp"
         req = self.q / "new" / f"{jid}.json"
@@ -134,7 +140,11 @@ def queue_loop(queue_dir: Path, cpu_s: int | None = None, mem_mb: int | None = N
     for f in (q / "claimed").glob("*.json"):
         f.rename(q / "new" / f.name)
     print(f"worker: очередь {q}, лимиты cpu={cpu_s}s mem={mem_mb}MB", file=sys.stderr, flush=True)
+    hb, last_hb = q / "heartbeat", 0.0
     while True:
+        if time.time() - last_hb > 5:
+            hb.touch()
+            last_hb = time.time()
         files = sorted(p for p in (q / "new").glob("*.json") if not p.name.startswith("."))
         if not files:
             time.sleep(0.3)

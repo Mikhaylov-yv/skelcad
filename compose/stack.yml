@@ -1,0 +1,61 @@
+# skelcad.br — сервер SkelCAD с точкой MCP для агентов (README, docs/architecture/04-m1-plan.md).
+#   server — FastAPI: /mcp (Bearer-токен), /api, /out (артефакты); проекты — git-репозитории в /data/projects
+#   worker — тот же образ, цикл по файловой очереди /data/jobs; исполняет код проектов (генераторы, OCCT)
+#            в подпроцессах с лимитами; без сети, с ограничением CPU/памяти/процессов
+# Наружу — только loopback; маршруты раздаёт host-nginx (nginx/skelcad.br.conf).
+name: skelcad
+
+services:
+  server:
+    build:
+      context: ..
+    image: skelcad:local
+    container_name: skelcad-server
+    init: true
+    restart: unless-stopped
+    environment:
+      SKELCAD_DATA: /data
+      SKELCAD_JOBS: /data/jobs
+      SKELCAD_TOKENS: ${SKELCAD_TOKENS:?}
+      SKELCAD_SEED: ${SKELCAD_SEED:-bracket,pipe_support}
+      SKELCAD_JOB_TIMEOUT_S: ${JOB_TIMEOUT_S:-180}
+      PUBLIC_URL: ${PUBLIC_URL:?}
+    volumes:
+      - data:/data
+    ports:
+      - "127.0.0.1:${APP_PORT:?}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  worker:
+    image: skelcad:local
+    container_name: skelcad-worker
+    init: true
+    restart: unless-stopped
+    command: ["skelcad", "worker", "--queue", "/data/jobs"]
+    environment:
+      SKELCAD_LIMIT_CPU_S: ${LIMIT_CPU_S:-170}
+      SKELCAD_LIMIT_MEM_MB: ${LIMIT_MEM_MB:-3072}
+    volumes:
+      - data:/data
+    network_mode: none
+    cpus: ${WORKER_CPUS:-2}
+    mem_limit: ${WORKER_MEM:-4g}
+    pids_limit: 256
+    depends_on:
+      server:
+        condition: service_started
+
+volumes:
+  data:
+
+# Пулы docker по умолчанию на cloud исчерпаны — подсеть явно (drawio занял 10.88.10.0/24).
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.88.11.0/24

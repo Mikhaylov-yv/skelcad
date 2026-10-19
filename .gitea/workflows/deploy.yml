@@ -1,0 +1,89 @@
+name: Deploy skelcad
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  SRV: srv/skelcad
+  COMPOSE: docker compose -f compose/stack.yml --env-file compose/.env
+
+jobs:
+  deploy-cloud:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install rsync
+        run: |
+          if ! command -v rsync >/dev/null; then
+            apt-get update -qq && apt-get install -y -qq rsync
+          fi
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.CLOUD_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ vars.CLOUD_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Backup current state (single-overwrite)
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ vars.CLOUD_USER }}@${{ vars.CLOUD_HOST }} "
+            mkdir -p \$HOME/$SRV \$HOME/$SRV.bak
+            rsync -a --delete \$HOME/$SRV/ \$HOME/$SRV.bak/ 2>/dev/null || true
+          "
+
+      - name: Sync files to host
+        run: |
+          rsync -az --delete --exclude='.git' --exclude='.gitea' --exclude='compose/.env' \
+            --exclude='.venv' --exclude='.tmp' --exclude='**/out' --exclude='**/__pycache__' \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            ./ ${{ vars.CLOUD_USER }}@${{ vars.CLOUD_HOST }}:$SRV/
+
+      - name: Write .env from compose/env.home + secrets
+        run: |
+          {
+            cat compose/env.home
+            echo "SKELCAD_TOKENS=${{ secrets.SKELCAD_TOKENS }}"
+          } | ssh -i ~/.ssh/deploy_key ${{ vars.CLOUD_USER }}@${{ vars.CLOUD_HOST }} \
+            "umask 077 && cat > \$HOME/$SRV/compose/.env"
+
+      - name: Validate, build, deploy
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ vars.CLOUD_USER }}@${{ vars.CLOUD_HOST }} \
+            "SRV='$SRV' COMPOSE='$COMPOSE' bash -s" <<'EOF'
+          set -e
+          cd $HOME/$SRV
+          if ! $COMPOSE config -q; then
+            echo "compose invalid, rolling back"
+            rsync -a --delete $HOME/$SRV.bak/ $HOME/$SRV/
+            exit 1
+          fi
+          $COMPOSE build --pull
+          $COMPOSE up -d --remove-orphans --wait --wait-timeout 300
+          $COMPOSE ps
+          EOF
+
+      - name: Install nginx vhost (skelcad.br), smoke-check
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ vars.CLOUD_USER }}@${{ vars.CLOUD_HOST }} \
+            "SRV='$SRV' bash -s" <<'EOF'
+          set -e
+          sudo -n /usr/local/sbin/install-nginx-vhost skelcad.br "$HOME/$SRV/nginx/skelcad.br.conf"
+          # -k: имя в SAN сертификата добавляется отдельно (add-domain.sh на malina), smoke-check от него не зависит
+          C="curl -sk -o /dev/null -w %{http_code} --resolve skelcad.br:443:127.0.0.1"
+          for i in 1 2 3 4 5 6; do
+            # /health → 200; /mcp без токена → 401; / → 404 (workbench — M2)
+            h=$($C https://skelcad.br/health); m=$($C -X POST https://skelcad.br/mcp); r=$($C https://skelcad.br/)
+            echo "attempt $i: /health $h, /mcp $m, / $r"
+            if [ "$h" = 200 ] && [ "$m" = 401 ] && [ "$r" = 404 ]; then
+              echo "https://skelcad.br OK"; exit 0
+            fi
+            sleep 5
+          done
+          docker logs --tail 30 skelcad-server
+          echo "https://skelcad.br FAILED"; exit 1
+          EOF

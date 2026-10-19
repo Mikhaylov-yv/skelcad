@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 import time
 import traceback
 from pathlib import Path
@@ -167,6 +168,46 @@ def handle(request: dict) -> dict:
 
 # ------------------------------------------------------------------ лимиты и запуск
 
+_WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
+
+
+def install_guard(allow_write: list[Path], deny_write: list[Path] = ()) -> None:
+    """Audit-hook: запись файлов только в разрешённые папки (out/, временные, __pycache__);
+    запуск процессов и сетевые соединения запрещены. Исключение — PermissionError (OSError):
+    importlib молча пропускает невозможность записать .pyc."""
+    allowed = [p.resolve() for p in allow_write] + [Path(tempfile.gettempdir()).resolve()]
+    denied = [p.resolve() for p in deny_write]
+
+    def ok(path: str) -> bool:
+        try:
+            rp = Path(path).resolve()
+        except (OSError, RuntimeError):
+            return False
+        if "__pycache__" in rp.parts:
+            return True
+        if any(rp == d or d in rp.parents for d in denied):
+            return False
+        return any(rp == a or a in rp.parents for a in allowed)
+
+    def hook(event: str, args: tuple) -> None:
+        if event == "open":
+            path, mode, flags = args
+            writing = (mode and any(c in str(mode) for c in "wax+")) or (not mode and flags & _WRITE_FLAGS)
+            if writing and isinstance(path, (str, bytes, os.PathLike)) and not ok(os.fsdecode(path)):
+                raise PermissionError(
+                    f"воркер: запись в «{os.fsdecode(path)}» запрещена (только out/ и временные файлы)"
+                )
+        elif event in ("os.remove", "os.rename", "os.unlink", "os.rmdir", "os.mkdir", "shutil.rmtree"):
+            path = args[0]
+            if isinstance(path, (str, bytes, os.PathLike)) and not ok(os.fsdecode(path)):
+                raise PermissionError(f"воркер: изменение «{os.fsdecode(path)}» запрещено")
+        elif event in ("subprocess.Popen", "os.system", "os.posix_spawn", "os.fork", "os.exec"):
+            raise PermissionError("воркер: запуск процессов из кода проекта запрещён")
+        elif event == "socket.connect":
+            raise PermissionError("воркер: сетевые соединения из кода проекта запрещены")
+
+    sys.addaudithook(hook)
+
 
 def apply_limits(cpu_s: int | None, mem_mb: int | None) -> None:
     """Лимиты на процесс (Linux): CPU-время и адресное пространство."""
@@ -188,6 +229,12 @@ def run_once(stdin=None, stdout=None) -> int:
     request = json.load(stdin)
     sys.stdout = sys.stderr
     try:
+        args = request.get("args") or {}
+        if request.get("guard", True):
+            install_guard(
+                [Path(args["out_dir"])] if args.get("out_dir") else [],
+                [Path(args["project_dir"])] if args.get("project_dir") else [],
+            )
         response = handle(request)
     finally:
         sys.stdout = real_out
