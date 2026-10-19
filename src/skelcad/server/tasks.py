@@ -41,7 +41,8 @@ class TaskStore:
             raise TaskError("нужен текст задачи")
         if (a := self.active(project)) is not None:
             raise TaskError(f"проект уже у агента: задача {a['id']} ({a['status']}); дождитесь или остановите её")
-        tid = datetime.now(tz=UTC).strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
+        # миллисекунды в ключе: list() и claim() сортируют по имени папки, две задачи в одну секунду шли вразнобой
+        tid = datetime.now(tz=UTC).strftime("%Y%m%d-%H%M%S-%f")[:-3] + "-" + secrets.token_hex(2)
         d = self.root / tid
         d.mkdir(parents=True)
         task = {

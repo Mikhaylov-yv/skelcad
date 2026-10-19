@@ -153,6 +153,7 @@ export interface Report {
   metrics?: { id: string; title: string; value: string | number }[];
   urls: { glb: string | null; step: string | null; svg: Record<string, string> };
   built_at: string;
+  geometry_at?: string | null; // 3D/STEP могут быть старше отчёта: сборка без экспорта переносит ссылки прошлой
 }
 
 export type CommitKind = "agent" | "user" | "system" | "revert";

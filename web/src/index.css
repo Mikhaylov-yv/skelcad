@@ -99,6 +99,8 @@ h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacin
 .canvas { flex: 1; min-height: 300px; position: relative; }
 .canvas canvas { outline: none; }
 .canvas__note { position: absolute; top: 8px; left: 12px; margin: 0; z-index: 1; }
+.canvas__empty { padding: 24px 16px; max-width: 520px; }
+.canvas__empty p { margin: 0 0 8px; }
 .tree { list-style: none; margin: 0 0 8px; padding: 0; }
 .tree__item { display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left; padding: 4px 8px; border: 1px solid transparent; background: none; }
 .tree__item:hover { background: var(--bg); }

@@ -135,7 +135,9 @@ def build_mcp(srv: Server) -> FastMCP:
     @mcp.tool()
     async def build(project: str, variant: str | None = None, export: bool = True) -> dict:
         """Построить вариант(ы): модель → геометрия → правила/проверки/расчёт → артефакты (STEP, glTF, SVG,
-        report.json) и ссылки на них. Без variant — все варианты. Сводка: масса, габарит, K_min, замечания."""
+        report.json) и ссылки на них. Без variant — все варианты. Сводка: масса, габарит, K_min, замечания.
+        export=False — быстрее, но 3D/STEP/SVG не обновляются (в отчёте остаются ссылки прошлой сборки);
+        перед отчётом конструктору собирай с export=True, иначе он увидит в workbench старую геометрию."""
         return await run(t.build, project, variant, export)
 
     @mcp.tool()

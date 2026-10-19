@@ -145,6 +145,9 @@ export function Variant() {
   );
 
   const title = report ? `${report.project_title || project} · ${report.title || variant}` : `${project} · ${variant}`;
+  // геометрия старше отчёта больше чем на минуту — после сборки была ещё сборка без экспорта
+  const geometryStale =
+    !!report?.urls.glb && !!report.geometry_at && Date.parse(report.built_at) - Date.parse(report.geometry_at) > 60_000;
 
   return (
     <main className="variant">
@@ -168,6 +171,11 @@ export function Variant() {
             <span className="muted small">
               {S.variant.builtAt} {relativeTime(report.built_at)}
             </span>
+            {geometryStale && (
+              <span className="muted small" role="status">
+                {S.variant.geometryStale(relativeTime(report.geometry_at!))}
+              </span>
+            )}
             {(report.summary.findings.error ?? 0) > 0 ? (
               <span className="level-error small" role="status">
                 {S.gate.closed(report.summary.findings.error ?? 0)}
@@ -396,7 +404,13 @@ export function Variant() {
                   />
                 </>
               ) : (
-                <p className="muted">{S.variant.glbMissing}</p>
+                <div className="canvas__empty">
+                  <p className="muted">{S.variant.glbMissing}</p>
+                  <p className="muted small">{S.variant.glbMissingHint}</p>
+                  <button onClick={build} disabled={building !== null} aria-busy={building !== null}>
+                    {S.variant.rebuild}
+                  </button>
+                </div>
               )}
             </div>
           </section>

@@ -180,6 +180,9 @@ def test_variant_report_endpoint(client: TestClient):
     (out / "report.json").write_text(json.dumps(rep), encoding="utf-8")
     r = client.get("/api/projects/bracket/variants/A_fork/report", headers=h).json()
     assert r["urls"]["glb"] == "/out/bracket/A_fork/A_fork.glb" and r["built_at"]
+    assert r["geometry_at"] is None  # GLB по ссылке нет
+    (out / "A_fork.glb").write_bytes(b"glTF")
+    assert client.get("/api/projects/bracket/variants/A_fork/report", headers=h).json()["geometry_at"]
 
 
 def test_commits_reviewed_and_revert(client: TestClient):

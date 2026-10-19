@@ -67,6 +67,23 @@ describe("Вариант", () => {
     expect(await screen.findByTestId("viewer")).toHaveTextContent("выделено: cheek_L");
   });
 
+  it("нет 3D в комплекте: объясняет причину и предлагает собрать заново прямо в окне 3D", async () => {
+    const noGlb = { ...report, urls: { ...report.urls, glb: null } };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(noGlb), { status: 200 })));
+    mount();
+    expect(await screen.findByText("3D-модели в комплекте сборки нет.")).toBeInTheDocument();
+    expect(screen.getByText(/build с export=false/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Собрать заново" })).toHaveLength(2); // шапка и окно 3D
+    expect(screen.queryByTestId("viewer")).not.toBeInTheDocument();
+  });
+
+  it("геометрия старше отчёта: предупреждает, что 3D от прошлой сборки", async () => {
+    const stale = { ...report, geometry_at: new Date(Date.now() - 3 * 3600_000).toISOString() };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(stale), { status: 200 })));
+    mount();
+    expect(await screen.findByRole("status")).toHaveTextContent(/3D от сборки .*пересобирали без геометрии/);
+  });
+
   it("несобранный вариант: объясняет и предлагает собрать", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "вариант «A_fork» ещё не собран" }), { status: 404 })));
     mount();

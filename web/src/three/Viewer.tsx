@@ -74,10 +74,17 @@ function topLevelName(obj: THREE.Object3D, root: THREE.Object3D): string | null 
   return o && o !== root ? o.name : null;
 }
 
-/** Группа, чьи дети — сущности модели: GLB обёрнут в узел сборки (A_fork → base_plate, cheek_L, …). */
+/** Сущность модели в GLB: меш либо группа примитивов одной детали (плита из 14 граней → plate_1…plate_14). */
+function isEntity(o: THREE.Object3D): boolean {
+  return (o as THREE.Mesh).isMesh === true || (o.children.length > 0 && o.children.every((c) => (c as THREE.Mesh).isMesh === true));
+}
+
+/** Группа, чьи дети — сущности модели: GLB обёрнут в узел сборки (A_fork → base_plate, cheek_L, …).
+ *  У изделия из одной детали обёртка содержит единственную группу граней (A_base → plate → plate_1…) — в неё не спускаемся,
+ *  иначе деталь рассыпается на грани. */
 function entityGroup(scene: THREE.Object3D): THREE.Object3D {
   let g = scene;
-  while (g.children.length === 1 && g.children[0].children.length > 0) g = g.children[0];
+  while (g.children.length === 1 && g.children[0].children.length > 0 && !isEntity(g.children[0])) g = g.children[0];
   return g;
 }
 

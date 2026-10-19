@@ -80,6 +80,11 @@ def variant_report(ws: Workspace, out_dir: Path, project: str, variant: str) -> 
         "svg": {k: base + v for k, v in (files.get("svg") or {}).items()},
     }
     r["built_at"] = datetime.fromtimestamp(rep.stat().st_mtime, tz=UTC).isoformat(timespec="seconds")
+    # геометрия может быть старше отчёта: сборка без экспорта (build export=False) переносит ссылки прошлой сборки
+    glb = out_dir / project / files["gltf"] if files.get("gltf") else None
+    r["geometry_at"] = None
+    if glb and glb.is_file():
+        r["geometry_at"] = datetime.fromtimestamp(glb.stat().st_mtime, tz=UTC).isoformat(timespec="seconds")
     return r
 
 

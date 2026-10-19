@@ -36,6 +36,29 @@ def blanks(m: Project) -> dict[str, int]:
     )
 
 
+def previous_files(out: Path) -> dict | None:
+    """Ссылки на артефакты прошлой сборки из out/report.json — те, что ещё лежат на диске.
+
+    Сборка без экспорта (build export=False) обновляет модель, замечания и расчёт, но геометрию не пишет.
+    Чтобы workbench и инструменты не теряли 3D, STEP и проекции, ссылки на них переносятся в новый отчёт.
+    """
+    rep = out / "report.json"
+    if not rep.is_file():
+        return None
+    try:
+        files = json.loads(rep.read_text(encoding="utf-8")).get("files") or {}
+    except (OSError, ValueError):
+        return None
+    root = out.parent
+    kept: dict = {"parts_step": {}, "parts_stl": {}, "svg": {}}
+    for k, v in files.items():
+        if isinstance(v, dict):
+            kept[k] = {kk: vv for kk, vv in v.items() if isinstance(vv, str) and (root / vv).is_file()}
+        elif isinstance(v, str) and (root / v).is_file():
+            kept[k] = v
+    return kept if any(kept.values()) else None
+
+
 def analyse(pd: ProjectDir, m: Project, g: Geometry) -> tuple[list[Finding], list, list[Metric]]:
     """Правила + проверки + расчёты + метрики по собранной модели и геометрии."""
     ps = PluginSet.collect(pd.ctx, pd.plugins)
@@ -66,6 +89,8 @@ def build_variant(
     if export:
         files = export_all(m, g, pd.ctx, out)
         files["svg"] = {k: f"{name}/{v}" for k, v in write_views(g.assembly(m, with_purchased=True), out, name).items()}
+    else:
+        files = previous_files(out) or files
 
     try:
         masses = g.masses(m, pd.ctx)
@@ -126,6 +151,7 @@ def build_variant(
             a.model_dump(include={"id", "topic", "text"}) | {"text": text(a.text, lang)} for a in m.assumptions
         ],
         "files": files,
+        "exported": export,
     }
     (out / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     log(f"   масса {summary['mass_kg']} кг, габарит {summary['envelope_mm']} мм, швы {summary['weld_length_mm']} мм")
