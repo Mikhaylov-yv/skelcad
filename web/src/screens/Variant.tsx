@@ -168,15 +168,45 @@ export function Variant() {
             <span className="muted small">
               {S.variant.builtAt} {relativeTime(report.built_at)}
             </span>
-            {report.urls.step && !(report.summary.findings.error ?? 0) && (
-              <a className="small" href={report.urls.step} download>
-                {S.variant.download}
-              </a>
-            )}
-            {(report.summary.findings.error ?? 0) > 0 && (
+            {(report.summary.findings.error ?? 0) > 0 ? (
               <span className="level-error small" role="status">
                 {S.gate.closed(report.summary.findings.error ?? 0)}
               </span>
+            ) : (
+              <details className="export">
+                <summary>{S.export.title}</summary>
+                <ul>
+                  {report.urls.step && (
+                    <li>
+                      <a href={report.urls.step} download>
+                        {S.export.step}
+                      </a>
+                    </li>
+                  )}
+                  {report.urls.glb && (
+                    <li>
+                      <a href={report.urls.glb} download>
+                        {S.export.glb}
+                      </a>
+                    </li>
+                  )}
+                  {(["main", "left", "top"] as const).map(
+                    (v) =>
+                      report.urls.svg[v] && (
+                        <li key={v}>
+                          <a href={report.urls.svg[v]} target="_blank" rel="noreferrer">
+                            {S.export.svg[v]}
+                          </a>
+                        </li>
+                      ),
+                  )}
+                  <li>
+                    <a href={`/out/${encodeURIComponent(project)}/${encodeURIComponent(variant)}/report.json`} target="_blank" rel="noreferrer">
+                      {S.export.report}
+                    </a>
+                  </li>
+                </ul>
+              </details>
             )}
             <Link className="small" to={`/p/${encodeURIComponent(project)}/commits?variant=${encodeURIComponent(variant)}`}>
               {S.feed.tab}

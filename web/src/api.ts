@@ -68,7 +68,14 @@ export interface Me {
   kind: "agent" | "user";
   email: string | null;
   auth: "none" | "tokens" | "proxy";
+  admin: boolean;
   logout_url: string | null;
+}
+
+export interface TokenInfo {
+  name: string;
+  created: string | null;
+  created_by: string | null;
 }
 
 export type Level = "error" | "warning" | "info";
@@ -283,6 +290,14 @@ export const api = {
   projects: () => getJson<ProjectsResponse>("/api/projects"),
   report: (project: string, variant: string) =>
     getJson<Report>(`/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/report`),
+  tokens: () => getJson<{ tokens: TokenInfo[]; mcp_url: string }>("/api/tokens"),
+  tokenCreate: (name: string) =>
+    getJson<TokenInfo & { token: string; command: string; mcp_url: string }>("/api/tokens", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }),
+  tokenDelete: (name: string) => getJson<{ ok: boolean }>(`/api/tokens/${encodeURIComponent(name)}`, { method: "DELETE" }),
   tasks: (project: string) =>
     getJson<{ tasks: AgentTask[]; active: AgentTask | null }>(`/api/projects/${encodeURIComponent(project)}/tasks`),
   taskCreate: (project: string, text: string, variant?: string) =>

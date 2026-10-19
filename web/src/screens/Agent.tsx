@@ -122,7 +122,11 @@ export function Agent() {
           </ul>
         </section>
         <section className="agent__log" aria-label={S.agent.log}>
-          {selected ? <TaskLog id={selected} project={project} onChange={load} /> : <p className="muted">{S.agent.noSelected}</p>}
+          {selected ? (
+            <TaskLog key={selected} id={selected} project={project} onChange={load} />
+          ) : (
+            <p className="muted">{S.agent.noSelected}</p>
+          )}
         </section>
       </div>
     </main>
@@ -134,11 +138,14 @@ function TaskLog({ id, project, onChange }: { id: string; project: string; onCha
   const [task, setTask] = useState<AgentTask | null>(null);
   const [stopping, setStopping] = useState(false);
   const next = useRef(0);
+  const latest = useRef<AgentTask | null>(null); // статус из последнего опроса — для остановки опроса без замыкания на старом state
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     next.current = 0;
+    latest.current = null;
     setEvents([]);
+    setTask(null);
     let alive = true;
     const tick = () =>
       api
@@ -147,19 +154,25 @@ function TaskLog({ id, project, onChange }: { id: string; project: string; onCha
           if (!alive) return;
           if (r.events.length) setEvents((e) => [...e, ...r.events]);
           next.current = r.next;
+          latest.current = r.task;
           setTask(r.task);
         })
         .catch(() => undefined);
     tick();
     const h = window.setInterval(() => {
-      if (task && !["queued", "running"].includes(task.status)) return;
+      const t = latest.current;
+      if (t && !["queued", "running"].includes(t.status) && next.current >= 1) {
+        // задача завершена: дочитать хвост событий ещё раз и остановиться
+        tick();
+        window.clearInterval(h);
+        return;
+      }
       tick();
     }, 2000);
     return () => {
       alive = false;
       window.clearInterval(h);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
   useEffect(() => {
     box.current?.scrollTo?.({ top: box.current.scrollHeight });

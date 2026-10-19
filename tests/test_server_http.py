@@ -113,7 +113,14 @@ def test_workbench_static_and_me(client: TestClient):
     assert r.status_code == 200 and "text/html" in r.headers["content-type"]
     assert client.get("/api/nope", headers=h).status_code == 404
     me = client.get("/api/me", headers=h).json()
-    assert me == {"name": "claude-code", "kind": "agent", "email": None, "auth": "tokens", "logout_url": None}
+    assert me == {
+        "name": "claude-code",
+        "kind": "agent",
+        "email": None,
+        "auth": "tokens",
+        "admin": False,
+        "logout_url": None,
+    }
     p = client.get("/api/projects", headers=h).json()["projects"][0]
     assert p["name"] == "bracket" and p["state"] == "constructor"
     assert {v["id"] for v in p["variants"]} >= {"A_fork"} and all("built" in v for v in p["variants"])
@@ -133,8 +140,8 @@ def test_auth_modes(tmp_path, monkeypatch):
     assert resolve(R("/", {}), tokens, "proxy") is None
     u = resolve(R("/api/projects", {"x-forwarded-user": "ivanov", "x-forwarded-email": "i@x.ru"}), tokens, "proxy")
     assert u == Principal("ivanov", "user", "i@x.ru")
-    assert resolve(R("/", {}), tokens, "none") == Principal("constructor", "user")
-    assert resolve(R("/", {}), {}, "none") == Principal("constructor", "user")
+    assert resolve(R("/", {}), tokens, "none") == Principal("constructor", "user", admin=True)
+    assert resolve(R("/", {}), {}, "none") == Principal("constructor", "user", admin=True)
     assert resolve(R("/mcp", {}), {}, "none") == Principal("anonymous", "agent")
 
 
@@ -276,3 +283,30 @@ def test_review_roundtrip(client: TestClient):
     assert me["status"] == "resolved" and me["resolved_by"] == "SkelCAD agent (claude-code)"
     top = client.get("/api/projects/bracket/commits", headers=h).json()["commits"][0]
     assert top["message"].startswith(f"ответ на {item['id']}")
+
+
+def test_tokens_admin_flow(tmp_path_factory, monkeypatch):
+    """Токены из workbench: только admins; созданный токен сразу работает на /mcp и /api; отзыв закрывает доступ."""
+    monkeypatch.setenv("SKELCAD_TOKENS", "claude-code:secret1")
+    monkeypatch.setenv("SKELCAD_AUTH", "proxy")
+    monkeypatch.setenv("SKELCAD_SEED", "bracket")
+    srv = local_server(tmp_path_factory.mktemp("data"))
+    srv.public_url = "https://skelcad.test"
+    user = {"X-Forwarded-User": "petrov"}
+    admin = {"X-Forwarded-User": "ivanov", "X-Forwarded-Groups": "admins,users"}
+    with TestClient(create_app(srv)) as c:
+        assert c.get("/api/me", headers=user).json()["admin"] is False
+        assert c.get("/api/tokens", headers=user).status_code == 403
+        lst = c.get("/api/tokens", headers=admin).json()
+        assert [t["name"] for t in lst["tokens"]] == ["claude-code"] and lst["mcp_url"].endswith("/mcp")
+        assert c.post("/api/tokens", json={"name": "Bad Name"}, headers=admin).status_code == 400
+        assert c.post("/api/tokens", json={"name": "claude-code"}, headers=admin).status_code == 400
+        r = c.post("/api/tokens", json={"name": "cursor-petrov"}, headers=admin).json()
+        assert r["token"].startswith("sk_") and "claude mcp add" in r["command"] and r["created_by"] == "ivanov"
+        tok = r["token"]
+        me = c.get("/api/me", headers={"Authorization": f"Bearer {tok}"}).json()
+        assert me == {**me, "name": "cursor-petrov", "kind": "agent"}
+        assert mcp_call(c, tok, "tools/list").status_code == 200
+        assert c.delete("/api/tokens/cursor-petrov", headers=admin).json() == {"ok": True}
+        assert c.get("/api/me", headers={"Authorization": f"Bearer {tok}"}).status_code == 401
+        assert c.delete("/api/tokens/nope", headers=admin).status_code == 400

@@ -8,6 +8,7 @@ import { Feed } from "./screens/Feed";
 import { Compare } from "./screens/Compare";
 import { Params } from "./screens/Params";
 import { Agent } from "./screens/Agent";
+import { Tokens } from "./screens/Tokens";
 import "./index.css";
 
 const router = createBrowserRouter([
@@ -16,6 +17,7 @@ const router = createBrowserRouter([
     element: <App />,
     children: [
       { index: true, element: <Projects /> },
+      { path: "tokens", element: <Tokens /> },
       { path: "p/:project/commits", element: <Feed /> },
       { path: "p/:project/compare", element: <Compare /> },
       { path: "p/:project/agent", element: <Agent /> },

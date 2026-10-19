@@ -44,8 +44,9 @@
 - Документы: `docs/architecture/01-vision-and-architecture.md` (замысел), `02-decisions.md`
   (журнал решений), `03-m0-plan.md`, `04-m1-plan.md`, `05-m2-plan.md` (планы этапов со статусом).
 - Код: `src/skelcad/core` (модель), `geom` (OCCT), `rules` (плагины), `pipeline.py`, `server/`
-  (FastAPI + MCP + git-проекты), `worker.py` (изолированное исполнение кода проектов),
-  `measure.py`, `render.py`, `diff.py`. Пакет стандарта — `packages/std-gost`.
+  (FastAPI + MCP + git-проекты; `api.py`, `auth.py`, `params.py`, `review.py`, `tasks.py`, `tokens.py`),
+  `worker.py` (изолированное исполнение кода проектов), `agent.py` (встроенный агент из workbench),
+  `measure.py`, `render.py`, `diff.py`. Workbench — `web/` (Vite + React + TS, three.js). Пакет стандарта — `packages/std-gost`.
 - Проверки перед коммитом: `uv run ruff check src tests && uv run ruff format src tests &&
   uv run pytest -q`. Код проектов (генераторы, плагины) исполняется только в воркере.
 - Деплой: push в `main` на git.br → `.gitea/workflows/deploy.yml` → cloud (`~/srv/skelcad`,

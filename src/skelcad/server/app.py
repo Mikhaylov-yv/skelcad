@@ -29,6 +29,7 @@ from skelcad.server import api
 from skelcad.server.auth import CURRENT_PRINCIPAL, client_for, parse_tokens, resolve, web_mode
 from skelcad.server.mcp import CURRENT_CLIENT, build_mcp
 from skelcad.server.tasks import TaskError, TaskStore
+from skelcad.server.tokens import TokenError, TokenStore
 from skelcad.server.tools import Server, ToolError, Tools
 
 __all__ = ["client_for", "create_app", "main", "parse_tokens"]
@@ -44,12 +45,14 @@ PLACEHOLDER = """<!doctype html><html lang="ru"><meta charset="utf-8"><title>Ske
 
 def create_app(srv: Server | None = None) -> FastAPI:
     srv = srv or Server.from_env()
-    tokens = parse_tokens(os.environ.get("SKELCAD_TOKENS"))
+    static_tokens = parse_tokens(os.environ.get("SKELCAD_TOKENS"))
     if agent_token := os.environ.get("SKELCAD_AGENT_TOKEN"):
-        tokens[agent_token] = "workbench-agent"
-    mode = web_mode(tokens)
+        static_tokens[agent_token] = "workbench-agent"
+    token_store = TokenStore(srv.workspace.root / "tokens.json")
+    mode = web_mode(static_tokens)
+    tokens_mode = bool(static_tokens)  # токены обязательны, если заданы статические (prod)
     tasks = TaskStore(Path(os.environ.get("SKELCAD_TASKS") or (srv.workspace.root / "tasks")))
-    if not tokens:
+    if not static_tokens:
         log.warning("SKELCAD_TOKENS не задан — доступ без токена (режим разработки)")
     log.info("вход для браузера: SKELCAD_AUTH=%s", mode)
     mcp = build_mcp(srv)
@@ -76,6 +79,7 @@ def create_app(srv: Server | None = None) -> FastAPI:
         path = request.url.path
         if path == "/health":
             return await call_next(request)
+        tokens = {**static_tokens, **token_store.tokens()} if tokens_mode else {}
         who = resolve(request, tokens, mode)
         if who is None:
             msg = "нужен Bearer-токен клиента SkelCAD" if path == "/mcp" or mode == "tokens" else "нужен вход"
@@ -101,8 +105,39 @@ def create_app(srv: Server | None = None) -> FastAPI:
             "kind": who.kind,
             "email": who.email,
             "auth": mode,
+            "admin": who.admin,
             "logout_url": "/oauth2/sign_out?rd=" + srv.public_url if mode == "proxy" else None,
         }
+
+    def admin_only(request: Request) -> None:
+        if not request.state.principal.admin:
+            raise HTTPException(403, "только для администраторов (группа admins)")
+
+    @app.get("/api/tokens")
+    async def api_tokens(request: Request):
+        admin_only(request)
+        static = [
+            {"name": n, "created": None, "created_by": "SKELCAD_TOKENS"} for n in sorted(set(static_tokens.values()))
+        ]
+        return {"tokens": static + token_store.list(), "mcp_url": srv.public_url + "/mcp"}
+
+    @app.post("/api/tokens")
+    async def api_token_create(request: Request):
+        admin_only(request)
+        b = await request.json()
+        who = request.state.principal.name
+        res = token_store.create((b.get("name") or "").strip(), who, set(static_tokens.values()))
+        cmd = (
+            f"claude mcp add --transport http skelcad {srv.public_url}/mcp "
+            f'--header "Authorization: Bearer {res["token"]}"'
+        )
+        return {**res, "mcp_url": srv.public_url + "/mcp", "command": cmd}
+
+    @app.delete("/api/tokens/{name}")
+    async def api_token_delete(name: str, request: Request):
+        admin_only(request)
+        token_store.delete(name)
+        return {"ok": True}
 
     @app.get("/api/projects")
     async def api_projects():
@@ -224,7 +259,7 @@ def create_app(srv: Server | None = None) -> FastAPI:
     async def tool_error(_: Request, e: Exception):
         return JSONResponse({"error": str(e)}, status_code=400)
 
-    for exc in (*ToolError, TaskError):
+    for exc in (*ToolError, TaskError, TokenError):
         app.add_exception_handler(exc, tool_error)
 
     @app.exception_handler(HTTPException)

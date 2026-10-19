@@ -27,6 +27,8 @@ class Principal:
     name: str  # имя клиента (агент) или пользователя (человек)
     kind: str  # agent | user
     email: str | None = None
+    groups: tuple[str, ...] = ()
+    admin: bool = False  # группа admins в Keycloak; в режиме none — все
 
     @property
     def is_user(self) -> bool:
@@ -86,7 +88,14 @@ def proxy_user(request: Request) -> Principal | None:
     email = h.get("x-forwarded-email")
     if not user and not email:
         return None
-    return Principal(name=(user or email or "").strip(), kind="user", email=(email or "").strip() or None)
+    groups = tuple(g.strip() for g in (h.get("x-forwarded-groups") or "").split(",") if g.strip())
+    return Principal(
+        name=(user or email or "").strip(),
+        kind="user",
+        email=(email or "").strip() or None,
+        groups=groups,
+        admin="admins" in groups or "/admins" in groups,
+    )
 
 
 def resolve(request: Request, tokens: dict[str, str], mode: str) -> Principal | None:
@@ -102,4 +111,4 @@ def resolve(request: Request, tokens: dict[str, str], mode: str) -> Principal | 
         return proxy_user(request)
     if mode == "tokens":
         return None if tokens else Principal("anonymous", "agent")
-    return Principal("constructor", "user")
+    return Principal("constructor", "user", admin=True)

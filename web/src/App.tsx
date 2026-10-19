@@ -18,6 +18,7 @@ export function App() {
           <NavLink to="/" end>
             {S.nav.projects}
           </NavLink>
+          <NavLink to="/tokens">{S.nav.tokens}</NavLink>
         </nav>
         <span className="topbar__user">
           {me && (
