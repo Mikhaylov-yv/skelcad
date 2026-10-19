@@ -133,3 +133,36 @@ summary { cursor: pointer; font-weight: 600; font-size: 13px; }
   .variant__body { grid-template-columns: 220px 1fr; grid-template-rows: 1fr auto; }
   .pane--info { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--border); max-height: 40vh; }
 }
+
+/* --- лента коммитов --- */
+.feed { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.feed__body { max-width: 900px; }
+.badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+.badge--warn { color: var(--warning); border-color: var(--warning); }
+.badge--ok { color: var(--ok); border-color: var(--ok); }
+.ok { color: var(--ok); }
+.commits { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.commit { background: var(--surface); border: 1px solid var(--border); border-left-width: 4px; border-radius: var(--radius); padding: 10px 14px; }
+.commit--agent { border-left-color: var(--agent); }
+.commit--user { border-left-color: var(--accent); }
+.commit--revert { border-left-color: var(--warning); }
+.commit--system { border-left-color: var(--border); }
+.commit__head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.commit__hash { margin-left: auto; }
+.commit__message { margin: 6px 0 2px; font-weight: 600; }
+.commit__files { margin: 0 0 6px; }
+.commit__actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.commit__diff { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); display: grid; gap: 8px; }
+.deltas .delta.up { color: var(--warning); }
+.deltas .delta.down { color: var(--ok); }
+.entities { font-size: 13px; }
+.findings-lines h4 { margin: 4px 0; font-size: 13px; }
+.findings-lines ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.overlay { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.canvas--overlay { height: 420px; min-height: 0; background: var(--bg); }
+button.danger { color: var(--error); border-color: var(--error); }
+.dialog { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; z-index: 10; }
+.dialog__box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; max-width: 560px; width: calc(100% - 32px); display: grid; gap: 8px; }
+.dialog__box h2 { margin: 0; }
+.dialog__actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
+.card__links { margin-left: 12px; display: inline-flex; gap: 6px; align-items: center; }

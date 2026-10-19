@@ -112,6 +112,29 @@ def create_app(srv: Server | None = None) -> FastAPI:
         except api.NotBuilt as e:
             raise HTTPException(404, str(e)) from e
 
+    @app.get("/api/projects/{name}/commits")
+    async def api_commits(name: str, limit: int = 50):
+        return await to_thread.run_sync(api.commits, srv.workspace, name, limit)
+
+    @app.get("/api/projects/{name}/commits/{commit}/diff")
+    async def api_commit_diff(name: str, commit: str, variant: str | None = None):
+        return await to_thread.run_sync(api.commit_diff, tools, srv.workspace.out_dir, name, commit, variant)
+
+    @app.get("/api/projects/{name}/commits/{commit}/model")
+    async def api_commit_model(name: str, commit: str, variant: str):
+        return await to_thread.run_sync(api.commit_model, srv, name, commit, variant)
+
+    @app.post("/api/projects/{name}/commits/{commit}/reviewed")
+    async def api_reviewed(name: str, commit: str, request: Request):
+        body = await request.json()
+        who = request.state.principal.name
+        return await to_thread.run_sync(api.set_reviewed, srv.workspace, name, commit, bool(body.get("reviewed")), who)
+
+    @app.post("/api/projects/{name}/revert")
+    async def api_revert(name: str, request: Request):
+        body = await request.json()
+        return await to_thread.run_sync(tools.revert, name, body["commit"], body.get("message"), "workbench")
+
     @app.get("/api/projects/{name}/history")
     async def api_history(name: str, limit: int = 20):
         return await to_thread.run_sync(tools.history, name, limit)

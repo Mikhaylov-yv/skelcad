@@ -247,6 +247,30 @@ class Workspace:
             )
         return out
 
+    NOTES_REF = "skelcad"
+
+    def notes(self, name: str) -> dict[str, str]:
+        """Заметки git (ref notes/skelcad) по полным хешам: {hash: текст}. Одна строка на заметку."""
+        p = git(self.path(name), "log", f"--notes={self.NOTES_REF}", "--format=%x1e%H%x1f%N", check=False)
+        out: dict[str, str] = {}
+        for chunk in p.stdout.split("\x1e"):
+            if "\x1f" not in chunk:
+                continue
+            full, _, note = chunk.partition("\x1f")
+            note = note.strip()
+            if note:
+                out[full.strip()] = note
+        return out
+
+    def note_set(self, name: str, commit: str, text: str | None, actor: Actor) -> None:
+        """text=None — убрать заметку."""
+        full = self.rev(name, commit)
+        root = self.path(name)
+        if text is None:
+            git(root, "notes", f"--ref={self.NOTES_REF}", "remove", "--ignore-missing", full, actor=actor)
+        else:
+            git(root, "notes", f"--ref={self.NOTES_REF}", "add", "-f", "-m", text, full, actor=actor)
+
     def revert(self, name: str, commit: str, actor: Actor, message: str | None = None) -> dict:
         root = self.path(name)
         if not re.fullmatch(r"[0-9a-fA-F]{4,40}|HEAD(~\d+)?", commit or ""):

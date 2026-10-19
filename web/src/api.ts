@@ -29,6 +29,7 @@ export interface ProjectOverview {
   variants: VariantOverview[];
   last_commit: Commit | null;
   state: "constructor" | "agent";
+  unreviewed?: number;
 }
 
 export interface ProjectsResponse {
@@ -146,6 +147,46 @@ export interface Report {
   built_at: string;
 }
 
+export type CommitKind = "agent" | "user" | "system" | "revert";
+
+export interface FeedCommit extends Commit {
+  hash: string;
+  files: string[];
+  kind: CommitKind;
+  is_head: boolean;
+  reviewed: { by: string; at: string | null } | null;
+}
+
+export interface CommitsResponse {
+  commits: FeedCommit[];
+  unreviewed: number;
+  head: string | null;
+}
+
+export interface DeltaNum {
+  a: number | null;
+  b: number | null;
+  delta: number | null;
+}
+
+export interface CommitDiff {
+  variant: string;
+  a: string | null;
+  b: string;
+  summary: string;
+  cached: boolean;
+  entities: Record<string, { added?: string[]; removed?: string[]; changed?: Record<string, unknown> }>;
+  geometry: Record<string, unknown>;
+  deltas: Record<string, DeltaNum | Record<string, { a: number | null; b: number | null }>>;
+  findings: { added: string[]; removed: string[] };
+}
+
+export interface CommitModel {
+  url: string;
+  commit: string;
+  built: boolean;
+}
+
 export interface BuildResponse {
   summary: string;
   variants: { variant: string; line: string }[];
@@ -156,6 +197,28 @@ export const api = {
   projects: () => getJson<ProjectsResponse>("/api/projects"),
   report: (project: string, variant: string) =>
     getJson<Report>(`/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/report`),
+  commits: (project: string, limit = 50) =>
+    getJson<CommitsResponse>(`/api/projects/${encodeURIComponent(project)}/commits?limit=${limit}`),
+  commitDiff: (project: string, hash: string, variant: string) =>
+    getJson<CommitDiff>(
+      `/api/projects/${encodeURIComponent(project)}/commits/${hash}/diff?variant=${encodeURIComponent(variant)}`,
+    ),
+  commitModel: (project: string, hash: string, variant: string) =>
+    getJson<CommitModel>(
+      `/api/projects/${encodeURIComponent(project)}/commits/${hash}/model?variant=${encodeURIComponent(variant)}`,
+    ),
+  setReviewed: (project: string, hash: string, reviewed: boolean) =>
+    getJson<{ reviewed: FeedCommit["reviewed"] }>(`/api/projects/${encodeURIComponent(project)}/commits/${hash}/reviewed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reviewed }),
+    }),
+  revert: (project: string, commit: string, message?: string) =>
+    getJson<{ commit: Commit }>(`/api/projects/${encodeURIComponent(project)}/revert`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commit, message }),
+    }),
   build: (project: string, variant: string) =>
     getJson<BuildResponse>(`/api/projects/${encodeURIComponent(project)}/build?variant=${encodeURIComponent(variant)}`, {
       method: "POST",

@@ -107,11 +107,19 @@ export function Variant() {
             <span className="muted small">
               {S.variant.builtAt} {relativeTime(report.built_at)}
             </span>
-            {report.urls.step && (
+            {report.urls.step && !(report.summary.findings.error ?? 0) && (
               <a className="small" href={report.urls.step} download>
                 {S.variant.download}
               </a>
             )}
+            {(report.summary.findings.error ?? 0) > 0 && (
+              <span className="level-error small" role="status">
+                {S.gate.closed(report.summary.findings.error ?? 0)}
+              </span>
+            )}
+            <Link className="small" to={`/p/${encodeURIComponent(project)}/commits?variant=${encodeURIComponent(variant)}`}>
+              {S.feed.tab}
+            </Link>
           </div>
         )}
         <div className="variant__actions">

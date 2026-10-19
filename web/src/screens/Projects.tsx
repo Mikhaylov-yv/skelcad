@@ -93,6 +93,10 @@ function ProjectCard({ p }: { p: ProjectOverview }) {
       <footer className="card__foot">
         <span className="muted">{S.projects.lastChange}: </span>
         {p.last_commit ? <CommitLine c={p.last_commit} /> : <span className="muted">{S.projects.noCommits}</span>}
+        <span className="card__links">
+          <Link to={`/p/${encodeURIComponent(p.name)}/commits`}>{S.feed.tab}</Link>
+          {p.unreviewed ? <span className="badge badge--warn">{p.unreviewed}</span> : null}
+        </span>
       </footer>
     </article>
   );

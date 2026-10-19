@@ -173,3 +173,35 @@ def test_variant_report_endpoint(client: TestClient):
     (out / "report.json").write_text(json.dumps(rep), encoding="utf-8")
     r = client.get("/api/projects/bracket/variants/A_fork/report", headers=h).json()
     assert r["urls"]["glb"] == "/out/bracket/A_fork/A_fork.glb" and r["built_at"]
+
+
+def test_commits_reviewed_and_revert(client: TestClient):
+    h = {"Authorization": "Bearer secret1"}
+    r = client.get("/api/projects/bracket/commits", headers=h).json()
+    assert r["commits"] and r["commits"][0]["is_head"] and r["commits"][-1]["kind"] == "system"
+    before = r["unreviewed"]  # другие тесты модуля уже могли сделать коммиты агента
+    # коммит агента через MCP → в ленте «agent», непросмотрен
+    res = mcp_call(
+        client,
+        "secret1",
+        "tools/call",
+        {"name": "files_write", "arguments": {"project": "bracket", "files": {"notes.md": "x"}, "message": "заметка"}},
+    )
+    assert res.status_code == 200
+    r = client.get("/api/projects/bracket/commits", headers=h).json()
+    top = r["commits"][0]
+    assert top["kind"] == "agent" and top["reviewed"] is None and r["unreviewed"] == before + 1
+    # отметка «просмотрено» — заметка git с именем
+    rv = client.post(f"/api/projects/bracket/commits/{top['hash']}/reviewed", json={"reviewed": True}, headers=h).json()
+    assert rv["reviewed"]["by"] == "claude-code"
+    assert client.get("/api/projects/bracket/commits", headers=h).json()["unreviewed"] == before
+    client.post(f"/api/projects/bracket/commits/{top['hash']}/reviewed", json={"reviewed": False}, headers=h)
+    assert client.get("/api/projects/bracket/commits", headers=h).json()["unreviewed"] == before + 1
+    # первый коммит: diff «сравнивать не с чем», без воркера
+    first = r["commits"][-1]["hash"]
+    d = client.get(f"/api/projects/bracket/commits/{first}/diff?variant=A_fork", headers=h).json()
+    assert d["a"] is None and "первый" in d["summary"]
+    # откат из workbench → коммит-откат, kind=revert
+    rv = client.post("/api/projects/bracket/revert", json={"commit": top["hash"]}, headers=h).json()
+    assert rv["commit"]["message"].startswith("Revert")
+    assert client.get("/api/projects/bracket/commits", headers=h).json()["commits"][0]["kind"] == "revert"

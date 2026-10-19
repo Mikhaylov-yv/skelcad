@@ -1,0 +1,21 @@
+// Скриншоты ленты: node shots-feed.mjs <base> <outdir>
+import { chromium } from "playwright";
+const [base, out] = [process.argv[2], process.argv[3]];
+const browser = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+const errors = [];
+page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+await page.goto(base + "/p/bracket/commits?variant=A_fork", { waitUntil: "networkidle" });
+await page.screenshot({ path: out + "/04-feed.png" });
+await page.getByRole("button", { name: "Разница" }).first().click();
+await page.getByText("Разница по варианту").waitFor({ timeout: 240000 });
+await page.screenshot({ path: out + "/04-feed-diff.png" });
+await page.getByRole("button", { name: "3D-разница" }).click();
+await page.locator("canvas").waitFor({ timeout: 240000 });
+await page.waitForTimeout(3000);
+await page.screenshot({ path: out + "/04-feed-3d.png" });
+await page.getByRole("button", { name: "Откатить" }).first().click();
+await page.getByRole("dialog").waitFor();
+await page.screenshot({ path: out + "/04-feed-revert.png" });
+console.log(JSON.stringify({ errors }));
+await browser.close();

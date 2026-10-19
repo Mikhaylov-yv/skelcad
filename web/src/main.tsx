@@ -4,6 +4,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { App } from "./App";
 import { Projects } from "./screens/Projects";
 import { Variant } from "./screens/Variant";
+import { Feed } from "./screens/Feed";
 import "./index.css";
 
 const router = createBrowserRouter([
@@ -12,6 +13,7 @@ const router = createBrowserRouter([
     element: <App />,
     children: [
       { index: true, element: <Projects /> },
+      { path: "p/:project/commits", element: <Feed /> },
       { path: "p/:project/:variant", element: <Variant /> },
     ],
   },
