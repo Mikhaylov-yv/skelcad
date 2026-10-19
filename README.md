@@ -1,9 +1,10 @@
 # SkelCAD
 
 **Среда совместного конструирования «ИИ-агент + инженер-конструктор», сверху вниз.**
-Open source, Apache-2.0. Стадия: M0 (обобщение пилота) закрыт 16.10.2026: ядро, CLI, пакет `std-gost`,
-примеры `bracket` и `pipe_support`. Текущий этап — M1, агентный контур (MCP-сервер), план в
-[docs/architecture/04-m1-plan.md](docs/architecture/04-m1-plan.md).
+Open source, Apache-2.0. Стадия: M0 (обобщение пилота) закрыт 16.10.2026; M1 (агентный контур:
+сервер с точкой MCP, проекты в git, изолированный воркер, измерения, рендер, diff) закрыт 19.10.2026,
+см. [docs/architecture/04-m1-plan.md](docs/architecture/04-m1-plan.md). Следующий этап — M2,
+рабочее место конструктора в браузере.
 
 *SkelCAD is an open-source environment where an AI agent and a design engineer develop a product
 together, top-down (skeleton → units → parts → drawings). The product model, not the CAD file, is
