@@ -112,6 +112,22 @@ def create_app(srv: Server | None = None) -> FastAPI:
         except api.NotBuilt as e:
             raise HTTPException(404, str(e)) from e
 
+    @app.get("/api/projects/{name}/variants/{variant}/params")
+    async def api_variant_params(name: str, variant: str):
+        return await to_thread.run_sync(api.variant_params, srv.workspace, name, variant)
+
+    @app.post("/api/projects/{name}/variants/{variant}/draft")
+    async def api_variant_draft(name: str, variant: str, request: Request):
+        body = await request.json()
+        return await to_thread.run_sync(api.variant_draft, srv, name, variant, body.get("params") or {})
+
+    @app.post("/api/projects/{name}/variants/{variant}/params")
+    async def api_variant_save(name: str, variant: str, request: Request):
+        body = await request.json()
+        return await to_thread.run_sync(
+            api.variant_save, srv, name, variant, body.get("params") or {}, body.get("message") or "", body.get("draft")
+        )
+
     @app.get("/api/projects/{name}/compare")
     async def api_compare(name: str, variants: str | None = None):
         vs = [v for v in (variants or "").split(",") if v] or None

@@ -203,6 +203,29 @@ export interface CompareResponse {
   rows: CompareRow[];
 }
 
+export interface ParamField {
+  path: string;
+  value: number | string | boolean | null;
+  type: "number" | "string" | "boolean" | "json";
+  source: "project" | "variant";
+}
+
+export interface ParamsResponse {
+  variant: string;
+  file: string;
+  fields: ParamField[];
+}
+
+export interface DraftResponse {
+  draft: string;
+  variant: string;
+  changes: Record<string, unknown>;
+  file: string;
+  numbers: { mass_kg?: number; k_min?: number; k_min_item?: string; errors: number; warnings: number };
+  diff: CommitDiff;
+  urls: { glb: string | null; head_glb: string | null };
+}
+
 export interface BuildResponse {
   summary: string;
   variants: { variant: string; line: string }[];
@@ -213,6 +236,26 @@ export const api = {
   projects: () => getJson<ProjectsResponse>("/api/projects"),
   report: (project: string, variant: string) =>
     getJson<Report>(`/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/report`),
+  params: (project: string, variant: string) =>
+    getJson<ParamsResponse>(`/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/params`),
+  draft: (project: string, variant: string, params: Record<string, string | number | boolean>) =>
+    getJson<DraftResponse>(`/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/draft`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ params }),
+    }),
+  saveParams: (
+    project: string,
+    variant: string,
+    params: Record<string, string | number | boolean>,
+    message: string,
+    draft: string | null,
+  ) =>
+    getJson<{ commit: Commit }>(`/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/params`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ params, message, draft }),
+    }),
   compare: (project: string) => getJson<CompareResponse>(`/api/projects/${encodeURIComponent(project)}/compare`),
   commits: (project: string, limit = 50) =>
     getJson<CommitsResponse>(`/api/projects/${encodeURIComponent(project)}/commits?limit=${limit}`),

@@ -205,3 +205,38 @@ def test_commits_reviewed_and_revert(client: TestClient):
     rv = client.post("/api/projects/bracket/revert", json={"commit": top["hash"]}, headers=h).json()
     assert rv["commit"]["message"].startswith("Revert")
     assert client.get("/api/projects/bracket/commits", headers=h).json()["commits"][0]["kind"] == "revert"
+
+
+def test_params_draft_and_save(tmp_path_factory, monkeypatch):
+    """Параметры: форма → черновик (сборка во временном снимке, без коммита) → сохранение коммитом конструктора."""
+    monkeypatch.setenv("SKELCAD_TOKENS", "")
+    monkeypatch.setenv("SKELCAD_AUTH", "proxy")
+    monkeypatch.setenv("SKELCAD_SEED", "bracket")
+    srv = local_server(tmp_path_factory.mktemp("data"))
+    h = {"X-Forwarded-User": "ivanov", "X-Forwarded-Email": "ivanov@kb.ru"}
+    with TestClient(create_app(srv)) as c:
+        f = c.get("/api/projects/bracket/variants/A_fork/params", headers=h).json()
+        by = {x["path"]: x for x in f["fields"]}
+        assert by["members.gap"]["value"] == 100 and by["members.gap"]["source"] == "variant"
+        assert by["base_plate.thickness"]["source"] == "project"
+        bad = c.post("/api/projects/bracket/variants/A_fork/draft", json={"params": {"members.gap": "abc"}}, headers=h)
+        assert bad.status_code == 400 and "число" in bad.json()["error"]
+        d = c.post("/api/projects/bracket/variants/A_fork/draft", json={"params": {"members.gap": "120"}}, headers=h)
+        assert d.status_code == 200, d.text
+        d = d.json()
+        assert d["changes"] == {"members.gap": 120} and d["numbers"]["mass_kg"] and d["urls"]["glb"].startswith("/out/")
+        assert "derived" in d["diff"]["entities"]  # ширина щели изменилась
+        # черновик не коммитит
+        hist = c.get("/api/projects/bracket/commits", headers=h).json()["commits"]
+        assert len(hist) == 1
+        r = c.post(
+            "/api/projects/bracket/variants/A_fork/params",
+            json={"params": {"members.gap": "120"}, "message": "щель 100 → 120", "draft": d["draft"]},
+            headers=h,
+        ).json()
+        assert r["commit"]["author"] == "ivanov" and r["commit"]["message"] == "щель 100 → 120"
+        text = c.get("/api/projects/bracket", headers=h)  # проект читается
+        assert text.status_code == 200
+        # артефакты черновика стали текущими — отчёт варианта доступен без новой сборки
+        rep = c.get("/api/projects/bracket/variants/A_fork/report", headers=h).json()
+        assert rep["derived"]["ширина щели вилки, мм"] == 120

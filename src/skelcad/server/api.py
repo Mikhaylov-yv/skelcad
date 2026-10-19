@@ -7,6 +7,8 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+import yaml
+
 from skelcad.server.auth import current_actor
 from skelcad.server.workspace import Workspace
 
@@ -214,3 +216,45 @@ def compare(tools, out_dir: Path, project: str, variants: list[str] | None = Non
     for c in cols:
         c["title"] = c["title"] or titles.get(c["id"], "")
     return {"summary": res["summary"], "variants": cols, "rows": res["rows"]}
+
+
+# ---------------------------------------------------------------- параметры варианта (форма, черновик, сохранение)
+
+
+def variant_params(ws: Workspace, project: str, variant: str) -> dict:
+    from skelcad.server import params as P
+
+    spec = ws.spec(project)
+    v = next((x for x in ws.variants(project) if x["id"] == variant), None)
+    if not v:
+        raise LookupError(f"нет варианта «{variant}»")
+    vdata = yaml.safe_load(ws.read_file(project, v["file"])) or {}
+    return {
+        "variant": variant,
+        "file": v["file"],
+        "fields": P.fields(spec.get("params") or {}, vdata.get("params") or {}),
+    }
+
+
+def variant_draft(srv, project: str, variant: str, raw: dict) -> dict:
+    from skelcad.server import params as P
+
+    cur = variant_params(srv.workspace, project, variant)["fields"]
+    changes = P.coerce(cur, raw)
+    if not changes:
+        raise ValueError("нет изменённых параметров")
+    out = P.build_draft(srv, project, variant, changes)
+    out.pop("_tools", None)
+    return out
+
+
+def variant_save(srv, project: str, variant: str, raw: dict, message: str, draft: str | None) -> dict:
+    from skelcad.server import params as P
+
+    cur = variant_params(srv.workspace, project, variant)["fields"]
+    changes = P.coerce(cur, raw)
+    if not changes:
+        raise ValueError("нет изменённых параметров")
+    if not message.strip():
+        raise ValueError("нужно сообщение: что и зачем изменено")
+    return P.save_params(srv, project, variant, changes, message.strip(), current_actor("workbench"), draft)

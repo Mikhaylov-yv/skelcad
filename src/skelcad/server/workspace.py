@@ -66,7 +66,7 @@ def git(root: Path, *args: str, actor: Actor | None = None, check: bool = True) 
 
 class Workspace:
     def __init__(self, root: Path, templates: Path | None = None):
-        self.root = Path(root)
+        self.root = Path(root).resolve()
         self.projects_dir = self.root / "projects"
         self.out_dir = self.root / "out"
         self.projects_dir.mkdir(parents=True, exist_ok=True)

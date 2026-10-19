@@ -123,6 +123,9 @@ export function Variant() {
             <Link className="small" to={`/p/${encodeURIComponent(project)}/compare`}>
               {S.compare.tab}
             </Link>
+            <Link className="small" to={`/p/${encodeURIComponent(project)}/${encodeURIComponent(variant)}/params`}>
+              {S.params.tab}
+            </Link>
           </div>
         )}
         <div className="variant__actions">
