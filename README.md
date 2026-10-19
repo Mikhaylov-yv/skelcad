@@ -68,10 +68,10 @@ JSON Schema спецификации проекта, варианта и раз�
 | Файл | Что это |
 |---|---|
 | [docs/architecture/01-vision-and-architecture.md](docs/architecture/01-vision-and-architecture.md) | Замысел, принципы, архитектура (C4), проектная модель, режимы выдачи, дорожная карта, риски |
-| [docs/architecture/02-decisions.md](docs/architecture/02-decisions.md) | Журнал решений D1–D20: принятые, обсуждаемые, отложенные |
+| [docs/architecture/02-decisions.md](docs/architecture/02-decisions.md) | Журнал решений D1–D21: принятые, обсуждаемые, отложенные |
 | [docs/architecture/03-m0-plan.md](docs/architecture/03-m0-plan.md) | План этапа M0: устройство репозитория, что переезжает из пилота, шаги и статус |
 | [docs/architecture/05-m2-plan.md](docs/architecture/05-m2-plan.md) | План этапа M2: workbench в браузере, принципы интерфейса (ISO 9241-110, чеклист Нильсена), вход, задача агенту |
-| [docs/architecture/06-m2-1-sketches-plan.md](docs/architecture/06-m2-1-sketches-plan.md) | План этапа M2.1 (предложение): эскизы с размерами по модели, сравнение вариантов в одном масштабе и наложением |
+| [docs/architecture/06-m2-1-sketches-plan.md](docs/architecture/06-m2-1-sketches-plan.md) | План этапа M2.1 (предложение): компоновочный эскиз по скелету и обстановке для согласования, эскизы с размерами по модели, сравнение вариантов в одном масштабе и наложением |
 | [docs/ui/checklist.md](docs/ui/checklist.md) | Чеклист ревью интерфейса; ревью экранов — `docs/ui/reviews/` |
 | [docs/guide-workbench.md](docs/guide-workbench.md) | Руководство конструктора: рабочее место в браузере без терминала и git |
 | [docs/architecture/04-m1-plan.md](docs/architecture/04-m1-plan.md) | План этапа M1: сервер с точкой MCP, изменения агента как коммиты, воркер с лимитами, diff, сценарий приёмки |
