@@ -633,6 +633,14 @@ export function Variant() {
           </section>
 
           <aside className="pane pane--info">
+            {mode === "layout" && layout && (
+              <ApprovalBox
+                project={project}
+                layout={layout}
+                locked={locked}
+                onApproved={() => setLayoutNonce((n) => n + 1)}
+              />
+            )}
             <h3>{S.review.title}</h3>
             <section className="review" aria-label={S.review.title}>
               <div className="commit__actions">
@@ -743,14 +751,6 @@ export function Variant() {
                 </ul>
               )}
             </section>
-            {mode === "layout" && layout && (
-              <ApprovalBox
-                project={project}
-                layout={layout}
-                locked={locked}
-                onApproved={() => setLayoutNonce((n) => n + 1)}
-              />
-            )}
             {report && (
               <>
                 <h3>{S.variant.findings}</h3>
