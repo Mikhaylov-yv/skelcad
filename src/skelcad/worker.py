@@ -169,8 +169,44 @@ def op_render(args: dict) -> Any:
     return render(m, g, args.get("view") or "iso", out, args.get("highlight"), int(args.get("width") or 1200))
 
 
+def _report_light(pd, m, g) -> dict:
+    """Сводка и замечания как в report.json, без экспорта (для diff)."""
+    from skelcad.pipeline import analyse
+
+    findings, calc_items, _ = analyse(pd, m, g)
+    try:
+        mass = round(sum(g.masses(m, pd.ctx).values()), 2)
+    except Exception:  # noqa: BLE001 — нет таблицы материалов
+        mass = None
+    bb = g.assembly(m, with_purchased=False).bounding_box()
+    return {
+        "summary": {
+            "mass_kg": mass,
+            "envelope_mm": [round(bb.size.X), round(bb.size.Y), round(bb.size.Z)],
+            "parts": len(m.parts),
+            "welds": len(m.welds),
+            "fasteners": len(m.fasteners),
+            "weld_length_mm": round(sum(w.length for w in m.welds)),
+            "K": {i.id: round(i.K, 3) for i in calc_items},
+            "K_min": round(min((i.K for i in calc_items), default=0), 3) if calc_items else None,
+        },
+        "findings": [f.model_dump() for f in findings],
+    }
+
+
+def op_diff(args: dict) -> Any:
+    from skelcad.diff import diff_all
+
+    a = dict(args, project_dir=args["project_dir_a"])
+    b = dict(args, project_dir=args["project_dir_b"])
+    pda, ma, ga = _resolved(a)
+    pdb, mb, gb = _resolved(b)
+    return diff_all(ma, ga, _report_light(pda, ma, ga), mb, gb, _report_light(pdb, mb, gb))
+
+
 OPS = {
     "query": op_query,
+    "diff": op_diff,
     "build": op_build,
     "check": op_check,
     "compare": op_compare,

@@ -118,3 +118,33 @@ def test_worker_error_is_reported(tools: Tools):
     tools.files_write("broken", {"generators/bracket.py": broken}, "ломаем генератор")
     with pytest.raises(Exception, match="сломано"):
         tools.model_query("broken", "A_fork")
+
+
+def test_origin_sync(tools: Tools, tmp_path):
+    import subprocess
+
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(bare)], check=True)
+    tools.project_create("synced", "bracket", client="test", origin=str(bare))
+    heads = subprocess.run(["git", "-C", str(bare), "rev-parse", "main"], capture_output=True, text=True).stdout
+    assert heads.strip(), "первый коммит ушёл в origin"
+    # конструктор правит в своём клоне и пушит
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", str(bare), str(clone)], check=True)
+    (clone / "notes.md").write_text("правка конструктора\n", encoding="utf-8")
+    env = {
+        "GIT_AUTHOR_NAME": "Инженер",
+        "GIT_AUTHOR_EMAIL": "e@x",
+        "GIT_COMMITTER_NAME": "Инженер",
+        "GIT_COMMITTER_EMAIL": "e@x",
+    }
+    subprocess.run(["git", "-C", str(clone), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(clone), "commit", "-q", "-m", "заметка инженера"], check=True, env=env)
+    subprocess.run(["git", "-C", str(clone), "push", "-q", "origin", "main"], check=True)
+    # сервер перед задачей подтягивает
+    tools.model_query("synced", "A_fork")
+    assert tools.history("synced", limit=1)["commits"][0]["author"] == "Инженер"
+    # и пушит свои коммиты
+    tools.files_write("synced", {"notes.md": "и агента\n"}, "ответ агента", client="test")
+    subprocess.run(["git", "-C", str(clone), "pull", "-q", "--ff-only"], check=True)
+    assert (clone / "notes.md").read_text(encoding="utf-8") == "и агента\n"

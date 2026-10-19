@@ -62,8 +62,10 @@ class Tools:
             "templates": self.ws.templates_list(),
         }
 
-    def project_create(self, name: str, template: str | None = None, client: str = "agent") -> dict:
-        info = self.ws.create(name, template=template, actor=Actor.agent(client))
+    def project_create(
+        self, name: str, template: str | None = None, client: str = "agent", origin: str | None = None
+    ) -> dict:
+        info = self.ws.create(name, template=template, actor=Actor.agent(client), origin=origin)
         return {"summary": f"создан проект «{name}»" + (f" из шаблона {template}" if template else ""), "project": info}
 
     def project_read(self, project: str, section: str | None = None) -> dict:
@@ -86,7 +88,12 @@ class Tools:
             "files": files,
         }
 
+    def _fresh(self, project: str) -> str:
+        self.ws.pull(project)
+        return str(self.ws.path(project))
+
     def model_query(self, project: str, variant: str | None = None, path: str | None = None) -> dict:
+        self._fresh(project)
         res = self.srv.runner.run(
             "query", {"project_dir": str(self.ws.path(project)), "variant": variant, "path": path or ""}
         )
@@ -222,7 +229,7 @@ class Tools:
         reports = self.srv.runner.run(
             "build",
             {
-                "project_dir": str(self.ws.path(project)),
+                "project_dir": self._fresh(project),
                 "variants": [variant] if variant else None,
                 "out_dir": str(self.srv.out_dir(project)),
                 "export": export,
@@ -236,7 +243,7 @@ class Tools:
             raise ValueError("scope: all | rules | geometry | calc")
         res = self.srv.runner.run(
             "check",
-            {"project_dir": str(self.ws.path(project)), "variants": [variant] if variant else None, "scope": scope},
+            {"project_dir": self._fresh(project), "variants": [variant] if variant else None, "scope": scope},
         )
         out, lines = {}, []
         for v, d in res.items():
@@ -271,7 +278,7 @@ class Tools:
         res = self.srv.runner.run(
             "compare",
             {
-                "project_dir": str(self.ws.path(project)),
+                "project_dir": self._fresh(project),
                 "variants": variants,
                 "out_dir": str(self.srv.out_dir(project)),
                 "rebuild": rebuild,
@@ -327,6 +334,12 @@ class Tools:
             "png_base64": res.get("png_base64"),
             "svg_text": res.get("svg_text"),
         }
+
+    def diff(self, project: str, variant: str | None, a: str = "HEAD~1", b: str = "HEAD") -> dict:
+        da, db = self.ws.snapshot(project, a), self.ws.snapshot(project, b)
+        res = self.srv.runner.run("diff", {"project_dir_a": str(da), "project_dir_b": str(db), "variant": variant})
+        head = f"{project}/{variant or 'база'}: {self.ws.rev(project, a)[:7]} → {self.ws.rev(project, b)[:7]}"
+        return {"summary": head + "\n" + res["text"], **{k: v for k, v in res.items() if k != "text"}}
 
 
 def local_server(data: Path) -> Server:

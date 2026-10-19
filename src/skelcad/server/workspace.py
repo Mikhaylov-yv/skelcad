@@ -160,6 +160,7 @@ class Workspace:
         git(dst, "commit", "-q", "-m", f"Проект {name}" + (f" из шаблона {template}" if template else ""), actor=actor)
         if origin:
             git(dst, "remote", "add", "origin", origin)
+            self.push(name)
         return self.info(name)
 
     def seed(self, names: list[str]) -> list[str]:
@@ -215,6 +216,7 @@ class Workspace:
         if not git(root, "status", "--porcelain", "--", *written).stdout.strip():
             raise WorkspaceError("содержимое не изменилось — коммит не нужен")
         git(root, "commit", "-q", "-m", message, actor=actor)
+        self.push(name)
         return {"commit": self.history(name, limit=1)[0], "files": written}
 
     # ---------- история ----------
@@ -255,13 +257,56 @@ class Workspace:
             raise WorkspaceError(f"откат {commit} не прошёл (конфликт?): {p.stderr.strip()[:500]}")
         if message:
             git(root, "commit", "-q", "--amend", "-m", message, actor=actor)
+        self.push(name)
         return {"commit": self.history(name, limit=1)[0]}
+
+    # ---------- origin (необязательно: конструктор может работать со своим клоном) ----------
+
+    def has_origin(self, name: str) -> bool:
+        return git(self.path(name), "remote", "get-url", "origin", check=False).returncode == 0
+
+    def pull(self, name: str) -> str | None:
+        """fetch + fast-forward из origin; конфликт — ошибка, без тихого слияния."""
+        if not self.has_origin(name):
+            return None
+        root = self.path(name)
+        git(root, "fetch", "-q", "origin")
+        p = git(root, "merge", "--ff-only", "-q", "origin/main", check=False)
+        if p.returncode != 0:
+            raise WorkspaceError(
+                f"проект {name}: история разошлась с origin (на сервере и у конструктора разные коммиты); "
+                "разрешите вручную: git pull --rebase / git push в клоне конструктора"
+            )
+        return self.rev(name, "HEAD")[:7]
+
+    def push(self, name: str) -> None:
+        if not self.has_origin(name):
+            return
+        p = git(self.path(name), "push", "-q", "origin", "HEAD:main", check=False)
+        if p.returncode != 0:
+            raise WorkspaceError(f"проект {name}: push в origin не прошёл: {p.stderr.strip()[:300]}")
 
     def show(self, name: str, commit: str) -> str:
         return git(self.path(name), "show", "--stat", "--format=%h %an %aI%n%s%n", commit).stdout
 
     def diff_files(self, name: str, a: str, b: str) -> str:
         return git(self.path(name), "diff", "--stat", a, b).stdout
+
+    def rev(self, name: str, ref: str) -> str:
+        p = git(self.path(name), "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}", check=False)
+        if p.returncode != 0:
+            raise WorkspaceError(f"нет коммита «{ref}» в проекте {name}")
+        return p.stdout.strip()
+
+    def snapshot(self, name: str, ref: str) -> Path:
+        """Папка со снимком проекта на коммите (кэш в <data>/snapshots/<проект>/<hash>). HEAD — сам проект."""
+        full = self.rev(name, ref)
+        if full == self.rev(name, "HEAD"):
+            return self.path(name)
+        dst = self.root / "snapshots" / name / full[:12]
+        if not (dst / "project.yaml").exists():
+            self.checkout_to(name, full, dst)
+        return dst
 
     def checkout_to(self, name: str, commit: str, dst: Path) -> Path:
         """Снимок проекта на коммите в отдельную папку (для diff между состояниями)."""

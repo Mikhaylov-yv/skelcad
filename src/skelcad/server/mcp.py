@@ -56,10 +56,11 @@ def build_mcp(srv: Server) -> FastMCP:
         return await run(t.project_list)
 
     @mcp.tool()
-    async def project_create(name: str, template: str | None = None) -> dict:
+    async def project_create(name: str, template: str | None = None, origin: str | None = None) -> dict:
         """Создать проект (git-репозиторий) из шаблона (см. project_list.templates) или пустой (template=empty).
-        name — строчные латинские буквы, цифры, «-», «_»."""
-        return await run(t.project_create, name, template, client())
+        name — строчные латинские буквы, цифры, «-», «_». origin — адрес удалённого git-репозитория
+        (пустой репозиторий, ветка main): сервер будет пушить туда каждый коммит и подтягивать правки конструктора."""
+        return await run(t.project_create, name, template, client(), origin)
 
     @mcp.tool()
     async def project_read(project: str, section: str | None = None) -> dict:
@@ -136,6 +137,13 @@ def build_mcp(srv: Server) -> FastMCP:
         """Сравнить варианты по метрикам (масса, швы, K_min, метрики проекта); страница compare.html.
         Берёт готовые отчёты сборки, недостающие строит; rebuild=True — перестроить все."""
         return await run(t.compare, project, variants, rebuild)
+
+    @mcp.tool()
+    async def diff(project: str, variant: str, a: str = "HEAD~1", b: str = "HEAD") -> dict:
+        """Что изменилось между двумя коммитами в варианте: сущности модели по id (добавлено/удалено/изменённые
+        поля), геометрия деталей (объём, добавлено/убрано мм³, смещение центроида), сводка (масса, габарит,
+        швы, K по позициям), появившиеся и ушедшие замечания. a, b — хеши из history или HEAD~N."""
+        return await run(t.diff, project, variant, a, b)
 
     # ---------------- измерения и виды
     @mcp.tool()

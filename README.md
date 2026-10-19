@@ -33,6 +33,16 @@ uv run skelcad standards                  # установленные паке�
 uv run pytest -q
 ```
 
+Сервер с точкой MCP для агента (этап M1):
+
+```bash
+uv run skelcad serve                      # http://127.0.0.1:8000: /mcp, /api, /out; без SKELCAD_TOKENS — режим разработки
+SKELCAD_TOKENS="claude-code:секрет" uv run skelcad serve
+claude mcp add --transport http skelcad https://skelcad.br/mcp --header "Authorization: Bearer секрет"
+docker compose -f compose/stack.yml --env-file compose/.env up -d   # сервер + изолированный воркер
+```
+
+Как агенту работать с проектом через MCP — [AGENTS.md](AGENTS.md).
 Устройство репозитория и план этапа — в [docs/architecture/03-m0-plan.md](docs/architecture/03-m0-plan.md).
 Проект для SkelCAD — папка с `project.yaml` (требования, скелет, пакеты стандартов, генератор, плагины)
 и `variants/*.yaml` (параметры топологий); см. [examples/bracket](examples/bracket) (кронштейн на стене)
@@ -58,6 +68,8 @@ JSON Schema спецификации проекта, варианта и раз�
   первым, публичная площадка как экземпляр того же образа, настольный вариант позже по спросу.
 - У инженера на машине — только мост к его САПР, и только для передачи в САПР.
 - Стандарты (ГОСТ, ISO, DIN, ASME, корпоративные) — подключаемые пакеты, в ядре ни одной таблицы.
+- Агент работает через точку MCP сервера; его изменения — коммиты в git проекта; код проектов
+  исполняется в изолированном воркере (решения D11–D13 в журнале).
 
 ## Происхождение
 
