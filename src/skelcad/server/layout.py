@@ -1,23 +1,19 @@
-"""Компоновка на сервере: состояние согласования (project.yaml → `layout`), сравнение со согласованным
+"""Компоновка на сервере: состояние согласования (layout.yaml → `approved`), сравнение со согласованным
 состоянием, отметка «Компоновка согласована» коммитом конструктора. Сам эскиз строит воркер (op layout),
-кэш по коммиту — в Tools.layout."""
+кэш по коммиту — в Tools.layout. Отметка живёт в отдельном файле: агент переписывает project.yaml целиком
+и не должен её терять."""
 
 from __future__ import annotations
 
-import json
-import re
 from datetime import UTC, datetime
 
 import yaml
 
 from skelcad.core.model import Requirements, Skeleton, layout_hash
-from skelcad.server.workspace import Actor, Workspace, git
+from skelcad.core.project import LAYOUT_FILE
+from skelcad.server.workspace import Actor, Workspace, WorkspaceError, git
 
 GROUPS = ("datums", "interfaces", "envelopes", "surroundings")
-BLOCK_RE = re.compile(r"(?m)^(#[^\n]*согласовани[^\n]*\n)?layout:[^\n]*\n(?:[ \t]+[^\n]*\n)*")
-COMMENT = (
-    "# согласование компоновки (кнопка «Компоновка согласована» в рабочем месте); hash — скелет, обстановка, требования"
-)
 
 
 def spec_hash(spec: dict) -> str:
@@ -62,10 +58,11 @@ def state(ws: Workspace, project: str) -> dict:
         h = spec_hash(spec)
     except Exception as e:  # noqa: BLE001 — ошибка валидации показывается конструктору текстом
         return {"state": "invalid", "error": str(e)[:500], "hash": None, "approved": None, "diff": None}
-    ap = spec.get("layout")
-    approved = None
-    if isinstance(ap, dict) and ap.get("hash"):
-        approved = {k: ap.get(k) for k in ("by", "at", "commit", "hash")}
+    approved = read_approval(ws, project)
+    if approved is None:
+        ap = spec.get("layout")  # старый способ: раздел в project.yaml
+        if isinstance(ap, dict) and ap.get("hash"):
+            approved = {k: ap.get(k) for k in ("by", "at", "commit", "hash")}
     st = "none" if approved is None else "approved" if approved["hash"] == h else "changed"
     out = {"state": st, "hash": h, "approved": approved, "diff": None}
     if st == "changed" and approved and approved.get("commit"):
@@ -90,16 +87,27 @@ def describe(st: dict) -> str:
     }[st["state"]]
 
 
+def read_approval(ws: Workspace, project: str) -> dict | None:
+    try:
+        data = yaml.safe_load(ws.read_file(project, LAYOUT_FILE)) or {}
+    except (WorkspaceError, yaml.YAMLError):
+        return None
+    rec = data.get("approved") if isinstance(data, dict) else None
+    if isinstance(rec, dict) and rec.get("hash"):
+        return {k: rec.get(k) for k in ("by", "at", "commit", "hash")}
+    return None
+
+
 def approve(ws: Workspace, project: str, actor: Actor) -> dict:
-    """Записать отметку согласования в project.yaml (блок `layout`) и закоммитить от имени конструктора."""
+    """Записать отметку согласования в layout.yaml и закоммитить от имени конструктора."""
     spec = ws.spec(project)
     h = spec_hash(spec)
     head = ws.rev(project, "HEAD")[:12]
     rec = {"by": actor.name, "at": datetime.now(tz=UTC).isoformat(timespec="seconds"), "commit": head, "hash": h}
-    text = ws.read_file(project, "project.yaml")
-    text = BLOCK_RE.sub("", text).rstrip("\n") + f"\n\n{COMMENT}\nlayout: {json.dumps(rec, ensure_ascii=False)}\n"
-    parsed = yaml.safe_load(text) or {}
-    if (parsed.get("layout") or {}).get("hash") != h:
-        raise ValueError("не удалось записать отметку согласования в project.yaml")
-    res = ws.write_files(project, {"project.yaml": text}, f"Компоновка согласована ({actor.name})", actor)
+    text = (
+        "# Согласование компоновки конструктором (кнопка «Компоновка согласована» в рабочем месте).\n"
+        "# hash — скелет, обстановка и требования на момент согласования; файл конструктора, агент его не меняет.\n"
+        + yaml.safe_dump({"approved": rec}, allow_unicode=True, sort_keys=False)
+    )
+    res = ws.write_files(project, {LAYOUT_FILE: text}, f"Компоновка согласована ({actor.name})", actor)
     return {"approval": rec, "commit": res["commit"], **state(ws, project)}

@@ -217,6 +217,10 @@ def test_layout_tool_and_approval(tools: Tools):
     # повторное согласование снимает предупреждение
     ap2 = L.approve(tools.ws, "plate", Actor("Иванов", "ivanov@x"))
     assert ap2["state"] == "approved" and L.state(tools.ws, "plate")["state"] == "approved"
-    spec = yaml.safe_load(tools.files_read("plate", "project.yaml")["content"])
-    assert spec["layout"]["by"] == "Иванов" and spec["layout"]["hash"] == ap2["hash"]
-    assert tools.files_read("plate", "project.yaml")["content"].count("layout:") == 1
+    rec = yaml.safe_load(tools.files_read("plate", "layout.yaml")["content"])["approved"]
+    assert rec["by"] == "Иванов" and rec["hash"] == ap2["hash"]
+    assert "layout:" not in tools.files_read("plate", "project.yaml")["content"]
+    # агент переписал project.yaml целиком — отметка в layout.yaml уцелела: состояние «изменена», а не «нет»
+    wider = text.replace("max: [85, 40, 20]", "max: [95, 40, 20]")
+    tools.files_write("plate", {"project.yaml": wider}, "ещё шире", client="t")
+    assert L.state(tools.ws, "plate")["state"] == "changed"

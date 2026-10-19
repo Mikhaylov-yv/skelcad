@@ -23,7 +23,8 @@
    скелет (`datums`, `interfaces`, `envelopes` keep_in / keep_out) и обстановку `skeleton.surroundings`
    (стена, пол, труба, ответная деталь, соседнее оборудование — plane / box / cylinder с ролью и именем),
    посмотри `render(layout=true)` и дождись согласования конструктора (`project_read` → `layout`:
-   none / approved / changed). Детали — после согласования; изменил скелет — согласуй заново.
+   none / approved / changed; отметка — файл `layout.yaml` конструктора, не трогай его). Детали — после
+   согласования; изменил скелет — согласуй заново.
 2. `check` или `build` — текущее состояние: замечания (error / warning / info), запасы K, масса.
 3. Заземлиться: `measure` (расстояния, зазоры, пересечения, массы, ЦТ), `context_search` /
    `context_lookup` (каталоги: крепёж, анкеры, материалы, трубы), `render` (посмотреть вид).

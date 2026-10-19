@@ -55,13 +55,9 @@ export function Sketch({
   const [error, setError] = useState<string | null>(null);
   const host = useRef<HTMLDivElement>(null);
   const [tf, setTf] = useState({ x: 0, y: 0, k: 1 });
-  const drag = useRef<{
-    x: number;
-    y: number;
-    tx: number;
-    ty: number;
-    moved: boolean;
-  } | null>(null);
+  const drag = useRef<{ x: number; y: number; tx: number; ty: number; moved: boolean; ref: string | null } | null>(
+    null,
+  );
 
   useEffect(() => {
     let alive = true;
@@ -148,13 +144,7 @@ export function Sketch({
 
   const onDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    drag.current = {
-      x: e.clientX,
-      y: e.clientY,
-      tx: tf.x,
-      ty: tf.y,
-      moved: false,
-    };
+    drag.current = { x: e.clientX, y: e.clientY, tx: tf.x, ty: tf.y, moved: false, ref: refAt(e.target) };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
   const onMove = (e: React.PointerEvent) => {
@@ -179,7 +169,7 @@ export function Sketch({
         point = fromView(view, pt.x, -pt.y);
       }
     }
-    onPick?.(refAt(e.target), point);
+    onPick?.(d.ref, point); // при захвате указателя pointerup приходит на контейнер — сущность берём с pointerdown
   };
 
   return (

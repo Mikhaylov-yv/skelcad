@@ -72,10 +72,29 @@ def _merge(base: dict, over: dict) -> dict:
     return out
 
 
+LAYOUT_FILE = "layout.yaml"  # отметка «Компоновка согласована» — файл конструктора, агент его не трогает
+
+
+def read_layout_approval(root: Path) -> LayoutApproval | None:
+    f = Path(root) / LAYOUT_FILE
+    if not f.exists():
+        return None
+    data = _read(f)
+    rec = data.get("approved") if isinstance(data, dict) else None
+    try:
+        return LayoutApproval.model_validate(rec) if isinstance(rec, dict) else None
+    except ValueError:
+        return None
+
+
 def read_spec(root: Path) -> ProjectSpec:
-    """Спецификация проекта из project.yaml без загрузки генератора и плагинов (код проекта не исполняется)."""
+    """Спецификация проекта из project.yaml без загрузки генератора и плагинов (код проекта не исполняется);
+    отметка согласования компоновки — из layout.yaml (приоритет) или из раздела layout в project.yaml."""
     spec = ProjectSpec.model_validate(_read(Path(root) / "project.yaml"))
     spec.requirements.standards = list(dict.fromkeys(spec.standards + spec.requirements.standards))
+    approval = read_layout_approval(root)
+    if approval is not None:
+        spec.layout = approval
     return spec
 
 
