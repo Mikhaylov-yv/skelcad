@@ -15,6 +15,12 @@ export interface Overlay {
   mix: number; // 0 — только «было», 1 — только «стало»
 }
 
+export interface Pin {
+  id: string;
+  point: [number, number, number]; // мм, в координатах модели (Z вверх)
+  resolved?: boolean;
+}
+
 export interface ViewerProps {
   url: string;
   selected: string[];
@@ -22,8 +28,9 @@ export interface ViewerProps {
   clip: { on: boolean; axis: ClipAxis; pos: number }; // pos 0..1 вдоль габарита
   view: { name: ViewName; nonce: number }; // nonce — чтобы повторный клик по тому же виду сработал
   overlay?: Overlay;
+  pins?: Pin[];
   onNodes?: (topLevel: string[]) => void;
-  onPick?: (node: string | null) => void;
+  onPick?: (node: string | null, point?: [number, number, number]) => void;
   onError?: (message: string) => void;
 }
 
@@ -80,11 +87,16 @@ interface ModelProps {
   clip: ViewerProps["clip"];
   view?: ViewerProps["view"];
   primary: boolean;
+  pins?: Pin[];
   onNodes?: ViewerProps["onNodes"];
   onPick?: ViewerProps["onPick"];
 }
 
-function Model({ url, paint, clip, view, primary, onNodes, onPick }: ModelProps) {
+function diag(box: THREE.Box3): number {
+  return box.getSize(new THREE.Vector3()).length();
+}
+
+function Model({ url, paint, clip, view, primary, pins, onNodes, onPick }: ModelProps) {
   const { scene } = useGLTF(url);
   const cloned = useMemo(() => {
     const c = scene.clone(true);
@@ -157,11 +169,22 @@ function Model({ url, paint, clip, view, primary, onNodes, onPick }: ModelProps)
   if (!primary) return <primitive object={cloned} />;
   return (
     <>
+      {pins && pins.length > 0 && (
+        <group>
+          {pins.map((p) => (
+            <mesh key={p.id} position={[p.point[0], p.point[1], p.point[2]]}>
+              <sphereGeometry args={[Math.max(diag(box) / 60, 2), 16, 16]} />
+              <meshStandardMaterial color={p.resolved ? "#1b7f3b" : "#f2b705"} emissive={p.resolved ? "#0a3a1a" : "#5a4200"} />
+            </mesh>
+          ))}
+        </group>
+      )}
       <primitive
         object={cloned}
-        onClick={(e: { stopPropagation: () => void; object: THREE.Object3D }) => {
+        onClick={(e: { stopPropagation: () => void; object: THREE.Object3D; point: THREE.Vector3 }) => {
           e.stopPropagation();
-          onPick?.(topLevelName(e.object, root));
+          // мировые координаты сцены = координаты модели (мм, Z вверх): обёртка cloned уже повёрнута и отмасштабирована
+          onPick?.(topLevelName(e.object, root), [e.point.x, e.point.y, e.point.z]);
         }}
         onPointerMissed={() => onPick?.(null)}
       />
@@ -201,6 +224,7 @@ export function Viewer(props: ViewerProps) {
           clip={props.clip}
           view={props.view}
           primary
+          pins={props.pins}
           onNodes={props.onNodes}
           onPick={props.onPick}
         />

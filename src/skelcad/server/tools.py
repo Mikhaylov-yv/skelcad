@@ -82,11 +82,16 @@ class Tools:
             return {"summary": f"{project}: раздел {section}", "section": section, "data": data}
         files = self.ws.files(project)
         vnames = ", ".join(v["id"] for v in variants) or "нет"
+        from skelcad.server import review
+
+        open_items = review.list_items(self.ws, project, "open")
+        note = f"; открытых замечаний конструктора: {len(open_items)} (см. review_list)" if open_items else ""
         return {
-            "summary": f"{project}: «{spec.get('title', '')}», варианты: {vnames}",
+            "summary": f"{project}: «{spec.get('title', '')}», варианты: {vnames}{note}",
             "spec": spec,
             "variants": variants,
             "files": files,
+            "review_open": len(open_items),
         }
 
     def _fresh(self, project: str) -> str:
@@ -120,6 +125,43 @@ class Tools:
     def revert(self, project: str, commit: str, message: str | None = None, client: str = "agent") -> dict:
         res = self.ws.revert(project, commit, current_actor(client), message=message)
         return {"summary": f"откат {commit} → коммит {res['commit']['commit']}", **res}
+
+    # ---------------------------------------------------------------- замечания конструктора
+
+    def review_list(self, project: str, status: str | None = "open") -> dict:
+        from skelcad.server import review
+
+        items = review.list_items(project=project, ws=self.ws, status=None if status == "all" else status)
+        lines = [
+            f"{i['id']} [{i.get('status', 'open')}]"
+            + (f" {i['variant']}" if i.get("variant") else "")
+            + (f" {i['part']}" if i.get("part") else "")
+            + (f" @{i['point']}" if i.get("point") else "")
+            + f": {i['text']}"
+            + (f" — ответ: {i['answer']}" if i.get("answer") else "")
+            for i in items
+        ]
+        return {"summary": "\n".join(lines) or "замечаний нет", "items": items}
+
+    def review_resolve(self, project: str, id: str, answer: str, client: str = "agent") -> dict:  # noqa: A002
+        from skelcad.server import review
+
+        res = review.resolve(self.ws, project, id, answer, current_actor(client))
+        return {"summary": f"{id} закрыто: {res['item']['answer']}", **res}
+
+    def review_add(
+        self,
+        project: str,
+        text: str,
+        variant: str | None = None,
+        part: str | None = None,
+        point: list[float] | None = None,
+        client: str = "agent",
+    ) -> dict:
+        from skelcad.server import review
+
+        res = review.add(self.ws, project, text, current_actor(client), variant=variant, part=part, point=point)
+        return {"summary": f"{res['item']['id']}: {res['item']['text']}", **res}
 
     # ---------------------------------------------------------------- контекст
 

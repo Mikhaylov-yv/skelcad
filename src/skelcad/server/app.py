@@ -128,6 +128,22 @@ def create_app(srv: Server | None = None) -> FastAPI:
             api.variant_save, srv, name, variant, body.get("params") or {}, body.get("message") or "", body.get("draft")
         )
 
+    @app.get("/api/projects/{name}/review")
+    async def api_review(name: str, status: str = "all"):
+        return await to_thread.run_sync(tools.review_list, name, status)
+
+    @app.post("/api/projects/{name}/review")
+    async def api_review_add(name: str, request: Request):
+        b = await request.json()
+        return await to_thread.run_sync(
+            tools.review_add, name, b.get("text", ""), b.get("variant"), b.get("part"), b.get("point"), "workbench"
+        )
+
+    @app.post("/api/projects/{name}/review/{item_id}/resolve")
+    async def api_review_resolve(name: str, item_id: str, request: Request):
+        b = await request.json()
+        return await to_thread.run_sync(tools.review_resolve, name, item_id, b.get("answer", ""), "workbench")
+
     @app.get("/api/projects/{name}/compare")
     async def api_compare(name: str, variants: str | None = None):
         vs = [v for v in (variants or "").split(",") if v] or None

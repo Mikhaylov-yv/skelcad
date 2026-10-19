@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { api, ApiError, type Report } from "../api";
+import { api, ApiError, type Report, type ReviewItem } from "../api";
 import { S } from "../strings";
 import { NumbersRow } from "../ui/NumbersRow";
 import { Findings } from "../ui/Findings";
@@ -78,10 +78,67 @@ export function Variant() {
   };
   const onNodes = useCallback((names: string[]) => setTopLevel(names), []);
   const [glbError, setGlbError] = useState<string | null>(null);
-  const onPick = useCallback((node: string | null) => {
-    setActiveRef(null);
-    setSelected(node ? [node] : []);
-  }, []);
+
+  // замечания агенту: пометки на модели
+  const [review, setReview] = useState<ReviewItem[]>([]);
+  const [pinMode, setPinMode] = useState(false);
+  const [pinAt, setPinAt] = useState<{ part: string | null; point: [number, number, number] } | null>(null);
+  const [pinText, setPinText] = useState("");
+  const [pinBusy, setPinBusy] = useState(false);
+  const [pinErr, setPinErr] = useState<string | null>(null);
+  const loadReview = useCallback(() => {
+    api
+      .review(project)
+      .then((r) => setReview(Array.isArray(r.items) ? r.items : []))
+      .catch(() => setReview([]));
+  }, [project]);
+  useEffect(loadReview, [loadReview]);
+
+  const onPick = useCallback(
+    (node: string | null, point?: [number, number, number]) => {
+      if (pinMode && point) {
+        setPinAt({ part: node, point });
+        setPinMode(false);
+        setSelected(node ? [node] : []);
+        return;
+      }
+      setActiveRef(null);
+      setSelected(node ? [node] : []);
+    },
+    [pinMode],
+  );
+  const sendPin = () => {
+    if (!pinText.trim()) {
+      setPinErr(S.review.needText);
+      return;
+    }
+    setPinBusy(true);
+    setPinErr(null);
+    api
+      .reviewAdd(project, { text: pinText, variant, part: pinAt?.part ?? null, point: pinAt?.point ?? null })
+      .then(() => {
+        setPinText("");
+        setPinAt(null);
+        loadReview();
+      })
+      .catch((e: Error) => setPinErr(e.message))
+      .finally(() => setPinBusy(false));
+  };
+  const closeItem = (id: string) => {
+    const answer = window.prompt(S.review.closeAnswer) ?? "";
+    api
+      .reviewResolve(project, id, answer)
+      .then(loadReview)
+      .catch((e: Error) => setPinErr(e.message));
+  };
+  const pins = useMemo(
+    () =>
+      [
+        ...review.filter((r) => r.point && (!r.variant || r.variant === variant)).map((r) => ({ id: r.id, point: r.point!, resolved: r.status === "resolved" })),
+        ...(pinAt ? [{ id: "_new", point: pinAt.point }] : []),
+      ],
+    [review, variant, pinAt],
+  );
 
   const title = report ? `${report.project_title || project} · ${report.title || variant}` : `${project} · ${variant}`;
 
@@ -279,7 +336,7 @@ export function Variant() {
                 </button>
               )}
             </div>
-            <div className="canvas">
+            <div className={"canvas" + (pinMode ? " canvas--pinning" : "")}>
               {report.urls.glb ? (
                 <>
                   {topLevel.length === 0 && !glbError && <p className="canvas__note muted">{S.variant.glbLoading}</p>}
@@ -294,6 +351,7 @@ export function Variant() {
                     dim={dim}
                     clip={clip}
                     view={view}
+                    pins={pins}
                     onNodes={onNodes}
                     onPick={onPick}
                     onError={setGlbError}
@@ -306,6 +364,90 @@ export function Variant() {
           </section>
 
           <aside className="pane pane--info">
+            <h3>{S.review.title}</h3>
+            <section className="review" aria-label={S.review.title}>
+              <div className="commit__actions">
+                {!pinMode && !pinAt && (
+                  <button onClick={() => setPinMode(true)} aria-pressed={pinMode}>
+                    {S.review.pin}
+                  </button>
+                )}
+                {pinMode && (
+                  <>
+                    <span className="muted small" aria-live="polite">
+                      {S.review.pinning}
+                    </span>
+                    <button className="link" onClick={() => setPinMode(false)}>
+                      {S.review.cancelPin}
+                    </button>
+                  </>
+                )}
+              </div>
+              {pinAt && (
+                <form
+                  className="review__form"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    sendPin();
+                  }}
+                >
+                  <p className="small muted">
+                    {S.review.at(pinAt.part ?? "—")} · {S.review.atPoint(pinAt.point)}
+                  </p>
+                  <textarea
+                    aria-label={S.review.textLabel}
+                    value={pinText}
+                    placeholder={S.review.placeholder}
+                    rows={3}
+                    onChange={(e) => setPinText(e.target.value)}
+                  />
+                  <div className="commit__actions">
+                    <button type="submit" disabled={pinBusy} aria-busy={pinBusy}>
+                      {pinBusy ? S.review.sending : S.review.send}
+                    </button>
+                    <button type="button" className="link" onClick={() => setPinAt(null)}>
+                      {S.review.cancelPin}
+                    </button>
+                  </div>
+                </form>
+              )}
+              {pinErr && (
+                <p className="level-error small" role="alert">
+                  {pinErr}
+                </p>
+              )}
+              {review.length === 0 && !pinAt && <p className="muted small">{S.review.empty}</p>}
+              {review.length > 0 && (
+                <ul className="review__list">
+                  {review.map((r) => (
+                    <li key={r.id} className={"review__item review__item--" + r.status}>
+                      <button
+                        className="ref"
+                        onClick={() => {
+                          setActiveRef(null);
+                          if (r.part) setSelected([r.part]);
+                        }}
+                        title={r.point ? S.review.atPoint(r.point) : undefined}
+                      >
+                        {r.id}
+                      </button>{" "}
+                      <span>{r.text}</span>
+                      {r.part && <span className="muted small"> · {r.part}</span>}
+                      {r.answer && (
+                        <div className="small ok">
+                          {S.review.answer}: {r.answer}
+                        </div>
+                      )}
+                      {r.status === "open" && (
+                        <button className="link small" onClick={() => closeItem(r.id)}>
+                          {S.review.close}
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
             <h3>{S.variant.findings}</h3>
             <Findings items={report.findings} onRef={pickRef} activeRef={activeRef} />
             <h3>{S.variant.calc}</h3>

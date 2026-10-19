@@ -226,6 +226,20 @@ export interface DraftResponse {
   urls: { glb: string | null; head_glb: string | null };
 }
 
+export interface ReviewItem {
+  id: string;
+  text: string;
+  status: "open" | "resolved";
+  author: string;
+  created: string;
+  variant?: string;
+  part?: string;
+  point?: [number, number, number];
+  answer?: string;
+  resolved_by?: string;
+  resolved_at?: string;
+}
+
 export interface BuildResponse {
   summary: string;
   variants: { variant: string; line: string }[];
@@ -236,6 +250,19 @@ export const api = {
   projects: () => getJson<ProjectsResponse>("/api/projects"),
   report: (project: string, variant: string) =>
     getJson<Report>(`/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/report`),
+  review: (project: string) => getJson<{ items: ReviewItem[] }>(`/api/projects/${encodeURIComponent(project)}/review?status=all`),
+  reviewAdd: (project: string, body: { text: string; variant?: string; part?: string | null; point?: number[] | null }) =>
+    getJson<{ item: ReviewItem }>(`/api/projects/${encodeURIComponent(project)}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  reviewResolve: (project: string, id: string, answer: string) =>
+    getJson<{ item: ReviewItem }>(`/api/projects/${encodeURIComponent(project)}/review/${encodeURIComponent(id)}/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answer }),
+    }),
   params: (project: string, variant: string) =>
     getJson<ParamsResponse>(`/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/params`),
   draft: (project: string, variant: string, params: Record<string, string | number | boolean>) =>

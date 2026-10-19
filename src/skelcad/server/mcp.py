@@ -69,6 +69,18 @@ def build_mcp(srv: Server) -> FastMCP:
         return await run(t.project_read, project, section)
 
     @mcp.tool()
+    async def review_list(project: str, status: str | None = "open") -> dict:
+        """Замечания конструктора агенту из review.yaml (пометки на модели: деталь, точка в мм, текст).
+        status: open (по умолчанию) | resolved | all. Открытые замечания — часть задачи: ответь на каждое
+        через review_resolve после того, как учёл его (или объясни, почему не учитываешь)."""
+        return await run(t.review_list, project, status)
+
+    @mcp.tool()
+    async def review_resolve(project: str, id: str, answer: str) -> dict:
+        """Закрыть замечание конструктора ответом (коммит «ответ на R1: …»). answer — что сделано или почему нет."""
+        return await run(t.review_resolve, project, id, answer, client())
+
+    @mcp.tool()
     async def model_query(project: str, variant: str | None = None, path: str | None = None) -> dict:
         """Разрешённая модель варианта (после генератора) — срезами. Без path: сводка (узлы, детали, derived).
         path: parts | parts[id=base_plate] | parts[role=rib] | welds | fasteners | units[0].parts |

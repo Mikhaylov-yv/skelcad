@@ -240,3 +240,39 @@ def test_params_draft_and_save(tmp_path_factory, monkeypatch):
         # артефакты черновика стали текущими — отчёт варианта доступен без новой сборки
         rep = c.get("/api/projects/bracket/variants/A_fork/report", headers=h).json()
         assert rep["derived"]["ширина щели вилки, мм"] == 120
+
+
+def test_review_roundtrip(client: TestClient):
+    """Пометка конструктора → review.yaml коммитом → агент видит в project_read и review_list → закрывает с ответом."""
+    h = {"Authorization": "Bearer secret1"}
+    r = client.post(
+        "/api/projects/bracket/review",
+        json={
+            "text": "мало места под ключ у анкера",
+            "variant": "A_fork",
+            "part": "anchor_a00",
+            "point": [95.0, 0, -100.2],
+        },
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    item = r.json()["item"]
+    assert item["id"].startswith("R") and item["status"] == "open" and item["point"] == [95.0, 0.0, -100.2]
+    assert client.get("/api/projects/bracket", headers=h).json()["review_open"] >= 1
+    lst = mcp_call(client, "secret1", "tools/call", {"name": "review_list", "arguments": {"project": "bracket"}})
+    assert item["id"] in lst.text and "мало места" in lst.text
+    res = mcp_call(
+        client,
+        "secret1",
+        "tools/call",
+        {
+            "name": "review_resolve",
+            "arguments": {"project": "bracket", "id": item["id"], "answer": "анкеры вынесены на 10 мм"},
+        },
+    )
+    assert res.status_code == 200 and "закрыто" in res.text
+    items = client.get("/api/projects/bracket/review?status=all", headers=h).json()["items"]
+    me = next(i for i in items if i["id"] == item["id"])
+    assert me["status"] == "resolved" and me["resolved_by"] == "SkelCAD agent (claude-code)"
+    top = client.get("/api/projects/bracket/commits", headers=h).json()["commits"][0]
+    assert top["message"].startswith(f"ответ на {item['id']}")

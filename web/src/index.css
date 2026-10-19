@@ -202,3 +202,13 @@ button.danger { color: var(--error); border-color: var(--error); }
 .save label { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
 .save input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font: inherit; background: var(--bg); color: var(--text); }
 @media (max-width: 1000px) { .params__grid { grid-template-columns: 1fr; } }
+
+/* --- замечания агенту --- */
+.review { display: grid; gap: 6px; margin-bottom: 8px; }
+.review__form { display: grid; gap: 6px; }
+.review__form textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); resize: vertical; }
+.review__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.review__item { padding: 6px 8px; border-left: 3px solid #f2b705; background: var(--surface); border-radius: 4px; font-size: 14px; }
+.review__item--resolved { border-left-color: var(--ok); opacity: 0.85; }
+.review .ref { font-family: var(--mono); font-size: 12px; padding: 1px 6px; }
+.canvas--pinning canvas { cursor: crosshair; }
