@@ -61,6 +61,15 @@ export async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+export interface Me {
+  name: string;
+  kind: "agent" | "user";
+  email: string | null;
+  auth: "none" | "tokens" | "proxy";
+  logout_url: string | null;
+}
+
 export const api = {
+  me: () => getJson<Me>("/api/me"),
   projects: () => getJson<ProjectsResponse>("/api/projects"),
 };

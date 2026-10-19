@@ -12,9 +12,12 @@ from __future__ import annotations
 
 import hmac
 import os
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 from fastapi import Request
+
+from skelcad.server.workspace import Actor
 
 MODES = ("none", "tokens", "proxy")
 
@@ -28,6 +31,21 @@ class Principal:
     @property
     def is_user(self) -> bool:
         return self.kind == "user"
+
+    def actor(self) -> Actor:
+        """Автор коммитов: человек — своим именем и почтой, агент — «SkelCAD agent (<клиент>)»."""
+        if self.is_user:
+            return Actor(self.name, self.email or f"{self.name}@skelcad")
+        return Actor.agent(self.name)
+
+
+CURRENT_PRINCIPAL: ContextVar[Principal | None] = ContextVar("skelcad_principal", default=None)
+
+
+def current_actor(client: str) -> Actor:
+    """Actor для пишущих инструментов: пользователь workbench из контекста запроса, иначе агент по имени клиента."""
+    who = CURRENT_PRINCIPAL.get()
+    return who.actor() if who and who.is_user else Actor.agent(client)
 
 
 def parse_tokens(raw: str | None) -> dict[str, str]:

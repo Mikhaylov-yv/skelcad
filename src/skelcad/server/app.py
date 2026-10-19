@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from skelcad.server import api
-from skelcad.server.auth import client_for, parse_tokens, resolve, web_mode
+from skelcad.server.auth import CURRENT_PRINCIPAL, client_for, parse_tokens, resolve, web_mode
 from skelcad.server.mcp import CURRENT_CLIENT, build_mcp
 from skelcad.server.tools import Server, ToolError, Tools
 
@@ -75,9 +75,11 @@ def create_app(srv: Server | None = None) -> FastAPI:
             return JSONResponse({"error": msg}, status_code=401)
         request.state.principal = who
         token = CURRENT_CLIENT.set(who.name)
+        ptoken = CURRENT_PRINCIPAL.set(who)
         try:
             return await call_next(request)
         finally:
+            CURRENT_PRINCIPAL.reset(ptoken)
             CURRENT_CLIENT.reset(token)
 
     @app.get("/health")
@@ -87,7 +89,13 @@ def create_app(srv: Server | None = None) -> FastAPI:
     @app.get("/api/me")
     async def api_me(request: Request):
         who = request.state.principal
-        return {"name": who.name, "kind": who.kind, "email": who.email, "auth": mode}
+        return {
+            "name": who.name,
+            "kind": who.kind,
+            "email": who.email,
+            "auth": mode,
+            "logout_url": "/oauth2/sign_out?rd=" + srv.public_url if mode == "proxy" else None,
+        }
 
     @app.get("/api/projects")
     async def api_projects():

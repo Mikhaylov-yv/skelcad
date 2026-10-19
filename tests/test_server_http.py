@@ -113,7 +113,7 @@ def test_workbench_static_and_me(client: TestClient):
     assert r.status_code == 200 and "text/html" in r.headers["content-type"]
     assert client.get("/api/nope", headers=h).status_code == 404
     me = client.get("/api/me", headers=h).json()
-    assert me == {"name": "claude-code", "kind": "agent", "email": None, "auth": "tokens"}
+    assert me == {"name": "claude-code", "kind": "agent", "email": None, "auth": "tokens", "logout_url": None}
     p = client.get("/api/projects", headers=h).json()["projects"][0]
     assert p["name"] == "bracket" and p["state"] == "constructor"
     assert {v["id"] for v in p["variants"]} >= {"A_fork"} and all("built" in v for v in p["variants"])
@@ -136,3 +136,27 @@ def test_auth_modes(tmp_path, monkeypatch):
     assert resolve(R("/", {}), tokens, "none") == Principal("constructor", "user")
     assert resolve(R("/", {}), {}, "none") == Principal("constructor", "user")
     assert resolve(R("/mcp", {}), {}, "none") == Principal("anonymous", "agent")
+
+
+def test_proxy_user_commits_as_person(tmp_path_factory, monkeypatch):
+    """Режим proxy: пользователь из заголовков oauth2-proxy, коммит через инструменты — его именем."""
+    from skelcad.server.auth import CURRENT_PRINCIPAL, Principal, current_actor
+
+    monkeypatch.setenv("SKELCAD_TOKENS", "claude-code:secret1")
+    monkeypatch.setenv("SKELCAD_AUTH", "proxy")
+    monkeypatch.setenv("SKELCAD_SEED", "bracket")
+    srv = local_server(tmp_path_factory.mktemp("data"))
+    with TestClient(create_app(srv)) as c:
+        assert c.get("/api/me").status_code == 401
+        me = c.get("/api/me", headers={"X-Forwarded-User": "ivanov", "X-Forwarded-Email": "ivanov@kb.ru"}).json()
+        assert me["name"] == "ivanov" and me["kind"] == "user" and me["auth"] == "proxy"
+        assert me["logout_url"].startswith("/oauth2/sign_out?rd=")
+        # токен агента по-прежнему работает на /api и /mcp
+        assert c.get("/api/me", headers={"Authorization": "Bearer secret1"}).json()["kind"] == "agent"
+    tok = CURRENT_PRINCIPAL.set(Principal("ivanov", "user", "ivanov@kb.ru"))
+    try:
+        a = current_actor("claude-code")
+        assert (a.name, a.email) == ("ivanov", "ivanov@kb.ru")
+    finally:
+        CURRENT_PRINCIPAL.reset(tok)
+    assert current_actor("claude-code").name == "SkelCAD agent (claude-code)"

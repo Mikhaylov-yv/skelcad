@@ -48,6 +48,8 @@ jobs:
           {
             cat compose/env.home
             echo "SKELCAD_TOKENS=${{ secrets.SKELCAD_TOKENS }}"
+            echo "OIDC_CLIENT_SECRET=${{ secrets.OIDC_CLIENT_SECRET }}"
+            echo "COOKIE_SECRET=${{ secrets.COOKIE_SECRET }}"
           } | ssh -i ~/.ssh/deploy_key ${{ vars.CLOUD_USER }}@${{ vars.CLOUD_HOST }} \
             "umask 077 && cat > \$HOME/$SRV/compose/.env"
 
@@ -76,14 +78,15 @@ jobs:
           # -k: имя в SAN сертификата добавляется отдельно (add-domain.sh на malina), smoke-check от него не зависит
           C="curl -sk -o /dev/null -w %{http_code} --resolve skelcad.br:443:127.0.0.1"
           for i in 1 2 3 4 5 6; do
-            # /health → 200; /mcp без токена → 401; / → 404 (workbench — M2)
+            # /health → 200; /mcp без токена → 401; / → 302 на вход Keycloak (oauth2-proxy)
             h=$($C https://skelcad.br/health); m=$($C -X POST https://skelcad.br/mcp); r=$($C https://skelcad.br/)
             echo "attempt $i: /health $h, /mcp $m, / $r"
-            if [ "$h" = 200 ] && [ "$m" = 401 ] && [ "$r" = 404 ]; then
+            if [ "$h" = 200 ] && [ "$m" = 401 ] && [ "$r" = 302 ]; then
               echo "https://skelcad.br OK"; exit 0
             fi
             sleep 5
           done
           docker logs --tail 30 skelcad-server
+          docker logs --tail 20 skelcad-oauth2-proxy || true
           echo "https://skelcad.br FAILED"; exit 1
           EOF

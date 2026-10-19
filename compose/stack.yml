@@ -2,7 +2,10 @@
 #   server — FastAPI: / (workbench), /mcp (Bearer-токен), /api, /out (артефакты); проекты — git-репозитории в /data/projects
 #   worker — тот же образ, цикл по файловой очереди /data/jobs; исполняет код проектов (генераторы, OCCT)
 #            в подпроцессах с лимитами; без сети, с ограничением CPU/памяти/процессов
-# Наружу — только loopback; маршруты раздаёт host-nginx (nginx/skelcad.br.conf).
+#   oauth2-proxy — вход через Keycloak (realm home) для браузера: /, /api, /out; передаёт пользователя
+#            в server заголовками X-Forwarded-User/-Email (SKELCAD_AUTH=proxy)
+# Наружу — только loopback; маршруты раздаёт host-nginx (nginx/skelcad.br.conf): /mcp — в server напрямую,
+# остальное — через oauth2-proxy.
 name: skelcad
 
 services:
@@ -47,6 +50,40 @@ services:
     cpus: ${WORKER_CPUS:-2}
     mem_limit: ${WORKER_MEM:-4g}
     pids_limit: 256
+    depends_on:
+      server:
+        condition: service_started
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.4
+    container_name: skelcad-oauth2-proxy
+    restart: unless-stopped
+    environment:
+      OAUTH2_PROXY_PROVIDER: keycloak-oidc
+      OAUTH2_PROXY_PROVIDER_DISPLAY_NAME: Keycloak
+      OAUTH2_PROXY_OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:?}
+      OAUTH2_PROXY_CLIENT_ID: ${OIDC_CLIENT_ID:?}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-missing}
+      OAUTH2_PROXY_CODE_CHALLENGE_METHOD: S256
+      OAUTH2_PROXY_REDIRECT_URL: ${PUBLIC_URL}/oauth2/callback
+      OAUTH2_PROXY_COOKIE_SECRET: ${COOKIE_SECRET:-}
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_NAME: _skelcad_session
+      OAUTH2_PROXY_COOKIE_EXPIRE: 168h
+      OAUTH2_PROXY_COOKIE_REFRESH: 1h
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_PASS_USER_HEADERS: "true"
+      OAUTH2_PROXY_UPSTREAMS: http://server:8000/
+      OAUTH2_PROXY_UPSTREAM_TIMEOUT: 600s
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      # Keycloak на auth.br подписан CA сети .br — Go берёт корни из этого файла.
+      SSL_CERT_FILE: /certs/ca.crt
+    volumes:
+      - /etc/ssl/home_certs/ca.crt:/certs/ca.crt:ro
+    ports:
+      - "127.0.0.1:${PROXY_PORT:?}:4180"
     depends_on:
       server:
         condition: service_started

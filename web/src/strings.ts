@@ -2,6 +2,7 @@
 export const S = {
   app: "SkelCAD",
   nav: { projects: "Проекты" },
+  user: { logout: "Выйти", guest: "без входа" },
   projects: {
     title: "Проекты",
     empty: "Проектов пока нет. Проект создаёт агент инструментом project_create или администратор из шаблона.",

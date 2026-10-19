@@ -13,8 +13,9 @@ from typing import Any
 
 from skelcad.context import Context, discover_standards
 from skelcad.core.findings import LEVEL_RU
+from skelcad.server.auth import current_actor
 from skelcad.server.jobs import JobError, SubprocessRunner, make_runner
-from skelcad.server.workspace import Actor, Workspace, WorkspaceError
+from skelcad.server.workspace import Workspace, WorkspaceError
 
 ToolError = (WorkspaceError, JobError, ValueError, KeyError, LookupError)
 
@@ -65,7 +66,7 @@ class Tools:
     def project_create(
         self, name: str, template: str | None = None, client: str = "agent", origin: str | None = None
     ) -> dict:
-        info = self.ws.create(name, template=template, actor=Actor.agent(client), origin=origin)
+        info = self.ws.create(name, template=template, actor=current_actor(client), origin=origin)
         return {"summary": f"создан проект «{name}»" + (f" из шаблона {template}" if template else ""), "project": info}
 
     def project_read(self, project: str, section: str | None = None) -> dict:
@@ -107,7 +108,7 @@ class Tools:
         return {"summary": f"{project}/{path}: {len(content.splitlines())} строк", "path": path, "content": content}
 
     def files_write(self, project: str, files: dict[str, str | None], message: str, client: str = "agent") -> dict:
-        res = self.ws.write_files(project, files, message, Actor.agent(client))
+        res = self.ws.write_files(project, files, message, current_actor(client))
         c = res["commit"]
         return {"summary": f"коммит {c['commit']} «{c['message']}»: {', '.join(res['files'])}", **res}
 
@@ -117,7 +118,7 @@ class Tools:
         return {"summary": "\n".join(lines) or "история пуста", "commits": items}
 
     def revert(self, project: str, commit: str, message: str | None = None, client: str = "agent") -> dict:
-        res = self.ws.revert(project, commit, Actor.agent(client), message=message)
+        res = self.ws.revert(project, commit, current_actor(client), message=message)
         return {"summary": f"откат {commit} → коммит {res['commit']['commit']}", **res}
 
     # ---------------------------------------------------------------- контекст
