@@ -59,10 +59,12 @@ TABLES = ("graph_entity", "graph_relation", "graph_state", "graph_meta")
 class Graph:
     """Пул соединений с Postgres и схема индекса. `close()` закрывает пул и встроенный сервер, если он наш."""
 
-    def __init__(self, url: str, server: Any = None, max_size: int = 4):
+    def __init__(self, url: str, server: Any = None, max_size: int = 4, timeout: float = 10.0):
         self.url = url
         self._server = server
-        self.pool = ConnectionPool(url, min_size=1, max_size=max_size, kwargs={"row_factory": dict_row}, open=True)
+        self.pool = ConnectionPool(
+            url, min_size=1, max_size=max_size, timeout=timeout, kwargs={"row_factory": dict_row}, open=True
+        )
         self.ensure_schema()
 
     @classmethod

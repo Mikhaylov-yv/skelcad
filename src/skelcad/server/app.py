@@ -108,8 +108,7 @@ def create_app(srv: Server | None = None) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        graph = "off" if srv.graph is None else ("ok" if srv.graph.ok() else "error")
-        return {"ok": True, "projects": srv.workspace.names(), "graph": graph}
+        return {"ok": True, "projects": srv.workspace.names(), "graph": srv.graph_status()}
 
     @app.get("/api/me")
     async def api_me(request: Request):

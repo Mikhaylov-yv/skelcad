@@ -10,6 +10,8 @@ import base64
 import json
 import logging
 import os
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -38,18 +40,69 @@ class Server:
     runner: Any = field(default_factory=make_runner)
     public_url: str = os.environ.get("PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/")
     graph: Any = None  # skelcad.graph.Graph | None — индекс связей в Postgres (M2.2, D27)
+    database_url: str | None = None  # URL Postgres или «embedded»; граф открывается при старте или позже (ensure_graph)
     indexer: Any = field(default=None, init=False, repr=False)
+    _graph_retry_at: float = field(default=0.0, init=False, repr=False)
+    _graph_opening: bool = field(default=False, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.graph is not None:
-            self.indexer = Indexer(self.graph, self.workspace)
-            self.workspace.listeners.append(self._on_commit)
+            self._attach_graph()
+        elif self.database_url:
+            self.ensure_graph(wait=True)  # при старте — синхронно: сервер поднимается уже с индексом
 
     @classmethod
     def from_env(cls) -> Server:
         data = Path(os.environ.get("SKELCAD_DATA", ".tmp/data"))
-        ws = Workspace(data)
-        return cls(workspace=ws, graph=Graph.open(os.environ.get("SKELCAD_DATABASE_URL"), ws.root))
+        return cls(workspace=Workspace(data), database_url=os.environ.get("SKELCAD_DATABASE_URL") or None)
+
+    def _attach_graph(self) -> None:
+        self.indexer = Indexer(self.graph, self.workspace)
+        self.workspace.listeners.append(self._on_commit)
+
+    def ensure_graph(self, wait: bool = False) -> Any:
+        """Граф настроен, но не открыт (база была недоступна при старте): повторная попытка не чаще раза в 30 с,
+        в фоне — /health и инструменты не ждут базу; при успехе — индексатор, слушатель коммитов и полный проход.
+        Возвращает Graph или None (как есть сейчас)."""
+        if (
+            self.graph is None
+            and self.database_url
+            and not self._graph_opening
+            and time.monotonic() >= self._graph_retry_at
+        ):
+            self._graph_retry_at = time.monotonic() + 30
+            self._graph_opening = True
+            late = not wait
+            t = threading.Thread(target=self._open_graph, args=(late,), name="graph-open", daemon=True)
+            t.start()
+            if wait:
+                t.join()
+        return self.graph
+
+    def _open_graph(self, late: bool) -> None:
+        try:
+            g = Graph.open(self.database_url, self.workspace.root)
+            if g is None:
+                return
+            self.graph = g
+            self._attach_graph()
+            if late:  # сервер уже работает — полный проход здесь же, в фоне
+                try:
+                    r = self.indexer.index_all()
+                    log.info(
+                        "граф связей (поздний старт): проектов %s, проиндексировано %s", r["projects"], r["indexed"]
+                    )
+                except Exception as e:  # noqa: BLE001
+                    log.warning("граф связей (поздний старт): %s", e)
+        finally:
+            self._graph_opening = False
+
+    def graph_status(self) -> str:
+        """off — не настроен; ok — отвечает; error — настроен, но недоступен (повтор при следующем вызове)."""
+        if not self.database_url and self.graph is None:
+            return "off"
+        g = self.ensure_graph()  # недоступна — попытка в фоне, ответ сразу
+        return "ok" if g is not None and g.ok() else "error"
 
     def _on_commit(self, project: str) -> None:
         try:
@@ -275,9 +328,12 @@ class Tools:
     # ---------------------------------------------------------------- граф связей (M2.2, D27)
 
     def _graph(self):
-        if self.srv.graph is None:
+        g = self.srv.ensure_graph()
+        if g is None:
+            if self.srv.database_url:
+                raise GraphOff("граф связей недоступен: база Postgres не отвечает, повторное подключение идёт в фоне")
             raise GraphOff("граф связей не настроен: задайте SKELCAD_DATABASE_URL (URL Postgres или embedded)")
-        return self.srv.graph
+        return g
 
     def links(
         self,
@@ -598,5 +654,4 @@ class Tools:
 
 def local_server(data: Path, database_url: str | None = None) -> Server:
     """Сервер для CLI и тестов: подпроцесс-воркер, данные в папке; database_url — граф связей (Postgres)."""
-    ws = Workspace(data)
-    return Server(workspace=ws, runner=SubprocessRunner(), graph=Graph.open(database_url, ws.root))
+    return Server(workspace=Workspace(data), runner=SubprocessRunner(), database_url=database_url)

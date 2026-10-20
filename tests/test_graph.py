@@ -199,6 +199,23 @@ def test_http_and_mcp(pg_url, tmp_path_factory, monkeypatch):
         assert {"links", "where_used", "search"} <= names
 
 
+def test_graph_reconnects_later(tmp_path, monkeypatch, pg_url):
+    """База недоступна при старте → graph: error, инструменты говорят «недоступен»; появилась — подхватывается."""
+    monkeypatch.delenv("SKELCAD_TOKENS", raising=False)
+    monkeypatch.setenv("SKELCAD_SEED", "")
+    s = local_server(tmp_path, database_url="postgresql://nobody:x@127.0.0.1:1/none?connect_timeout=1")
+    assert s.graph is None and s.graph_status() == "error"
+    with pytest.raises(GraphOff, match="недоступен"):
+        Tools(s).search("wall")
+    s.database_url = fresh_db(pg_url, "skelcad_t3")
+    s._graph_retry_at = 0.0  # не ждать 30 с
+    s.ensure_graph(wait=True)  # в сервере попытка идёт в фоне (/health не ждёт); здесь — дождаться
+    assert s.graph_status() == "ok" and s.indexer is not None
+    s.workspace.seed(["plate"])  # слушатель коммитов подключён после позднего старта
+    assert Tools(s).search("plate", kind="project")["hits"]
+    s.graph.close()
+
+
 def test_server_without_graph(tmp_path, monkeypatch):
     monkeypatch.delenv("SKELCAD_TOKENS", raising=False)
     monkeypatch.setenv("SKELCAD_SEED", "")
