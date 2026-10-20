@@ -58,7 +58,8 @@
 ## 2. Разработка SkelCAD в этом репозитории
 
 - Документы: `docs/architecture/01-vision-and-architecture.md` (замысел), `02-decisions.md`
-  (журнал решений), `03-m0-plan.md`, `04-m1-plan.md`, `05-m2-plan.md`, `06-m2-1-sketches-plan.md`, `07-m2-2-graph-plan.md` (планы этапов со статусом и дорожная карта).
+  (журнал решений), `03-m0-plan.md`, `04-m1-plan.md`, `05-m2-plan.md`, `06-m2-1-sketches-plan.md`, `07-m2-2-graph-plan.md` (планы этапов со статусом и дорожная карта),
+  `08-m2-3-layout-input-plan.md` (ввод компоновки от конструктора).
 - Код: `src/skelcad/core` (модель), `geom` (OCCT; `layout.py` — компоновочный эскиз), `rules` (плагины),
   `graph/` (граф связей в Postgres: словарь сущностей и связей, индексатор, запросы; D27),
   `pipeline.py`, `server/` (FastAPI + MCP + git-проекты; `api.py`, `auth.py`, `layout.py` (согласование
