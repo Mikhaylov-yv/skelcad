@@ -268,12 +268,13 @@ def describe_links(res: dict) -> str:
     head = f"{label(root['ref'])} ({KINDS.get(root['kind'], root['kind'])})"
     if not res["nodes"] or len(res["nodes"]) == 1 and not res["edges"]:
         return head + ": связей нет"
-    out, inc = {}, {}
-    for e in res["edges"]:
+    out: dict[str, dict[str, None]] = {}
+    inc: dict[str, dict[str, None]] = {}
+    for e in res["edges"]:  # одна связь на вариант → сущность упоминается один раз, варианты в её подписи
         if e["src"] == root["ref"]:
-            out.setdefault(e["kind"], []).append(e["dst"])
+            out.setdefault(e["kind"], {})[e["dst"]] = None
         elif e["dst"] == root["ref"]:
-            inc.setdefault(e["kind"], []).append(e["src"])
+            inc.setdefault(e["kind"], {})[e["src"]] = None
     lines = [head]
     for k, refs in out.items():
         lines.append(f"  {RELATIONS.get(k, k)}: " + "; ".join(label(r) for r in refs))

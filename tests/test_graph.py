@@ -150,6 +150,9 @@ def test_index_after_build_and_where_used(srv):
     t.build("bracket", "A_fork", export=False)
     res = t.links("bracket", "interface:wall", variant="A_fork")
     assert any(n["kind"] == "unit" for n in res["nodes"]) and any(e["kind"] == "mounts" for e in res["edges"])
+    t.build("bracket", "B_hub", export=False)
+    allv = t.links("bracket", "interface:wall")  # без варианта: узел один раз, варианты в подписи
+    assert allv["summary"].count("unit:bracket") == 1 and "[A_fork, B_hub]" in allv["summary"]
     wu = t.where_used("item:anchor/M16")
     assert wu["by_project"].get("bracket", 0) > 0 and any(u["kind"] == "selects" for u in wu["uses"])
     part = t.search("plate", project="bracket", kind="part")["hits"][0]["ref"]
