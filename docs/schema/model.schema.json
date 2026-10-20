@@ -812,6 +812,41 @@
               },
               {
                 "type": "string"
+              },
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "items": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                "type": "array"
               }
             ]
           },
@@ -1379,6 +1414,136 @@
         }
       },
       "title": "Skeleton",
+      "type": "object"
+    },
+    "SketchDim": {
+      "description": "Явный размер на эскизе: между двумя точками модели (`between`) по оси `axis` или размер сущности\n(`of` + `kind`: thickness | diameter | length). Ссылки: datum:<id>, interface:<id>, surrounding:<id>,\npart:<id>, part:<id>/hole:<hid>, fastener:<id>, point:x,y,z.",
+      "properties": {
+        "view": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "View"
+        },
+        "between": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Between"
+        },
+        "axis": {
+          "anyOf": [
+            {
+              "enum": [
+                "X",
+                "Y",
+                "Z"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Axis"
+        },
+        "of": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Of"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "thickness",
+                "diameter",
+                "length"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        }
+      },
+      "title": "SketchDim",
+      "type": "object"
+    },
+    "SketchSpec": {
+      "description": "Раздел `sketch` проекта или варианта: какие виды показывать, какие автоматические размеры скрыть\n(по id из <v>_sketch.json), какие размеры добавить.",
+      "properties": {
+        "views": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Views",
+          "type": "array"
+        },
+        "hide": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Hide",
+          "type": "array"
+        },
+        "dims": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SketchDim"
+          },
+          "title": "Dims",
+          "type": "array"
+        }
+      },
+      "title": "SketchSpec",
       "type": "object"
     },
     "Trim": {
@@ -1980,6 +2145,9 @@
         }
       ],
       "default": null
+    },
+    "sketch": {
+      "$ref": "#/$defs/SketchSpec"
     }
   },
   "required": [

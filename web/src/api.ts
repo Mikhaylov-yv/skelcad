@@ -385,6 +385,65 @@ export interface TaskEvent {
   cost_usd?: number;
 }
 
+// --- граф связей (M2.2, D27): производный индекс сущностей и связей в Postgres
+export interface GraphNode {
+  ref: string; // kind:id[/kind:id]
+  kind: string;
+  eid: string;
+  name: string;
+  variants: string[]; // варианты, где сущность есть (пусто — уровень проекта)
+  depth: number;
+  data: Record<string, unknown>;
+}
+
+export interface GraphEdge {
+  src: string;
+  dst: string;
+  kind: string;
+  variant: string;
+  data: Record<string, unknown>;
+}
+
+export interface LinksResponse {
+  project: string;
+  variant: string | null;
+  ref: string;
+  hops: number;
+  direction: "both" | "in" | "out";
+  kinds: string[];
+  root: GraphNode | null;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  truncated: boolean;
+  summary: string;
+}
+
+export interface SearchHit {
+  project: string;
+  variant: string;
+  ref: string;
+  kind: string;
+  eid: string;
+  name: string;
+  data: Record<string, unknown>;
+}
+
+export interface SearchResponse {
+  query: string;
+  hits: SearchHit[];
+  truncated: boolean;
+  summary: string;
+}
+
+export interface WhereUsedResponse {
+  ref: string;
+  project: string | null;
+  uses: { project: string; variant: string; src: string; kind: string; name: string }[];
+  by_project: Record<string, number>;
+  truncated: boolean;
+  summary: string;
+}
+
 export interface BuildResponse {
   summary: string;
   variants: { variant: string; line: string }[];
@@ -520,6 +579,23 @@ export const api = {
     getJson<LayoutApproval & { commit: Commit }>(`/api/projects/${encodeURIComponent(project)}/layout/approve`, {
       method: "POST",
     }),
+  graphLinks: (project: string, ref: string, opts?: { variant?: string; hops?: number; direction?: string }) => {
+    const q = new URLSearchParams({ ref });
+    if (opts?.variant) q.set("variant", opts.variant);
+    if (opts?.hops) q.set("hops", String(opts.hops));
+    if (opts?.direction) q.set("direction", opts.direction);
+    return getJson<LinksResponse>(`/api/projects/${encodeURIComponent(project)}/graph/links?${q}`);
+  },
+  graphWhereUsed: (project: string, ref: string) =>
+    getJson<WhereUsedResponse>(
+      `/api/projects/${encodeURIComponent(project)}/graph/where-used?ref=${encodeURIComponent(ref)}`,
+    ),
+  graphSearch: (q: string, opts?: { project?: string; kind?: string }) => {
+    const p = new URLSearchParams({ q });
+    if (opts?.project) p.set("project", opts.project);
+    if (opts?.kind) p.set("kind", opts.kind);
+    return getJson<SearchResponse>(`/api/graph/search?${p}`);
+  },
   text: async (url: string): Promise<string> => {
     const r = await fetch(url);
     if (!r.ok) throw new ApiError(r.status, `${r.status} ${r.statusText}`);

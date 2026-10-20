@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { api, ApiError, type LayoutResponse, type Report, type ReviewItem } from "../api";
+import { api, ApiError, type GraphNode, type LayoutResponse, type Report, type ReviewItem } from "../api";
 import { S } from "../strings";
 import { NumbersRow } from "../ui/NumbersRow";
 import { Findings } from "../ui/Findings";
@@ -12,6 +12,7 @@ import { useProjectState } from "../ui/useProjectState";
 import { AgentBanner } from "../ui/AgentBanner";
 import { ApprovalBox, LayoutPane, LayoutTree } from "../sketch/LayoutPane";
 import { Sketch } from "../sketch/Sketch";
+import { Links } from "../ui/Links";
 
 type State =
   | { kind: "loading" }
@@ -55,7 +56,7 @@ export function Variant() {
   const [sketchFit, setSketchFit] = useState(0);
   const [sketchHover, setSketchHover] = useState<string | null>(null);
   const [layout, setLayout] = useState<LayoutResponse | null>(null);
-  const [layoutSel, setLayoutSel] = useState<string[]>([]);
+  const [layoutSel, setLayoutSel] = useState<string[]>(() => (params.get("ref") ? [params.get("ref")!] : []));
   const [layoutNonce, setLayoutNonce] = useState(0);
   const onLayoutData = useCallback((d: LayoutResponse | null) => setLayout(d), []);
 
@@ -98,6 +99,13 @@ export function Variant() {
     if (p.toString() !== params.toString()) setParams(p, { replace: true });
   }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    const p = new URLSearchParams(params);
+    if (mode === "layout" && layoutSel.length === 1) p.set("ref", layoutSel[0]);
+    else p.delete("ref");
+    if (p.toString() !== params.toString()) setParams(p, { replace: true });
+  }, [layoutSel, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const report = st.kind === "ok" ? st.report : null;
   const idx = useMemo(() => (report ? indexNodes(report, topLevel) : null), [report, topLevel]);
 
@@ -105,6 +113,36 @@ export function Variant() {
     if (!report || !idx) return;
     setActiveRef(ref);
     setSelected(nodesForRef(ref, report, idx));
+  };
+  // связи (M2.2): сущность для блока «Связи» — ссылка из замечания, сущность компоновки или выделенный узел 3D
+  const linkRef =
+    activeRef ??
+    (mode === "layout"
+      ? (layoutSel[0] ?? null)
+      : selected.length === 1
+        ? (idx?.fasteners.includes(selected[0]) ? "fastener:" : "part:") + selected[0]
+        : null);
+  const onLinkPick = (node: GraphNode) => {
+    const k = node.kind;
+    if (/^(datum|interface|envelope|surrounding|load|constraint)$/.test(k)) {
+      setActiveRef(null);
+      setLayoutSel([node.ref]);
+      if (mode !== "layout") setMode("layout");
+      return;
+    }
+    if (k === "part" || k === "fastener") {
+      setActiveRef(null);
+      setSelected([node.eid]);
+      if (mode === "layout") setMode("3d");
+      return;
+    }
+    if (k === "dim") {
+      setActiveRef(node.ref);
+      if (mode !== "sketch") setMode("sketch");
+      return;
+    }
+    if (mode === "layout") setMode("3d");
+    pickRef(node.ref);
   };
   const toggleNode = (id: string) => {
     setActiveRef(null);
@@ -643,6 +681,12 @@ export function Variant() {
                 locked={locked}
                 onApproved={() => setLayoutNonce((n) => n + 1)}
               />
+            )}
+            {linkRef && (
+              <>
+                <h3>{S.graph.title}</h3>
+                <Links project={project} variant={variant || undefined} reference={linkRef} onPick={onLinkPick} />
+              </>
             )}
             <h3>{S.review.title}</h3>
             <section className="review" aria-label={S.review.title}>

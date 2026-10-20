@@ -39,10 +39,18 @@ uv run pytest -q
 
 ```bash
 uv run skelcad serve                      # http://127.0.0.1:8000: /mcp, /api, /out; без SKELCAD_TOKENS — режим разработки
+SKELCAD_DATABASE_URL=embedded uv run skelcad serve   # + граф связей на встроенном Postgres (поиск, связи)
 SKELCAD_TOKENS="claude-code:секрет" uv run skelcad serve
 claude mcp add --transport http skelcad https://skelcad.br/mcp --header "Authorization: Bearer секрет"
 docker compose -f compose/stack.yml --env-file compose/.env up -d   # сервер + изолированный воркер
 ```
+
+Граф связей (M2.2, D27): сервер держит в Postgres производный индекс сущностей и связей всех проектов (базы,
+интерфейсы, обстановка, узлы, детали, отверстия, крепёж, материалы, позиции каталога, размеры, замечания),
+пересобираемый по коммитам и сборкам — поиск по всем проектам и блок «Связи» в рабочем месте, инструменты
+`links` / `where_used` / `search` у агента. `SKELCAD_DATABASE_URL=postgresql://…` (в compose — сервис `db`,
+пароль создаёт деплой); для разработки и тестов `SKELCAD_DATABASE_URL=embedded` поднимает встроенный Postgres
+(`pgserver`) в `<data>/pg`. Индекс одноразовый: `POST /api/graph/reindex` пересобирает его из git.
 
 Рабочее место в браузере (M2): экраны Проекты, Вариант (3D), Лента, Сравнение, Параметры, Агент, Подключение агента;
 папка `web/` (Vite + React + TypeScript, three.js). Разработка:

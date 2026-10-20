@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { Projects } from "./Projects";
 
-const mount = () =>
+const mount = (entry = "/") =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[entry]}>
       <Projects />
     </MemoryRouter>,
   );
@@ -45,6 +45,51 @@ describe("Проекты", () => {
     expect(screen.getByText("анкеры M20: K_NV 1.14 → 1.74")).toBeInTheDocument();
     expect(screen.getByText("не собран")).toBeInTheDocument();
     expect(screen.getByText("1,54")).toBeInTheDocument();
+  });
+
+  it("ищет по всем проектам из адреса ?q= и ведёт к сущности", async () => {
+    const hits = {
+      query: "wall",
+      truncated: false,
+      hits: [
+        {
+          project: "bracket",
+          variant: "",
+          ref: "datum:wall",
+          kind: "datum",
+          eid: "wall",
+          name: "Плоскость стены",
+          data: {},
+        },
+        {
+          project: "bracket",
+          variant: "A_fork",
+          ref: "part:base_plate",
+          kind: "part",
+          eid: "base_plate",
+          name: "Плита",
+          data: {},
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async (url: string) =>
+          new Response(JSON.stringify(String(url).includes("/api/graph/search") ? hits : payload), { status: 200 }),
+      ),
+    );
+    mount("/?q=wall");
+    expect(await screen.findByText("datum:wall")).toBeInTheDocument();
+    expect(screen.getByText("datum:wall").closest("a")).toHaveAttribute(
+      "href",
+      "/p/bracket/A_fork?mode=layout&ref=datum%3Awall",
+    );
+    expect(screen.getByText("part:base_plate").closest("a")).toHaveAttribute(
+      "href",
+      "/p/bracket/A_fork?part=base_plate",
+    );
+    expect(screen.getByText("найдено: 2")).toBeInTheDocument();
   });
 
   it("показывает ошибку сервера словами и кнопку «Повторить»", async () => {

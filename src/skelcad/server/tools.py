@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,11 +16,20 @@ from typing import Any
 
 from skelcad.context import Context, discover_standards
 from skelcad.core.findings import LEVEL_RU
+from skelcad.graph import Graph, Indexer
+from skelcad.graph import query as gq
+from skelcad.graph.extract import KINDS, RELATIONS
 from skelcad.server.auth import current_actor
 from skelcad.server.jobs import JobError, SubprocessRunner, make_runner
 from skelcad.server.workspace import Workspace, WorkspaceError
 
+log = logging.getLogger("skelcad.server")
+
 ToolError = (WorkspaceError, JobError, ValueError, KeyError, LookupError)
+
+
+class GraphOff(RuntimeError):
+    """Граф связей не настроен (нет SKELCAD_DATABASE_URL) или недоступен."""
 
 
 @dataclass
@@ -27,11 +37,34 @@ class Server:
     workspace: Workspace
     runner: Any = field(default_factory=make_runner)
     public_url: str = os.environ.get("PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/")
+    graph: Any = None  # skelcad.graph.Graph | None — индекс связей в Postgres (M2.2, D27)
+    indexer: Any = field(default=None, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.graph is not None:
+            self.indexer = Indexer(self.graph, self.workspace)
+            self.workspace.listeners.append(self._on_commit)
 
     @classmethod
     def from_env(cls) -> Server:
         data = Path(os.environ.get("SKELCAD_DATA", ".tmp/data"))
-        return cls(workspace=Workspace(data))
+        ws = Workspace(data)
+        return cls(workspace=ws, graph=Graph.open(os.environ.get("SKELCAD_DATABASE_URL"), ws.root))
+
+    def _on_commit(self, project: str) -> None:
+        try:
+            self.indexer.index_project(project)
+        except Exception as e:  # noqa: BLE001 — индекс не должен ломать коммит
+            log.warning("индекс связей (%s): %s", project, e)
+
+    def index_variant(self, project: str, variant: str) -> None:
+        """После сборки варианта: уровень варианта в индексе (ошибка индекса не ломает сборку)."""
+        if self.indexer is None:
+            return
+        try:
+            self.indexer.index_variant(project, variant)
+        except Exception as e:  # noqa: BLE001
+            log.warning("индекс связей (%s/%s): %s", project, variant, e)
 
     def out_dir(self, project: str) -> Path:
         d = self.workspace.out_dir / project
@@ -239,6 +272,69 @@ class Tools:
                     break
         return {"summary": f"«{query}»: совпадений {len(hits)}", "hits": hits}
 
+    # ---------------------------------------------------------------- граф связей (M2.2, D27)
+
+    def _graph(self):
+        if self.srv.graph is None:
+            raise GraphOff("граф связей не настроен: задайте SKELCAD_DATABASE_URL (URL Postgres или embedded)")
+        return self.srv.graph
+
+    def links(
+        self,
+        project: str,
+        ref: str,
+        variant: str | None = None,
+        hops: int = 1,
+        kinds: list[str] | None = None,
+        direction: str = "both",
+    ) -> dict:
+        self.ws.path(project)
+        res = gq.links(self._graph(), project, ref, variant, hops, kinds, direction)
+        return {"summary": gq.describe_links(res), **res}
+
+    def where_used(self, ref: str, project: str | None = None) -> dict:
+        if project:
+            self.ws.path(project)
+        res = gq.where_used(self._graph(), ref, project)
+        lines = [
+            f"{u['project']}{'/' + u['variant'] if u['variant'] else ''}: {u['src']}"
+            + (f" «{u['name']}»" if u["name"] else "")
+            + f" — {RELATIONS.get(u['kind'], u['kind'])}"
+            for u in res["uses"]
+        ]
+        where = ", ".join(f"{k} ({v})" for k, v in res["by_project"].items())
+        head = f"{ref}: использований {len(res['uses'])}" + (f" — {where}" if where else "")
+        return {"summary": "\n".join([head, *lines[:60]]), **res}
+
+    def search(self, query: str, project: str | None = None, kind: str | None = None, limit: int = 50) -> dict:
+        if project:
+            self.ws.path(project)
+        res = gq.search(self._graph(), query, project, kind, limit)
+        lines = [
+            f"{h['project']}{'/' + h['variant'] if h['variant'] else ''}: {h['ref']}"
+            + (f" «{h['name']}»" if h["name"] else "")
+            + f" ({KINDS.get(h['kind'], h['kind'])})"
+            for h in res["hits"]
+        ]
+        head = f"«{query}»: найдено {len(res['hits'])}" + (" (список обрезан)" if res["truncated"] else "")
+        return {"summary": "\n".join([head, *lines[:60]]), **res}
+
+    def graph_stats(self, project: str | None = None) -> dict:
+        if project:
+            self.ws.path(project)
+        res = gq.stats(self._graph(), project)
+        return {"summary": f"граф связей: сущностей {res['entities']}, связей {res['relations']}", **res}
+
+    def reindex(self, project: str | None = None) -> dict:
+        """Пересобрать индекс (проект или все): после смены словаря связей или если индекс разошёлся."""
+        self._graph()
+        if project:
+            r = self.srv.indexer.index_project(project, force=True)
+            vs = [self.srv.indexer.index_variant(project, v["id"], force=True) for v in self.ws.variants(project)]
+            return {"summary": f"{project}: индекс пересобран (вариантов {len(vs)})", "project": r, "variants": vs}
+        r = self.srv.indexer.index_all(force=True)
+        return {"summary": f"индекс пересобран: проектов {r['projects']}", **r}
+
     # ---------------------------------------------------------------- сборка и проверки
 
     def _links(self, project: str, files: dict) -> dict:
@@ -282,6 +378,8 @@ class Tools:
                 "export": export,
             },
         )
+        for r in reports:
+            self.srv.index_variant(project, r["variant"])
         briefs = [self._report_brief(project, r) for r in reports]
         return {"summary": "\n".join(b["line"] for b in briefs), "variants": briefs}
 
@@ -333,6 +431,8 @@ class Tools:
         )
         reports = res["reports"]
         names = [r["variant"] for r in reports]
+        for n in names:
+            self.srv.index_variant(project, n)
         rows = []
         for row in _rows(reports):
             best = [names[i] for i in row.get("best") or []]
@@ -496,6 +596,7 @@ class Tools:
         return {"summary": head + "\n" + res["text"], **{k: v for k, v in res.items() if k != "text"}}
 
 
-def local_server(data: Path) -> Server:
-    """Сервер для CLI и тестов: подпроцесс-воркер, данные в папке."""
-    return Server(workspace=Workspace(data), runner=SubprocessRunner())
+def local_server(data: Path, database_url: str | None = None) -> Server:
+    """Сервер для CLI и тестов: подпроцесс-воркер, данные в папке; database_url — граф связей (Postgres)."""
+    ws = Workspace(data)
+    return Server(workspace=ws, runner=SubprocessRunner(), graph=Graph.open(database_url, ws.root))

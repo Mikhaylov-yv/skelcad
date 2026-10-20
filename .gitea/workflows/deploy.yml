@@ -56,7 +56,10 @@ jobs:
              # токен встроенного агента — локальный для хоста, создаётся один раз
              mkdir -p \$HOME/.config/skelcad
              test -s \$HOME/.config/skelcad/agent.token || openssl rand -hex 24 > \$HOME/.config/skelcad/agent.token
-             echo AGENT_TOKEN=\$(cat \$HOME/.config/skelcad/agent.token) >> \$HOME/$SRV/compose/.env"
+             echo AGENT_TOKEN=\$(cat \$HOME/.config/skelcad/agent.token) >> \$HOME/$SRV/compose/.env
+             # пароль Postgres (граф связей) — локальный для хоста, создаётся один раз
+             test -s \$HOME/.config/skelcad/pg.password || openssl rand -hex 24 > \$HOME/.config/skelcad/pg.password
+             echo PG_PASSWORD=\$(cat \$HOME/.config/skelcad/pg.password) >> \$HOME/$SRV/compose/.env"
 
       - name: Validate, build, deploy
         run: |
@@ -83,15 +86,17 @@ jobs:
           # -k: имя в SAN сертификата добавляется отдельно (add-domain.sh на malina), smoke-check от него не зависит
           C="curl -sk -o /dev/null -w %{http_code} --resolve skelcad.br:443:127.0.0.1"
           for i in 1 2 3 4 5 6; do
-            # /health → 200; /mcp без токена → 401; / → 302 на вход Keycloak (oauth2-proxy)
+            # /health → 200 и graph: ok (Postgres); /mcp без токена → 401; / → 302 на вход Keycloak (oauth2-proxy)
             h=$($C https://skelcad.br/health); m=$($C -X POST https://skelcad.br/mcp); r=$($C https://skelcad.br/)
-            echo "attempt $i: /health $h, /mcp $m, / $r"
-            if [ "$h" = 200 ] && [ "$m" = 401 ] && [ "$r" = 302 ]; then
+            g=$(curl -sk --resolve skelcad.br:443:127.0.0.1 https://skelcad.br/health | grep -o '"graph": *"[a-z]*"' | grep -o '[a-z]*"$' | tr -d '"')
+            echo "attempt $i: /health $h (graph $g), /mcp $m, / $r"
+            if [ "$h" = 200 ] && [ "$g" = ok ] && [ "$m" = 401 ] && [ "$r" = 302 ]; then
               echo "https://skelcad.br OK"; exit 0
             fi
             sleep 5
           done
           docker logs --tail 30 skelcad-server
+          docker logs --tail 20 skelcad-db || true
           docker logs --tail 20 skelcad-oauth2-proxy || true
           echo "https://skelcad.br FAILED"; exit 1
           EOF

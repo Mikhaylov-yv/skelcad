@@ -1,12 +1,19 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { api, type ProjectOverview } from "../api";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { api, ApiError, type ProjectOverview, type SearchResponse } from "../api";
 import { S } from "../strings";
 import { NumbersRow } from "../ui/NumbersRow";
 import { CommitLine } from "../ui/CommitLine";
 import { relativeTime } from "../ui/format";
+import { entityUrl, kindLabel } from "../ui/Links";
 
 type State = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ok"; projects: ProjectOverview[] };
+type SearchState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "off" }
+  | { kind: "error"; message: string }
+  | { kind: "ok"; data: SearchResponse };
 
 export function Projects() {
   const [st, setSt] = useState<State>({ kind: "loading" });
@@ -19,9 +26,91 @@ export function Projects() {
   };
   useEffect(load, []);
 
+  // поиск по всем проектам (M2.2): запрос живёт в адресе (?q=), чтобы ссылку можно было передать
+  const [params, setParams] = useSearchParams();
+  const q0 = params.get("q") ?? "";
+  const [q, setQ] = useState(q0);
+  const [search, setSearch] = useState<SearchState>({ kind: "idle" });
+  const runSearch = useCallback((text: string) => {
+    setSearch({ kind: "loading" });
+    api
+      .graphSearch(text)
+      .then((data) => setSearch({ kind: "ok", data }))
+      .catch((e: Error) => {
+        if (e instanceof ApiError && e.status === 503) setSearch({ kind: "off" });
+        else setSearch({ kind: "error", message: e.message });
+      });
+  }, []);
+  useEffect(() => {
+    setQ(q0);
+    if (q0.trim().length >= 2) runSearch(q0.trim());
+    else setSearch({ kind: "idle" });
+  }, [q0, runSearch]);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const p = new URLSearchParams(params);
+    if (q.trim()) p.set("q", q.trim());
+    else p.delete("q");
+    setParams(p);
+  };
+  const firstVariant = (project: string): string | null =>
+    st.kind === "ok" ? (st.projects.find((p) => p.name === project)?.variants[0]?.id ?? null) : null;
+
   return (
     <main className="page">
       <h1>{S.projects.title}</h1>
+      <form className="search" role="search" onSubmit={submit}>
+        <label htmlFor="search-q" className="small muted">
+          {S.graph.search}
+        </label>
+        <input
+          id="search-q"
+          type="search"
+          value={q}
+          placeholder={S.graph.searchPlaceholder}
+          onChange={(e) => setQ(e.target.value)}
+          title={S.graph.searchHint}
+        />
+        <button type="submit">{S.graph.searchButton}</button>
+      </form>
+      {search.kind === "loading" && (
+        <p className="muted small" aria-live="polite">
+          {S.graph.searching}
+        </p>
+      )}
+      {search.kind === "off" && <p className="muted small">{S.graph.off}</p>}
+      {search.kind === "error" && (
+        <p className="level-error small" role="alert">
+          {search.message}
+        </p>
+      )}
+      {search.kind === "ok" && (
+        <section className="search__results" aria-label={S.graph.search}>
+          <p className="muted small">
+            {S.graph.hits(search.data.hits.length)}
+            {search.data.truncated ? ` · ${S.graph.truncated}` : ""}
+          </p>
+          {search.data.hits.length === 0 ? (
+            <p className="empty">{S.graph.noHits(search.data.query)}</p>
+          ) : (
+            <ul className="search__list">
+              {search.data.hits.map((h) => (
+                <li key={h.project + "|" + h.variant + "|" + h.ref}>
+                  <Link to={entityUrl(h.project, h.variant || firstVariant(h.project), h)}>
+                    <span className="mono">{h.ref}</span>
+                  </Link>
+                  {h.name && <span className="muted"> — {h.name}</span>}
+                  <span className="muted small">
+                    {" "}
+                    · {kindLabel(h.kind)} · {h.project}
+                    {h.variant ? `/${h.variant}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       {st.kind === "loading" && (
         <p className="muted" aria-live="polite">
           {S.projects.loading}

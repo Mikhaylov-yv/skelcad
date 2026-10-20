@@ -23,6 +23,7 @@ Vec3 = tuple[float, float, float]
 # Текст на одном или нескольких языках: "Плита" или {ru: "Плита", en: "Plate"}.
 Text = str | dict[str, str]
 Scalar = int | float | str
+ParamValue = Scalar | list[Scalar] | list[list[Scalar]]  # параметр интерфейса: число, строка, список точек
 Status = Literal["draft", "proposed", "approved"]
 
 
@@ -302,7 +303,7 @@ class Interface(Entity):
     name: Text = ""
     datum: str | None = None  # ссылка на Datum
     body: Cylinder | None = None  # опорное тело для проверок и визуализации (вал, ось)
-    params: dict[str, Scalar] = {}  # диаметр, посадка, предельные размеры и т. п.
+    params: dict[str, ParamValue] = {}  # диаметр, посадка, предельные размеры, положения (списки) и т. п.
     loads: dict[str, float] = {}  # нагрузки, приложенные через интерфейс, кН / кН·м
 
 

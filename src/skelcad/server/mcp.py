@@ -29,6 +29,8 @@ Python) — источник истины, геометрия и чертежи 
 measure/context_search → files_write → build → diff → … → compare. Компоновку (skeleton: datums, interfaces,
 envelopes, surroundings; requirements) конструктор согласовывает в рабочем месте; её состояние — в project_read.
 Сводка — первая строка ответа; большие данные запрашивай срезами (model_query path=...).
+Связи между сущностями — индекс в базе: links (окрестность сущности), where_used (где используется, по всем
+проектам), search (поиск по всем проектам). Бери окрестность, а не весь YAML.
 Единицы: мм, кН, кг. Замечания уровня error блокируют приёмку — не оставляй их.
 """
 
@@ -207,5 +209,36 @@ def build_mcp(srv: Server) -> FastMCP:
         elif res.get("svg_text"):
             out.append(res["svg_text"][:20000])
         return out
+
+    # ---------------- граф связей (M2.2, D27)
+    @mcp.tool()
+    async def links(
+        project: str,
+        ref: str,
+        variant: str | None = None,
+        hops: int = 1,
+        kinds: list[str] | None = None,
+        direction: str = "both",
+    ) -> dict:
+        """Связи сущности по индексу: окрестность на hops шагов (1–4). ref — kind:id[/kind:id]: interface:wall,
+        datum:axle_axis, part:base_plate/hole:a00, unit:u1, load:Fv, item:anchor/M16, material:St3sp.
+        direction: out — что сущность содержит и на что ссылается; in — кто ссылается на неё; both — всё.
+        kinds — типы связей: contains, locates, mounts, applies, joins, fastens, made_of, selects, uses, annotates,
+        checks, reviews, computes. variant — ограничить уровень варианта одним вариантом (уровень проекта виден
+        всегда). Сводка — текстом; nodes / edges — данными. Дешевле, чем читать YAML целиком."""
+        return await run(t.links, project, ref, variant, hops, kinds, direction)
+
+    @mcp.tool()
+    async def where_used(ref: str, project: str | None = None) -> dict:
+        """Где используется сущность: по всем проектам (project не задан) или в одном. Примеры: item:anchor/M16,
+        material:St3sp, standard:gost, interface:wall, datum:wall. Ответ: кто ссылается и каким типом связи."""
+        return await run(t.where_used, ref, project)
+
+    @mcp.tool()
+    async def search(query: str, project: str | None = None, kind: str | None = None, limit: int = 50) -> dict:
+        """Поиск сущностей по всем проектам по подстроке в id, имени, роли, примечании, тегах («M16», «стена»,
+        «cheek»). kind — вид: project, variant, datum, interface, envelope, surrounding, load, constraint, unit,
+        part, hole, weld, fastener, material, item, dim, finding, calc, review, assumption, standard, metric."""
+        return await run(t.search, query, project, kind, limit)
 
     return mcp

@@ -274,3 +274,16 @@ button.danger { color: var(--error); border-color: var(--error); }
 .sketch--bare .dims, .sketch--bare .labels { display: none; }
 .cmp tr.cmp__section th { background: var(--bg); font-weight: 600; text-transform: uppercase; font-size: 12px; letter-spacing: 0.04em; color: var(--muted); }
 .cmp td.diff { font-weight: 600; }
+
+/* --- граф связей (M2.2) --- */
+.search { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
+.search input { flex: 1 1 320px; max-width: 640px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font: inherit; background: var(--surface); color: var(--text); }
+.search__results { margin-bottom: 16px; }
+.search__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+.links { display: grid; gap: 6px; margin-bottom: 8px; font-size: 14px; }
+.links__root { margin: 0; overflow-wrap: anywhere; }
+.links__group { display: grid; gap: 2px; }
+.links__list { list-style: none; margin: 0; padding: 0 0 0 8px; display: grid; gap: 2px; }
+.links__item { border: none; background: none; padding: 1px 4px; text-align: left; color: var(--text); cursor: pointer; border-radius: 4px; font: inherit; overflow-wrap: anywhere; }
+.links__item:hover { background: var(--bg); color: var(--accent); }
+.badge--kind { font-size: 11px; }

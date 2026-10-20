@@ -27,7 +27,11 @@
    согласования; изменил скелет — согласуй заново.
 2. `check` или `build` — текущее состояние: замечания (error / warning / info), запасы K, масса.
 3. Заземлиться: `measure` (расстояния, зазоры, пересечения, массы, ЦТ), `context_search` /
-   `context_lookup` (каталоги: крепёж, анкеры, материалы, трубы), `render` (посмотреть вид).
+   `context_lookup` (каталоги: крепёж, анкеры, материалы, трубы), `render` (посмотреть вид); связи по
+   индексу: `links(project, ref)` — окрестность сущности (что содержит, к чему привязана, кто на неё
+   ссылается; `kinds`, `direction`, `hops`), `where_used(ref)` — где используется по всем проектам
+   (`item:anchor/M16`, `material:St3sp`, `interface:wall`), `search(query)` — поиск по всем проектам.
+   Бери окрестность, а не весь YAML: `links` дешевле `files_read`.
 4. Изменить: `files_read` → правка → `files_write` с сообщением «что и зачем». Один вызов —
    одно логическое изменение, несколько файлов можно в одном вызове.
 5. Проверить: `build` (или `check`), затем `diff` (`HEAD~1` → `HEAD`) — что именно изменилось в
@@ -43,6 +47,8 @@
 - Замечания уровня `error` блокируют приёмку — не оставляй их; `warning` объясни или устрани.
 - Числа бери из `measure` и каталогов, а не из головы. Единицы: мм, кН, кг, кН·м.
 - Большие данные — срезами: `model_query` с `path` (`parts[id=…]`, `welds`, `skeleton.interfaces`).
+- Ссылки на сущности везде одни: `kind:id[/kind:id]` (`interface:wall`, `part:base_plate/hole:a00`,
+  `unit:u1`, `load:Fv`, `item:anchor/M16`, `material:St3sp`) — в замечаниях, размерах, `links` и `search`.
 - Не переписывай генератор целиком ради одного параметра: параметры живут в `variants/*.yaml`.
 - Допущения, которые ты принял, запиши в `assumptions` варианта или проекта.
 - Сообщение коммита — по-русски (или на языке проекта), по сути: «анкеры M20: K_anchor 1.14 → 1.62».
@@ -54,12 +60,15 @@
 - Документы: `docs/architecture/01-vision-and-architecture.md` (замысел), `02-decisions.md`
   (журнал решений), `03-m0-plan.md`, `04-m1-plan.md`, `05-m2-plan.md`, `06-m2-1-sketches-plan.md` (планы этапов со статусом).
 - Код: `src/skelcad/core` (модель), `geom` (OCCT; `layout.py` — компоновочный эскиз), `rules` (плагины),
+  `graph/` (граф связей в Postgres: словарь сущностей и связей, индексатор, запросы; D27),
   `pipeline.py`, `server/` (FastAPI + MCP + git-проекты; `api.py`, `auth.py`, `layout.py` (согласование
   компоновки), `params.py`, `review.py`, `tasks.py`, `tokens.py`),
   `worker.py` (изолированное исполнение кода проектов), `agent.py` (встроенный агент из workbench),
   `measure.py`, `render.py`, `diff.py`. Workbench — `web/` (Vite + React + TS, three.js). Пакет стандарта — `packages/std-gost`.
 - Проверки перед коммитом: `uv run ruff check src tests && uv run ruff format src tests &&
   uv run pytest -q`. Код проектов (генераторы, плагины) исполняется только в воркере.
+  Граф связей: `SKELCAD_DATABASE_URL` (URL Postgres; `embedded` — встроенный сервер для разработки и тестов,
+  dev-зависимость `pgserver`); без него сервер работает, инструменты связей отвечают «не настроен».
 - Деплой: push в `main` на git.br → `.gitea/workflows/deploy.yml` → cloud (`~/srv/skelcad`,
   `docker compose`, nginx `skelcad.br`). Локально: `uv run skelcad serve` (без токенов — режим
   разработки) и `uv run skelcad worker --queue <папка>` или подпроцесс-воркер по умолчанию.

@@ -30,7 +30,7 @@ from skelcad.server.auth import CURRENT_PRINCIPAL, client_for, parse_tokens, res
 from skelcad.server.mcp import CURRENT_CLIENT, build_mcp
 from skelcad.server.tasks import TaskError, TaskStore
 from skelcad.server.tokens import TokenError, TokenStore
-from skelcad.server.tools import Server, ToolError, Tools
+from skelcad.server.tools import GraphOff, Server, ToolError, Tools
 
 __all__ = ["client_for", "create_app", "main", "parse_tokens"]
 
@@ -65,8 +65,21 @@ def create_app(srv: Server | None = None) -> FastAPI:
         made = await to_thread.run_sync(srv.workspace.seed, seed)
         if made:
             log.info("заведены проекты-примеры: %s", ", ".join(made))
+        if srv.indexer is not None:  # граф связей: полный проход при старте (неизменившееся пропускается)
+            try:
+                r = await to_thread.run_sync(srv.indexer.index_all)
+                log.info(
+                    "граф связей: проектов %s, проиндексировано %s, без изменений %s",
+                    r["projects"],
+                    r["indexed"],
+                    r["skipped"],
+                )
+            except Exception as e:  # noqa: BLE001 — сервер работает и без индекса
+                log.error("граф связей при старте: %s", e)
         async with mcp.session_manager.run():
             yield
+        if srv.graph is not None:
+            srv.graph.close()
 
     app = FastAPI(
         title="SkelCAD", version="0.1", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json"
@@ -95,7 +108,8 @@ def create_app(srv: Server | None = None) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"ok": True, "projects": srv.workspace.names()}
+        graph = "off" if srv.graph is None else ("ok" if srv.graph.ok() else "error")
+        return {"ok": True, "projects": srv.workspace.names(), "graph": graph}
 
     @app.get("/api/me")
     async def api_me(request: Request):
@@ -193,6 +207,35 @@ def create_app(srv: Server | None = None) -> FastAPI:
         guard(name)
         return await to_thread.run_sync(api.layout_approve, srv.workspace, name)
 
+    # ---------------- граф связей (M2.2, D27)
+    @app.get("/api/graph/search")
+    async def api_graph_search(q: str, project: str | None = None, kind: str | None = None, limit: int = 50):
+        return await to_thread.run_sync(tools.search, q, project, kind, limit)
+
+    @app.get("/api/graph/stats")
+    async def api_graph_stats(project: str | None = None):
+        return await to_thread.run_sync(tools.graph_stats, project)
+
+    @app.post("/api/graph/reindex")
+    async def api_graph_reindex(project: str | None = None):
+        return await to_thread.run_sync(tools.reindex, project)
+
+    @app.get("/api/projects/{name}/graph/links")
+    async def api_graph_links(
+        name: str,
+        ref: str,
+        variant: str | None = None,
+        hops: int = 1,
+        kinds: str | None = None,
+        direction: str = "both",
+    ):
+        ks = [k for k in (kinds or "").split(",") if k] or None
+        return await to_thread.run_sync(tools.links, name, ref, variant or None, hops, ks, direction)
+
+    @app.get("/api/projects/{name}/graph/where-used")
+    async def api_graph_where_used(name: str, ref: str):
+        return await to_thread.run_sync(tools.where_used, ref, name)
+
     @app.get("/api/projects/{name}/variants/{variant}/params")
     async def api_variant_params(name: str, variant: str):
         return await to_thread.run_sync(api.variant_params, srv.workspace, name, variant)
@@ -270,6 +313,11 @@ def create_app(srv: Server | None = None) -> FastAPI:
 
     for exc in (*ToolError, TaskError, TokenError):
         app.add_exception_handler(exc, tool_error)
+
+    async def graph_off(_: Request, e: Exception):
+        return JSONResponse({"error": str(e)}, status_code=503)
+
+    app.add_exception_handler(GraphOff, graph_off)
 
     @app.exception_handler(HTTPException)
     async def http_error(_: Request, e: HTTPException):

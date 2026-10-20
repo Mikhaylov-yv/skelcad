@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -72,6 +73,8 @@ class Workspace:
         self.projects_dir.mkdir(parents=True, exist_ok=True)
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.templates = templates or default_templates_dir()
+        # слушатели коммитов: после каждого изменения HEAD проекта (запись, откат, создание, pull) — индекс связей
+        self.listeners: list[Callable[[str], None]] = []
 
     # ---------- проекты ----------
 
@@ -82,6 +85,10 @@ class Workspace:
         if not (p / "project.yaml").exists():
             raise WorkspaceError(f"проект «{name}» не найден; есть: {', '.join(self.names()) or 'ничего'}")
         return p
+
+    def _notify(self, name: str) -> None:
+        for fn in self.listeners:
+            fn(name)
 
     def names(self) -> list[str]:
         return sorted(p.name for p in self.projects_dir.iterdir() if (p / "project.yaml").exists())
@@ -161,6 +168,7 @@ class Workspace:
         if origin:
             git(dst, "remote", "add", "origin", origin)
             self.push(name)
+        self._notify(name)
         return self.info(name)
 
     def seed(self, names: list[str]) -> list[str]:
@@ -217,6 +225,7 @@ class Workspace:
             raise WorkspaceError("содержимое не изменилось — коммит не нужен")
         git(root, "commit", "-q", "-m", message, actor=actor)
         self.push(name)
+        self._notify(name)
         return {"commit": self.history(name, limit=1)[0], "files": written}
 
     # ---------- история ----------
@@ -282,6 +291,7 @@ class Workspace:
         if message:
             git(root, "commit", "-q", "--amend", "-m", message, actor=actor)
         self.push(name)
+        self._notify(name)
         return {"commit": self.history(name, limit=1)[0]}
 
     # ---------- origin (необязательно: конструктор может работать со своим клоном) ----------
@@ -294,6 +304,7 @@ class Workspace:
         if not self.has_origin(name):
             return None
         root = self.path(name)
+        before = self.rev(name, "HEAD")
         git(root, "fetch", "-q", "origin")
         p = git(root, "merge", "--ff-only", "-q", "origin/main", check=False)
         if p.returncode != 0:
@@ -301,7 +312,10 @@ class Workspace:
                 f"проект {name}: история разошлась с origin (на сервере и у конструктора разные коммиты); "
                 "разрешите вручную: git pull --rebase / git push в клоне конструктора"
             )
-        return self.rev(name, "HEAD")[:7]
+        head = self.rev(name, "HEAD")
+        if head != before:
+            self._notify(name)
+        return head[:7]
 
     def push(self, name: str) -> None:
         if not self.has_origin(name):

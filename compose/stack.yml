@@ -1,5 +1,7 @@
 # skelcad.br — сервер SkelCAD с точкой MCP для агентов (README, docs/architecture/04-m1-plan.md).
 #   server — FastAPI: / (workbench), /mcp (Bearer-токен), /api, /out (артефакты); проекты — git-репозитории в /data/projects
+#   db — Postgres: производный индекс сущностей и связей (граф связей, M2.2, D27); пересобирается из git
+#            и комплектов сборок, резервная копия не нужна
 #   worker — тот же образ, цикл по файловой очереди /data/jobs; исполняет код проектов (генераторы, OCCT)
 #            в подпроцессах с лимитами; без сети, с ограничением CPU/памяти/процессов
 #   oauth2-proxy — вход через Keycloak (realm home) для браузера: /, /api, /out; передаёт пользователя
@@ -26,8 +28,12 @@ services:
       SKELCAD_SEED: ${SKELCAD_SEED:-bracket,pipe_support,plate}
       SKELCAD_JOB_TIMEOUT_S: ${JOB_TIMEOUT_S:-180}
       PUBLIC_URL: ${PUBLIC_URL:?}
+      SKELCAD_DATABASE_URL: postgresql://skelcad:${PG_PASSWORD:?}@db:5432/skelcad
     volumes:
       - data:/data
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "127.0.0.1:${APP_PORT:?}:8000"
     healthcheck:
@@ -36,6 +42,23 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+
+  db:
+    image: postgres:16-alpine
+    container_name: skelcad-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: skelcad
+      POSTGRES_DB: skelcad
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skelcad -d skelcad"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   worker:
     image: skelcad:local
@@ -116,6 +139,7 @@ services:
 
 volumes:
   data:
+  pgdata:
 
 # Пулы docker по умолчанию на cloud исчерпаны — подсеть явно (drawio занял 10.88.10.0/24).
 networks:
