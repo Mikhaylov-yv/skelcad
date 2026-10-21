@@ -35,7 +35,8 @@ envelopes, surroundings; requirements) конструктор согласовы
 инструментом attachment(project, path). Набросок переводи в скелет и обстановку: опорное (стена, пол, труба,
 ответная деталь) — surroundings и datums, где изделие крепится и что несёт — interfaces и нагрузки, подписанные
 числа — размеры, неподписанное оцени по пропорциям и запиши в assumptions; покажи render(layout=True) и жди
-согласования.
+согласования. Поля обстановки: plane — origin, normal, extent, thickness; box — min, max; cylinder — center,
+axis, diameter, length (плюс id, role, name, material); зоны envelopes — kind keep_in | keep_out, min, max.
 Единицы: мм, кН, кг. Замечания уровня error блокируют приёмку — не оставляй их.
 """
 

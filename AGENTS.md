@@ -22,8 +22,9 @@
    место обведено или показано стрелкой: смотри `render(layout=true, view=<вид росчерка>)`), на каждое нужен
    `review_resolve` с ответом.
    Новое изделие начинай с компоновки: в `project.yaml` опиши требования (нагрузки `Fv`/`Fh`/`Fa`/`Fx`…),
-   скелет (`datums`, `interfaces`, `envelopes` keep_in / keep_out) и обстановку `skeleton.surroundings`
-   (стена, пол, труба, ответная деталь, соседнее оборудование — plane / box / cylinder с ролью и именем),
+   скелет (`datums`, `interfaces`, `envelopes` keep_in / keep_out с `min`/`max`) и обстановку `skeleton.surroundings`
+   (стена, пол, труба, ответная деталь, соседнее оборудование — plane: `origin`, `normal`, `extent`, `thickness`;
+   box: `min`, `max`; cylinder: `center`, `axis`, `diameter`, `length`; у всех `id`, `role`, `name`, `material`),
    посмотри `render(layout=true)` и дождись согласования конструктора (`project_read` → `layout`:
    none / approved / changed; отметка — файл `layout.yaml` конструктора, не трогай его). Детали — после
    согласования; изменил скелет — согласуй заново. Набросок конструктора (от руки, фото, экспорт доски) —
