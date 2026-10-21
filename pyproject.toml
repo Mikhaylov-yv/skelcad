@@ -19,6 +19,7 @@ dependencies = [
     "pillow>=10",
     "python-multipart>=0.0.9",
     "pypdfium2>=4.30",
+    "cryptography>=42",
 ]
 
 [project.optional-dependencies]

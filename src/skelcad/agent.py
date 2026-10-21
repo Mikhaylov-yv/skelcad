@@ -2,7 +2,9 @@
 против инструментов MCP сервера. Провайдер модели — любой с OpenAI-совместимым Chat Completions API;
 второй исполнитель — headless Claude Code (`claude -p`).
 
-Окружение:
+Провайдер модели — из файла providers.json рядом с очередью (настраивается в рабочем месте, D29; ключи
+расшифровываются тем же SKELCAD_SECRET_KEY, что у сервера); задача выбирает провайдера и модель, иначе умолчание.
+Если провайдеров нет — переменные окружения (старый путь):
   SKELCAD_AGENT_RUNNER   openai (по умолчанию) | claude-code
   SKELCAD_LLM_BASE_URL   например https://openrouter.ai/api/v1, http://litellm:4000/v1, http://ollama:11434/v1
   SKELCAD_LLM_API_KEY    ключ провайдера (для Ollama — любой)
@@ -33,6 +35,7 @@ from typing import Any, Protocol
 
 import httpx
 
+from skelcad.server.providers import ProviderError, ProviderStore, is_openrouter
 from skelcad.server.tasks import TaskStore
 
 log = logging.getLogger("skelcad.agent")
@@ -168,20 +171,38 @@ class McpBridge:
 class OpenAICompatible:
     def __init__(self, base_url: str, api_key: str, model: str, timeout: float = 180.0):
         if not base_url or not model:
-            raise RuntimeError("не заданы SKELCAD_LLM_BASE_URL / SKELCAD_LLM_MODEL — укажите провайдера модели")
+            raise RuntimeError(
+                "провайдер модели не настроен: добавьте его на экране «Подключение агента» "
+                "или задайте SKELCAD_LLM_BASE_URL / SKELCAD_LLM_MODEL"
+            )
         self.base = base_url.rstrip("/")
         self.model = model
-        self.client = httpx.Client(timeout=timeout, headers={"Authorization": f"Bearer {api_key or 'none'}"})
+        self.openrouter = is_openrouter(self.base)
+        headers = {"Authorization": f"Bearer {api_key or 'none'}"}
+        if self.openrouter:
+            headers["X-Title"] = "SkelCAD"
+        self.client = httpx.Client(timeout=timeout, headers=headers)
+        self.usage: dict[str, float] = {"prompt_tokens": 0, "completion_tokens": 0, "cost": 0.0, "calls": 0}
 
     def chat(self, messages: list[dict], tools: list[dict]) -> dict:
         body: dict[str, Any] = {"model": self.model, "messages": messages}
         if tools:
             body["tools"] = tools
             body["tool_choice"] = "auto"
+        if self.openrouter:
+            body["usage"] = {"include": True}  # OpenRouter отдаёт стоимость запроса
         r = self.client.post(self.base + "/chat/completions", json=body)
         if r.status_code >= 400:
             raise RuntimeError(f"провайдер модели ответил {r.status_code}: {r.text[:300]}")
         data = r.json()
+        u = data.get("usage") or {}
+        self.usage["calls"] += 1
+        for k in ("prompt_tokens", "completion_tokens"):
+            self.usage[k] += int(u.get(k) or 0)
+        try:
+            self.usage["cost"] = round(self.usage["cost"] + float(u.get("cost") or 0), 6)
+        except (TypeError, ValueError):
+            pass
         return data["choices"][0]["message"]
 
 
@@ -229,7 +250,7 @@ def run_loop(
     """Цикл агента. Возвращает {status, result, steps}."""
     tools = openai_tools(bridge.list_tools())
     user = task_text(task)
-    emit("start", runner="openai", tools=len(tools))
+    emit("start", runner="openai", tools=len(tools), provider=task.get("provider"), model=task.get("model"))
     # вложения задачи — сразу в первое сообщение как изображения (модель видит набросок, не дожидаясь вызова)
     content: list[dict] = [{"type": "text", "text": user}]
     for path in task.get("attachments") or []:
@@ -246,12 +267,13 @@ def run_loop(
     steps = 0
     max_steps = int(task.get("max_steps") or 60)
     while True:
+        usage = getattr(llm, "usage", None)
         if should_stop():
-            emit("stopped")
-            return {"status": "stopped", "result": None, "steps": steps}
+            emit("stopped", usage=usage)
+            return {"status": "stopped", "result": None, "steps": steps, "usage": usage}
         if steps >= max_steps:
-            emit("limit", max_steps=max_steps)
-            return {"status": "limit", "result": f"достигнут лимит шагов ({max_steps})", "steps": steps}
+            emit("limit", max_steps=max_steps, usage=usage)
+            return {"status": "limit", "result": f"достигнут лимит шагов ({max_steps})", "steps": steps, "usage": usage}
         steps += 1
         on_step and on_step(steps)
         msg = llm.chat(messages, tools)
@@ -261,8 +283,8 @@ def run_loop(
         if content:
             emit("assistant", text=content)
         if not calls:
-            emit("done", text=content)
-            return {"status": "done", "result": content, "steps": steps}
+            emit("done", text=content, usage=getattr(llm, "usage", None))
+            return {"status": "done", "result": content, "steps": steps, "usage": getattr(llm, "usage", None)}
         pictures: list[dict] = []  # изображения из инструментов этого шага — одним сообщением после ответов
         for call in calls:
             fn = call.get("function") or {}
@@ -359,9 +381,24 @@ def run_claude_code(task: dict, server_url: str, token: str | None, emit, should
 # ---------------------------------------------------------------- исполнение задачи из очереди
 
 
-def run_task(store: TaskStore, task: dict) -> None:
+def pick_provider(task: dict, providers: ProviderStore | None) -> dict:
+    """Провайдер задачи: из providers.json (задача → умолчание), иначе — переменные окружения."""
+    if providers is not None:
+        p = providers.resolve(task.get("provider"), task.get("model"))
+        if p is not None:
+            return p
+    return {
+        "id": None,
+        "title": "окружение",
+        "kind": os.environ.get("SKELCAD_AGENT_RUNNER", "openai"),
+        "base_url": os.environ.get("SKELCAD_LLM_BASE_URL", ""),
+        "api_key": os.environ.get("SKELCAD_LLM_API_KEY", ""),
+        "model": task.get("model") or os.environ.get("SKELCAD_LLM_MODEL", ""),
+    }
+
+
+def run_task(store: TaskStore, task: dict, providers: ProviderStore | None = None) -> None:
     tid = task["id"]
-    runner = os.environ.get("SKELCAD_AGENT_RUNNER", "openai")
     server_url = os.environ.get("SKELCAD_SERVER_URL", "http://127.0.0.1:8000/mcp")
     token = os.environ.get("SKELCAD_AGENT_TOKEN") or None
 
@@ -375,17 +412,19 @@ def run_task(store: TaskStore, task: dict) -> None:
         store.progress(tid, n)
 
     try:
-        if runner == "claude-code":
+        prov = pick_provider(task, providers)
+        task = {**task, "provider": prov.get("id") or task.get("provider"), "model": prov.get("model")}
+        if prov["kind"] == "claude-code":
             res = run_claude_code(task, server_url, token, emit, should_stop, on_step)
         else:
-            llm = OpenAICompatible(
-                os.environ.get("SKELCAD_LLM_BASE_URL", ""),
-                os.environ.get("SKELCAD_LLM_API_KEY", ""),
-                os.environ.get("SKELCAD_LLM_MODEL", ""),
-            )
+            llm = OpenAICompatible(prov["base_url"], prov["api_key"], prov["model"])
             with McpBridge(server_url, token) as bridge:
                 res = run_loop(task, llm, bridge, emit, should_stop, on_step)
-        store.finish(tid, res["status"], result=res.get("result"))
+        store.finish(tid, res["status"], result=res.get("result"), usage=res.get("usage"), model=prov.get("model"))
+    except ProviderError as e:
+        log.error("задача %s: %s", tid, e)
+        emit("error", text=str(e))
+        store.finish(tid, "failed", error=str(e))
     except Exception as e:  # noqa: BLE001
         log.exception("задача %s упала", tid)
         emit("error", text=f"{type(e).__name__}: {e}")
@@ -395,17 +434,24 @@ def run_task(store: TaskStore, task: dict) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="skelcad agent", description="агент из workbench: очередь задач → цикл с моделью")
     ap.add_argument("--queue", required=True, help="папка очереди задач (/data/tasks)")
+    ap.add_argument("--providers", help="файл провайдеров модели (по умолчанию <очередь>/../providers.json)")
     ap.add_argument("--once", action="store_true", help="выполнить одну задачу и выйти")
     ap.add_argument("--poll", type=float, default=2.0)
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s", stream=sys.stderr)
     store = TaskStore(Path(a.queue))
-    log.info("агент ждёт задачи в %s (исполнитель %s)", a.queue, os.environ.get("SKELCAD_AGENT_RUNNER", "openai"))
+    providers = ProviderStore(Path(a.providers) if a.providers else Path(a.queue).resolve().parent / "providers.json")
+    log.info(
+        "агент ждёт задачи в %s (провайдеры %s, иначе исполнитель %s)",
+        a.queue,
+        providers.path,
+        os.environ.get("SKELCAD_AGENT_RUNNER", "openai"),
+    )
     while True:
         task = store.claim()
         if task:
             log.info("задача %s: проект %s, %s", task["id"], task["project"], task["text"][:60])
-            run_task(store, task)
+            run_task(store, task, providers)
             if a.once:
                 return 0
         else:

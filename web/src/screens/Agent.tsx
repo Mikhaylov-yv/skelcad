@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { api, attachmentUrl, type AgentTask, type Attachment, type ProjectOverview, type TaskEvent } from "../api";
+import {
+  api,
+  attachmentUrl,
+  type AgentTask,
+  type Attachment,
+  type ProjectOverview,
+  type ProvidersResponse,
+  type TaskEvent,
+} from "../api";
 import { S } from "../strings";
 import { relativeTime } from "../ui/format";
 
@@ -21,6 +29,11 @@ export function Agent() {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  // провайдер и модель (D29): пусто — провайдер по умолчанию и его модель
+  const [providers, setProviders] = useState<ProvidersResponse | null>(null);
+  const [provider, setProvider] = useState("");
+  const [model, setModel] = useState("");
+  const chosen = providers?.providers.find((p) => p.id === (provider || providers.default)) ?? null;
 
   const load = useCallback(() => {
     api
@@ -47,6 +60,10 @@ export function Agent() {
       .projects()
       .then((r) => setInfo(r.projects.find((p) => p.name === project) ?? null))
       .catch(() => undefined);
+    api
+      .providers()
+      .then(setProviders)
+      .catch(() => setProviders(null));
   }, [project, load, loadFiles]);
   useEffect(() => {
     if (!active) return;
@@ -112,7 +129,7 @@ export function Agent() {
     setBusy(true);
     setErr(null);
     api
-      .taskCreate(project, text, variant || undefined, [...picked])
+      .taskCreate(project, text, variant || undefined, [...picked], provider || undefined, model.trim() || undefined)
       .then((t) => {
         setText("");
         setPicked(new Set());
@@ -238,6 +255,47 @@ export function Agent() {
                 ))}
               </select>
             </label>
+            {providers && providers.providers.length > 0 && (
+              <>
+                <label className="small">
+                  {S.agent.provider}:{" "}
+                  <select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={!!active}>
+                    <option value="">
+                      {S.agent.defaultProvider}
+                      {providers.default
+                        ? ` (${providers.providers.find((p) => p.id === providers.default)?.title ?? providers.default})`
+                        : ""}
+                    </option>
+                    {providers.providers.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {chosen?.kind === "openai" && (
+                  <label className="small">
+                    {S.agent.model}:{" "}
+                    <input
+                      list="task-models"
+                      value={model}
+                      placeholder={chosen.model || "—"}
+                      onChange={(e) => setModel(e.target.value)}
+                      disabled={!!active}
+                      style={{ width: 220 }}
+                    />
+                    <datalist id="task-models">
+                      {chosen.models.map((m) => (
+                        <option key={m} value={m} />
+                      ))}
+                    </datalist>
+                  </label>
+                )}
+              </>
+            )}
+            {providers && providers.providers.length === 0 && (
+              <span className="muted small">{S.agent.noProviders}</span>
+            )}
             <button onClick={run} disabled={!text.trim() || busy || !!active} aria-busy={busy}>
               {busy ? S.agent.starting : S.agent.run}
             </button>
@@ -267,6 +325,7 @@ export function Agent() {
                     {t.attachments?.length ? (
                       <span className="muted small"> · {S.agent.withTask(t.attachments.length)}</span>
                     ) : null}
+                    {t.model ? <span className="muted small"> · {t.model}</span> : null}
                   </span>
                   <span className="muted small">{relativeTime(t.created)}</span>
                 </button>
@@ -350,6 +409,8 @@ function TaskLog({ id, project, onChange }: { id: string; project: string; onCha
           </span>
         )}
         {task && <span className="muted small">{S.agent.byUser(task.user)}</span>}
+        {task?.model && <span className="mono small muted">{task.model}</span>}
+        {task?.usage && <span className="muted small">{S.agent.usage(task.usage)}</span>}
         {live && (
           <button className="danger" onClick={stop} disabled={stopping || task?.stop_requested} aria-busy={stopping}>
             {stopping || task?.stop_requested ? S.agent.stopping : S.agent.stop}
@@ -417,6 +478,8 @@ function TaskLog({ id, project, onChange }: { id: string; project: string; onCha
             {e.type === "start" && (
               <p className="muted small">
                 {e.runner}
+                {e.provider ? ` · ${e.provider}` : ""}
+                {e.model ? ` · ${e.model}` : ""}
                 {e.tools ? ` · инструментов ${e.tools}` : ""}
               </p>
             )}

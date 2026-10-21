@@ -145,3 +145,75 @@ describe("Вложения к задаче", () => {
     expect(taskBody).toEqual({ text: "по наброску", attachments: [item.path] });
   });
 });
+
+describe("Провайдер и модель задачи", () => {
+  it("задача несёт выбранного провайдера и модель; по умолчанию поля не шлются", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const prov = {
+      providers: [
+        {
+          id: "or",
+          title: "OpenRouter",
+          kind: "openai",
+          base_url: "https://openrouter.ai/api/v1",
+          model: "a/b",
+          models: ["a/b", "c/d"],
+          has_key: true,
+          key_tail: "1",
+          default: true,
+        },
+        {
+          id: "cc",
+          title: "Claude Code",
+          kind: "claude-code",
+          base_url: "",
+          model: "",
+          models: [],
+          has_key: false,
+          key_tail: "",
+          default: false,
+        },
+      ],
+      default: "or",
+      secure: true,
+      presets: [],
+      env: { base_url: "", model: "", has_key: false, runner: "openai" },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/api/projects")) return new Response(JSON.stringify(projects), { status: 200 });
+        if (url.endsWith("/api/providers")) return new Response(JSON.stringify(prov), { status: 200 });
+        if (url.endsWith("/attachments")) return new Response(JSON.stringify({ items: [] }), { status: 200 });
+        if (url.endsWith("/tasks") && init?.method === "POST") {
+          bodies.push(JSON.parse(String(init.body)));
+          return new Response(JSON.stringify({ ...task, status: "done" }), { status: 200 });
+        }
+        if (url.endsWith("/tasks")) return new Response(JSON.stringify({ tasks: [], active: null }), { status: 200 });
+        if (url.includes("/events")) return new Response(JSON.stringify(events), { status: 200 });
+        return new Response("{}", { status: 404 });
+      }),
+    );
+    render(
+      <MemoryRouter initialEntries={["/p/bracket/agent"]}>
+        <Routes>
+          <Route path="/p/:project/agent" element={<Agent />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const sel = (await screen.findByLabelText(/Провайдер/)) as HTMLSelectElement;
+    expect(sel.options[0].textContent).toContain("по умолчанию (OpenRouter)");
+    fireEvent.change(screen.getByLabelText("Текст задачи"), { target: { value: "раз" } });
+    fireEvent.click(screen.getByRole("button", { name: "Запустить" }));
+    await waitFor(() => expect(bodies.length).toBe(1));
+    expect(bodies[0]).toEqual({ text: "раз" });
+    fireEvent.change(sel, { target: { value: "or" } });
+    fireEvent.change(screen.getByLabelText(/Модель/), { target: { value: "c/d" } });
+    fireEvent.change(screen.getByLabelText("Текст задачи"), { target: { value: "два" } });
+    fireEvent.click(screen.getByRole("button", { name: "Запустить" }));
+    await waitFor(() => expect(bodies.length).toBe(2));
+    expect(bodies[1]).toEqual({ text: "два", provider: "or", model: "c/d" });
+    fireEvent.change(sel, { target: { value: "cc" } });
+    expect(screen.queryByLabelText(/Модель/)).not.toBeInTheDocument(); // у Claude Code модель не выбирается
+  });
+});

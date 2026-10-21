@@ -29,6 +29,7 @@ services:
       SKELCAD_JOB_TIMEOUT_S: ${JOB_TIMEOUT_S:-180}
       PUBLIC_URL: ${PUBLIC_URL:?}
       SKELCAD_DATABASE_URL: postgresql://skelcad:${PG_PASSWORD:?}@db:5432/skelcad
+      SKELCAD_SECRET_KEY: ${SECRET_KEY:?}
     volumes:
       - data:/data
     depends_on:
@@ -81,6 +82,8 @@ services:
 
   # Встроенный агент (задачи из workbench): цикл с моделью любого провайдера по OpenAI-совместимому API,
   # инструменты — через /mcp сервера с токеном «workbench-agent». Сеть нужна: сервер + провайдер модели.
+  # Провайдеры и ключи — в /data/providers.json (экран «Подключение агента», D29), ключи шифрованы SECRET_KEY;
+  # LLM_* ниже — запасной путь, если провайдеров в файле нет.
   agent:
     image: skelcad:local
     container_name: skelcad-agent
@@ -92,6 +95,7 @@ services:
       SKELCAD_LLM_BASE_URL: ${LLM_BASE_URL:-}
       SKELCAD_LLM_API_KEY: ${LLM_API_KEY:-}
       SKELCAD_LLM_MODEL: ${LLM_MODEL:-}
+      SKELCAD_SECRET_KEY: ${SECRET_KEY:?}
       SKELCAD_SERVER_URL: http://server:8000/mcp
       SKELCAD_AGENT_TOKEN: ${AGENT_TOKEN:?}
       SKELCAD_AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-60}

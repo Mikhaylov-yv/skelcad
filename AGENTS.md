@@ -73,7 +73,8 @@
   `graph/` (граф связей в Postgres: словарь сущностей и связей, индексатор, запросы; D27),
   `pipeline.py`, `server/` (FastAPI + MCP + git-проекты; `api.py`, `attachments.py` (вложения конструктора, D28),
   `auth.py`, `layout.py` (согласование компоновки), `layout_edit.py` (правка компоновки с эскиза на месте в
-  `project.yaml`), `params.py`, `review.py`, `tasks.py`, `tokens.py`),
+  `project.yaml`), `params.py`, `providers.py` (провайдеры модели встроенного агента, ключи шифрованы
+  `SKELCAD_SECRET_KEY`, D29), `review.py`, `tasks.py`, `tokens.py`),
   `worker.py` (изолированное исполнение кода проектов), `agent.py` (встроенный агент из workbench),
   `measure.py`, `render.py`, `diff.py`. Workbench — `web/` (Vite + React + TS, three.js). Пакет стандарта — `packages/std-gost`.
 - Проверки перед коммитом: `uv run ruff check src tests && uv run ruff format src tests &&

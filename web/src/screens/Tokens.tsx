@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type Me, type TokenInfo } from "../api";
 import { S } from "../strings";
 import { relativeTime } from "../ui/format";
+import { Providers } from "../ui/Providers";
 
 export function Tokens() {
   const [me, setMe] = useState<Me | null>(null);
@@ -115,6 +116,7 @@ export function Tokens() {
           </li>
         ))}
       </ul>
+      <Providers admin={!!me?.admin} />
     </main>
   );
 }

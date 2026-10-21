@@ -58,10 +58,14 @@ docker compose -f compose/stack.yml --env-file compose/.env up -d   # серве
 `http://127.0.0.1:8000`); сборка `npm run build` кладёт статику в `src/skelcad/server/static/`, сервер отдаёт её
 по `/`. В образе это делает Dockerfile. Вход для браузера — `SKELCAD_AUTH=none|tokens|proxy` (см. `server/auth.py`).
 
-Встроенный агент (задачи из workbench, контейнер `agent`): `skelcad agent --queue /data/tasks`. Провайдер модели —
-любой с OpenAI-совместимым Chat Completions API: `SKELCAD_LLM_BASE_URL`, `SKELCAD_LLM_API_KEY`, `SKELCAD_LLM_MODEL`
-(в compose — `LLM_BASE_URL`, `LLM_MODEL`, ключ в секрете `SKELCAD_LLM_API_KEY`); исполнитель
-`SKELCAD_AGENT_RUNNER=claude-code` запускает headless Claude Code, если команда `claude` есть на машине.
+Встроенный агент (задачи из workbench, контейнер `agent`): `skelcad agent --queue /data/tasks`. Провайдеры модели
+(любой с OpenAI-совместимым Chat Completions API или исполнитель Claude Code) настраивает администратор на экране
+«Подключение агента» (D29): шаблоны OpenRouter / OpenAI / DeepSeek / Ollama / LiteLLM, ключ, модель, список моделей с
+ценами, проверка запросом; хранение в `<data>/providers.json`, ключи зашифрованы `SKELCAD_SECRET_KEY` (один и тот же
+у сервера и агента; в compose — `SECRET_KEY`, деплой создаёт его в `~/.config/skelcad/secret.key`). Задача выбирает
+провайдера и модель, в ходе задачи видны токены и стоимость. Запасной путь без файла провайдеров — переменные
+`SKELCAD_LLM_BASE_URL`, `SKELCAD_LLM_API_KEY`, `SKELCAD_LLM_MODEL` и `SKELCAD_AGENT_RUNNER=claude-code` (headless
+Claude Code, если команда `claude` есть на машине).
 Инструменты агент берёт из `/mcp` сервера с токеном `SKELCAD_AGENT_TOKEN` (клиент «workbench-agent»).
 Вложения конструктора (набросок от руки, фото, экспорт доски; D28) хранятся в `attachments/` репозитория проекта
 коммитом конструктора, прикладываются к задаче и уходят модели как изображения; агент смотрит их инструментом

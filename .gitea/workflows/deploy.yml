@@ -59,7 +59,10 @@ jobs:
              echo AGENT_TOKEN=\$(cat \$HOME/.config/skelcad/agent.token) >> \$HOME/$SRV/compose/.env
              # пароль Postgres (граф связей) — локальный для хоста, создаётся один раз
              test -s \$HOME/.config/skelcad/pg.password || openssl rand -hex 24 > \$HOME/.config/skelcad/pg.password
-             echo PG_PASSWORD=\$(cat \$HOME/.config/skelcad/pg.password) >> \$HOME/$SRV/compose/.env"
+             echo PG_PASSWORD=\$(cat \$HOME/.config/skelcad/pg.password) >> \$HOME/$SRV/compose/.env
+             # ключ шифрования провайдеров модели (D29) — локальный для хоста, создаётся один раз
+             test -s \$HOME/.config/skelcad/secret.key || openssl rand -hex 32 > \$HOME/.config/skelcad/secret.key
+             echo SECRET_KEY=\$(cat \$HOME/.config/skelcad/secret.key) >> \$HOME/$SRV/compose/.env"
 
       - name: Validate, build, deploy
         run: |

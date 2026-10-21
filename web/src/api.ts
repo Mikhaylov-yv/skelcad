@@ -163,6 +163,55 @@ export interface Me {
   logout_url: string | null;
 }
 
+// --- провайдеры модели встроенного агента (D29): ключи хранятся на сервере, наружу не отдаются
+export interface Provider {
+  id: string;
+  title: string;
+  kind: "openai" | "claude-code";
+  base_url: string;
+  model: string;
+  models: string[];
+  has_key: boolean;
+  key_tail: string;
+  default: boolean;
+  created?: string | null;
+  created_by?: string | null;
+  updated?: string | null;
+  updated_by?: string | null;
+}
+
+export interface ProviderPreset {
+  id: string;
+  title: string;
+  base_url: string;
+  model: string;
+}
+
+export interface ProvidersResponse {
+  providers: Provider[];
+  default: string | null;
+  secure: boolean; // SKELCAD_SECRET_KEY задан — ключи шифруются
+  presets: ProviderPreset[];
+  env: { base_url: string; model: string; has_key: boolean; runner: string };
+}
+
+export interface ProviderModel {
+  id: string;
+  name?: string;
+  prompt?: number; // $ за 1M токенов, если провайдер отдаёт
+  completion?: number;
+}
+
+export interface ProviderTest {
+  ok: boolean;
+  model: string;
+  reply: string;
+  seconds: number;
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+  cost?: number | null;
+}
+
 export interface TokenInfo {
   name: string;
   created: string | null;
@@ -395,6 +444,9 @@ export interface AgentTask {
   error?: string | null;
   stop_requested?: boolean;
   attachments?: string[]; // вложения проекта (attachments/<файл>), переданные агенту с задачей
+  provider?: string | null; // провайдер модели (D29); пусто — по умолчанию
+  model?: string | null;
+  usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number } | null;
 }
 
 export interface TaskEvent {
@@ -420,6 +472,9 @@ export interface TaskEvent {
   path?: string; // attachment: путь вложения
   images?: number; // attachment: сколько изображений ушло модели
   count?: number; // images: сколько изображений из инструментов ушло модели
+  provider?: string; // start: провайдер и модель
+  model?: string;
+  usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number }; // done / limit / stopped
 }
 
 // --- вложения конструктора (M2.3, D28): файлы в attachments/ репозитория проекта
@@ -524,11 +579,47 @@ export const api = {
     }),
   tasks: (project: string) =>
     getJson<{ tasks: AgentTask[]; active: AgentTask | null }>(`/api/projects/${encodeURIComponent(project)}/tasks`),
-  taskCreate: (project: string, text: string, variant?: string, attachments?: string[]) =>
+  taskCreate: (
+    project: string,
+    text: string,
+    variant?: string,
+    attachments?: string[],
+    provider?: string,
+    model?: string,
+  ) =>
     getJson<AgentTask>(`/api/projects/${encodeURIComponent(project)}/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, variant, ...(attachments?.length ? { attachments } : {}) }),
+      body: JSON.stringify({
+        text,
+        variant,
+        ...(attachments?.length ? { attachments } : {}),
+        ...(provider ? { provider } : {}),
+        ...(model ? { model } : {}),
+      }),
+    }),
+  providers: () => getJson<ProvidersResponse>("/api/providers"),
+  providerSave: (body: Partial<Provider> & { id: string; key?: string }) =>
+    getJson<Provider>("/api/providers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  providerDelete: (id: string) =>
+    getJson<{ ok: boolean }>(`/api/providers/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  providerDefault: (id: string) =>
+    getJson<Provider>(`/api/providers/${encodeURIComponent(id)}/default`, { method: "POST" }),
+  providerTest: (id: string, model?: string) =>
+    getJson<ProviderTest>(`/api/providers/${encodeURIComponent(id)}/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(model ? { model } : {}),
+    }),
+  providerModels: (body: { id?: string; base_url?: string; key?: string }) =>
+    getJson<{ models: ProviderModel[] }>("/api/providers/models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     }),
   attachments: (project: string) =>
     getJson<{ items: Attachment[] }>(`/api/projects/${encodeURIComponent(project)}/attachments`),

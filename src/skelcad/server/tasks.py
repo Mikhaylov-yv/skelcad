@@ -44,8 +44,11 @@ class TaskStore:
         variant: str | None = None,
         max_steps: int = 60,
         attachments: list[str] | None = None,
+        provider: str | None = None,
+        model: str | None = None,
     ) -> dict:
-        """attachments — пути вложений проекта (attachments/<файл>), которые агент получит с задачей как изображения."""
+        """attachments — пути вложений проекта (attachments/<файл>), которые агент получит с задачей как изображения;
+        provider / model — провайдер модели из providers.json и модель (пусто — умолчания провайдера, D29)."""
         if not (text or "").strip():
             raise TaskError("нужен текст задачи")
         atts = [str(a).strip() for a in (attachments or []) if str(a).strip()]
@@ -66,6 +69,8 @@ class TaskStore:
             "created": _now(),
             "max_steps": max_steps,
             "attachments": atts,
+            "provider": (provider or "").strip() or None,
+            "model": (model or "").strip() or None,
         }
         (d / "task.json").write_text(json.dumps(task, ensure_ascii=False, indent=1), encoding="utf-8")
         (d / "events.jsonl").touch()

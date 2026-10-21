@@ -2136,6 +2136,7 @@ version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "build123d" },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "jinja2" },
     { name = "mcp" },
@@ -2167,6 +2168,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "build123d", specifier = ">=0.13.0" },
+    { name = "cryptography", specifier = ">=42" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "mcp", specifier = ">=1.30,<2" },

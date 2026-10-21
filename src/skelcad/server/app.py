@@ -26,8 +26,10 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from skelcad.server import api
+from skelcad.server import providers as PV
 from skelcad.server.auth import CURRENT_PRINCIPAL, client_for, parse_tokens, resolve, web_mode
 from skelcad.server.mcp import CURRENT_CLIENT, build_mcp
+from skelcad.server.providers import ProviderError, ProviderStore
 from skelcad.server.tasks import TaskError, TaskStore
 from skelcad.server.tokens import TokenError, TokenStore
 from skelcad.server.tools import GraphOff, Server, ToolError, Tools
@@ -52,6 +54,11 @@ def create_app(srv: Server | None = None) -> FastAPI:
     mode = web_mode(static_tokens)
     tokens_mode = bool(static_tokens)  # токены обязательны, если заданы статические (prod)
     tasks = TaskStore(Path(os.environ.get("SKELCAD_TASKS") or (srv.workspace.root / "tasks")))
+    providers = ProviderStore(
+        srv.workspace.root / "providers.json"
+    )  # провайдеры модели (D29); агент читает тот же файл
+    if not PV.secure():
+        log.warning("SKELCAD_SECRET_KEY не задан — ключи провайдеров модели хранятся без шифрования")
     if not static_tokens:
         log.warning("SKELCAD_TOKENS не задан — доступ без токена (режим разработки)")
     log.info("вход для браузера: SKELCAD_AUTH=%s", mode)
@@ -177,7 +184,74 @@ def create_app(srv: Server | None = None) -> FastAPI:
             raise HTTPException(400, "attachments: ожидался список путей")
         for a in atts:
             await to_thread.run_sync(tools.attachment_path, name, str(a))  # каждое вложение должно существовать
-        return await to_thread.run_sync(tasks.create, name, b.get("text", ""), who, b.get("variant"), 60, atts)
+        provider = (b.get("provider") or "").strip() or None
+        if provider:
+            providers.get(provider)  # провайдер должен существовать (ошибка словами)
+        return await to_thread.run_sync(
+            tasks.create, name, b.get("text", ""), who, b.get("variant"), 60, atts, provider, b.get("model")
+        )
+
+    # ---------- провайдеры модели встроенного агента (D29): список — всем, правки — администраторам
+    @app.get("/api/providers")
+    async def api_providers():
+        return {
+            "providers": providers.list(),
+            "default": providers.default_id(),
+            "secure": PV.secure(),
+            "presets": PV.PRESETS,
+            "env": PV.env_fallback(),
+        }
+
+    @app.post("/api/providers")
+    async def api_provider_save(request: Request):
+        admin_only(request)
+        b = await request.json()
+        return await to_thread.run_sync(
+            providers.upsert, b if isinstance(b, dict) else {}, request.state.principal.name
+        )
+
+    @app.delete("/api/providers/{pid}")
+    async def api_provider_delete(pid: str, request: Request):
+        admin_only(request)
+        providers.delete(pid)
+        return {"ok": True}
+
+    @app.post("/api/providers/{pid}/default")
+    async def api_provider_default(pid: str, request: Request):
+        admin_only(request)
+        return providers.set_default(pid)
+
+    @app.post("/api/providers/{pid}/test")
+    async def api_provider_test(pid: str, request: Request):
+        """Короткий запрос к модели сохранённым ключом: время ответа, токены, стоимость."""
+        admin_only(request)
+        b = await request.json()
+        p = providers.get(pid)
+        if p["kind"] != "openai":
+            return {
+                "ok": True,
+                "model": "",
+                "reply": "",
+                "seconds": 0,
+                "note": "исполнитель Claude Code: ключ не нужен",
+            }
+        model = (b.get("model") if isinstance(b, dict) else None) or p["model"]
+        return await to_thread.run_sync(PV.test_chat, p["base_url"], providers.key_for(pid), model)
+
+    @app.post("/api/providers/models")
+    async def api_provider_models(request: Request):
+        """Список моделей провайдера: по сохранённому ключу (id) или по новому ключу до сохранения (base_url + key)."""
+        admin_only(request)
+        b = await request.json()
+        b = b if isinstance(b, dict) else {}
+        if b.get("id") and not b.get("key"):
+            p = providers.get(str(b["id"]))
+            base_url, key = (b.get("base_url") or p["base_url"]), providers.key_for(p["id"])
+        else:
+            base_url, key = str(b.get("base_url") or ""), str(b.get("key") or "")
+        if not base_url:
+            raise HTTPException(400, "нужен base_url")
+        return {"models": await to_thread.run_sync(PV.fetch_models, base_url, key)}
 
     # ---------- вложения конструктора (M2.3, D28)
     @app.get("/api/projects/{name}/attachments")
@@ -350,7 +424,7 @@ def create_app(srv: Server | None = None) -> FastAPI:
     async def tool_error(_: Request, e: Exception):
         return JSONResponse({"error": str(e)}, status_code=400)
 
-    for exc in (*ToolError, TaskError, TokenError):
+    for exc in (*ToolError, TaskError, TokenError, ProviderError):
         app.add_exception_handler(exc, tool_error)
 
     async def graph_off(_: Request, e: Exception):
