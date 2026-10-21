@@ -189,7 +189,7 @@ function finishJob(p, job) {
 const TASK_TEXT = { layout: "Сделай компоновку по заданию", design: "Сделай детали по согласованной компоновке", kit: "Собери комплект по выбранному варианту", fix: "Устрани ошибки" };
 // --- Ядро: состояние, выбор, отмена, следующий шаг, имитация агента ----------------------------------
 const core = {
-  state: initialState(), undo: [], listeners: [], log: [], speed: 650, hook: null,
+  state: initialState(), undo: [], listeners: [], log: [], speed: 650, hook: null, auto: true,  // auto: после согласования компоновки агент сам делает детали
   cur: { folder: "krepezh", project: null, stage: null, view: "main" },
   ui: { closed: {}, dialog: null, form: {}, details: false, sketch: {}, drawer: false },
   on(fn) { this.listeners.push(fn); },
@@ -263,7 +263,7 @@ const core = {
     }
     if (!p.brief.done) return { stage: "brief", kind: "agent", title: "Опишите, что нужно", hint: "Назначение, нагрузки, к чему крепится; приложите набросок. Агент опишет скелет и покажет компоновку.", label: "Поручить агенту компоновку", act: "run:layout", short: "задание", disabled: !(p.brief.text || "").trim() };
     if (L === "none") return { stage: "layout", kind: "agent", title: "Задание принято", hint: "Агент опишет скелет и обстановку и покажет компоновку на согласование.", label: "Поручить агенту компоновку", act: "run:layout", short: "дальше: компоновка" };
-    if (L === "waiting" || L === "changed") return { stage: "layout", kind: "you", title: L === "changed" ? "Компоновка изменена после согласования" : "Компоновка ждёт вашего согласования", hint: "Посмотрите эскиз и допущения. Согласуйте или поправьте прямо на эскизе.", label: "Согласовать компоновку", act: "approve", short: "ждёт согласования" };
+    if (L === "waiting" || L === "changed") return { stage: "layout", kind: "you", title: L === "changed" ? "Компоновка изменена после согласования" : "Компоновка ждёт вашего согласования", hint: "Посмотрите эскиз и допущения. Согласуйте или поправьте прямо на эскизе. После согласования агент сразу возьмётся за детали.", label: "Согласовать компоновку", act: "approve", short: "ждёт согласования" };
     if (D === "none") return { stage: "design", kind: "agent", title: "Компоновка согласована", hint: "Агент сделает детали и варианты, проверит запасы и массу.", label: "Поручить агенту детали", act: "run:design", short: "дальше: детали" };
     const errs = this.errors(p), vs = p.design.variants;
     if (errs) return { stage: "design", kind: "you", title: `Ошибки: ${errs}`, hint: "Ошибки блокируют комплект. Поручите агенту устранить или поправьте параметры сами.", label: "Поручить агенту устранить", act: "run:fix", short: "ошибки" };
@@ -284,7 +284,7 @@ const core = {
       case "next": { if (!p) return; const n = this.nextOf(p); if (n.disabled) return toast("Опишите задание — хотя бы одной фразой"); return this.act(n.act, el); }
       case "run": return this.run(p.id, arg);
       case "stop": return this.stop(p && p.id);
-      case "approve": return this.commit("согласование компоновки", () => { if (!p || !["waiting", "changed"].includes(p.layout.state)) return "Согласовывать нечего"; p.layout.state = "approved"; p.layout.by = "вы"; p.layout.when = nowStr(); p.history.push({ when: nowStr(), who: "вы", what: "Компоновка согласована" }); this.cur.stage = "design"; this.event(p, { kind: "approve" }); });
+      case "approve": { const ok = this.commit("согласование компоновки", () => { if (!p || !["waiting", "changed"].includes(p.layout.state)) return "Согласовывать нечего"; p.layout.state = "approved"; p.layout.by = "вы"; p.layout.when = nowStr(); p.history.push({ when: nowStr(), who: "вы", what: "Компоновка согласована" }); this.cur.stage = "design"; this.event(p, { kind: "approve" }); }); if (ok && this.auto && p.design.state === "none" && !p.agent) { const go = () => this.run(p.id, "design", null, { auto: true }); this.speed ? setTimeout(go, 400) : go(); } return; }
       case "choose": return this.commit("выбор варианта " + arg, () => { if (!p) return "Нет проекта"; p.design.chosen = arg; p.history.push({ when: nowStr(), who: "вы", what: "Выбран вариант " + arg }); this.cur.stage = "kit"; this.event(p, { kind: "choose", v: arg }); });
       case "download": this.log.push("download:" + (p && p.id)); if (p) this.event(p, { kind: "download" }); return toast("Комплект скачан: STEP, эскиз, спецификация, отчёт");
       case "attach": return this.commit("набросок к заданию", () => { if (!p) return "Нет проекта"; p.brief.sketch = "pipe_bracket-sketch.png"; });
@@ -362,7 +362,7 @@ const core = {
     document.querySelectorAll('[data-act="next"]').forEach(b => (b.disabled = dis));
   },
   // --- имитация агента: шаги по таймеру; speed = 0 — всё сразу (прогон сценариев)
-  run(pid, job, text) {
+  run(pid, job, text, opts = {}) {
     const p = this.project(pid);
     if (!p || p.agent) return;
     if (job === "layout" && !p.brief.done) { if (!(p.brief.text || "").trim()) return toast("Опишите задание"); p.brief.done = true; p.brief.by = "вы"; p.brief.when = nowStr(); }
@@ -373,7 +373,7 @@ const core = {
     p.agent = { job, steps: [], started: Date.now() };
     this.cur.stage = job === "fix" ? "design" : job;
     this.log.push("run:" + job);
-    this.event(p, { kind: "task", job, text: text || TASK_TEXT[job] });
+    this.event(p, { kind: "task", job, text: text || TASK_TEXT[job], auto: !!opts.auto });
     let i = 0;
     const tick = () => {
       if (!p.agent) return;

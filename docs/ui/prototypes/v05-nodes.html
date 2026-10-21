@@ -168,11 +168,12 @@ function summary(p) {
 
 // --- Разговор: сообщения по узлам, события модели превращаются в сообщения ----------------------------------
 const _open = core.open.bind(core);
-core.open = (pid, stage) => { core.ui.jumpChat = true; core.ui.vcur = null; _open(pid, stage); };
+core.open = (pid, stage) => { core.ui.jumpChat = true; core.ui.vcur = null; core.ui.scope = null; _open(pid, stage); };
+const scopeOf = p => core.ui.scope || (p.parent ? "node" : "all");  // по умолчанию: у узла — узел, у изделия — всё изделие
 let mseq = 100;
 const pushMsg = m => { core.state.thread.push({ id: "m" + mseq++, when: nowStr(), ...m }); core.ui.jumpChat = true; };
 core.hooks.event = (p, e) => {
-  if (e.kind === "task") pushMsg({ node: p.id, who: "you", text: e.text });
+  if (e.kind === "task") pushMsg(e.auto ? { node: p.id, who: "system", text: `Агент продолжает сам: ${e.text.toLowerCase()}` } : { node: p.id, who: "you", text: e.text });
   else if (e.kind === "report") {
     const v0 = p.design.variants[0];
     const img = e.job === "layout" ? p.layout.img : e.job === "design" || e.job === "fix" ? (v0 ? v0.img : null) : null;
@@ -210,7 +211,7 @@ function msgHtml(m, showNode) {
   return `<div class="msg ${m.who}"><div class="mh">${who} · ${esc(m.when)}${showNode ? ` · ${esc((core.project(m.node) || {}).title || "")}` : ""}</div><div class="${m.question ? "q" : ""}">${esc(m.text)}</div>${m.img ? pic(m.img, { h: 120, alt: "" }) : ""}${extra}</div>`;
 }
 function threadHtml(p) {
-  const root = core.rootOf(p), scope = core.ui.scope || "node";
+  const root = core.rootOf(p), scope = scopeOf(p);
   const ids = scope === "all" ? new Set([root.id, ...core.descendants(root.id).map(x => x.id)]) : new Set([p.id]);
   const msgs = core.state.thread.filter(m => ids.has(m.node));
   const live = p.agent ? `<div class="msg agent live"><div class="mh">агент · сейчас</div>${stepsHtml(p.agent.steps, { h: 100, live: true })}<div class="btns"><button class="sm quiet" data-act="stop">Остановить</button></div></div>` : "";
@@ -278,7 +279,7 @@ function viewHtml(p) {
   const sid = core.cur.stage || core.nextOf(p).stage, vw = viewOf(p, sid), vs = p.design.variants, v = curVariant(p);
   const agg = isAgg(p);
   let bar = "";
-  if (agg) { const s = summary(p); bar = facts([["узлов", s.nodes], ["готово", s.done], ["масса узлов, кг", fmt(s.mass, 1)], ["K min", s.kmin == null ? "—" : fmt(s.kmin), s.kmin != null && s.kmin < 1.5 ? "error" : ""]]); }
+  if (agg) { const s = summary(p); bar = `<div class="tabs"><button class="cur">Общая компоновка</button><button disabled title="сборка 3D из выбранных вариантов узлов — этап M3 (дерево компоновок)">3D-сборка</button></div>` + facts([["узлов", s.nodes], ["готово", s.done], ["масса узлов, кг", fmt(s.mass, 1)], ["K min", s.kmin == null ? "—" : fmt(s.kmin), s.kmin != null && s.kmin < 1.5 ? "error" : ""]]); }
   else if (sid === "design" && v) bar = `<div class="tabs"><button class="${core.cur.view !== "sketch" ? "cur" : ""}" data-act="view:main">3D</button><button class="${core.cur.view === "sketch" ? "cur" : ""}" data-act="view:sketch">Эскиз с размерами</button></div>${facts([["вариант", esc(v.title)], ["масса, кг", fmt(v.mass)], ["K min", v.kmin == null ? "—" : fmt(v.kmin), v.kmin != null && v.kmin < 1.5 ? "error" : ""], ["замечания", v.errors ? `${v.errors} ош.` : v.warnings ? `${v.warnings} пред.` : "нет", v.errors ? "error" : v.warnings ? "warn" : ""]])}`;
   else if (sid === "layout" && p.layout.img) bar = `<div class="tabs"><button class="cur">Главный</button><button>Сверху</button><button>Слева</button></div>${facts([["базы", p.layout.bases], ["интерфейсы", p.layout.ifaces], ["обстановка", p.layout.bodies]])}`;
   const acts = sid === "layout" && p.layout.img && !p.agent ? `<div class="acts"><button class="sm" data-act="edit-layout">Поправить на эскизе</button><button class="sm" data-act="mark">Обвести замечание</button></div>` : "";
