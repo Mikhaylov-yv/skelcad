@@ -122,9 +122,26 @@ class Workspace:
             else []
         )
 
+    def templates_info(self) -> list[dict]:
+        """Шаблоны с названиями из их project.yaml — для формы «Новый проект» в рабочем месте."""
+        out = []
+        for n in self.templates_list():
+            try:
+                spec = yaml.safe_load((self.templates / n / "project.yaml").read_text(encoding="utf-8")) or {}
+            except (OSError, yaml.YAMLError):
+                spec = {}
+            out.append({"id": n, "title": str(spec.get("title") or "")})
+        return out
+
     def create(
-        self, name: str, template: str | None = None, actor: Actor | None = None, origin: str | None = None
+        self,
+        name: str,
+        template: str | None = None,
+        actor: Actor | None = None,
+        origin: str | None = None,
+        title: str | None = None,
     ) -> dict:
+        """Новый проект: из шаблона (копия) или пустой; title — название изделия (иначе из шаблона или имя)."""
         if not NAME_RE.match(name or ""):
             raise WorkspaceError(f"недопустимое имя проекта «{name}»: строчные буквы, цифры, «-», «_»")
         dst = self.projects_dir / name
@@ -136,8 +153,10 @@ class Workspace:
                 raise WorkspaceError(f"нет шаблона «{template}»; есть: {', '.join(self.templates_list())}, empty")
             shutil.copytree(src, dst, ignore=shutil.ignore_patterns("out", "__pycache__", ".git", ".tmp"))
             spec = yaml.safe_load((dst / "project.yaml").read_text(encoding="utf-8")) or {}
-            if spec.get("id") != name:
+            if spec.get("id") != name or (title and spec.get("title") != title):
                 spec["id"] = name
+                if title:
+                    spec["title"] = title
                 (dst / "project.yaml").write_text(
                     yaml.safe_dump(spec, allow_unicode=True, sort_keys=False, width=110), encoding="utf-8"
                 )
@@ -147,7 +166,7 @@ class Workspace:
                 yaml.safe_dump(
                     {
                         "id": name,
-                        "title": name,
+                        "title": title or name,
                         "lang": "ru",
                         "standards": [],
                         "requirements": {},
@@ -164,7 +183,8 @@ class Workspace:
         actor = actor or Actor.system()
         git(dst, "init", "-q", "-b", "main")
         git(dst, "add", "-A")
-        git(dst, "commit", "-q", "-m", f"Проект {name}" + (f" из шаблона {template}" if template else ""), actor=actor)
+        msg = f"Проект {name}" + (f" «{title}»" if title else "") + (f" из шаблона {template}" if template else "")
+        git(dst, "commit", "-q", "-m", msg, actor=actor)
         if origin:
             git(dst, "remote", "add", "origin", origin)
             self.push(name)

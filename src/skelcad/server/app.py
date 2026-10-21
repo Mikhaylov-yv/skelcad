@@ -163,6 +163,16 @@ def create_app(srv: Server | None = None) -> FastAPI:
     async def api_projects():
         return await to_thread.run_sync(api.projects_overview, srv.workspace, srv.workspace.out_dir, tasks)
 
+    @app.post("/api/projects")
+    async def api_project_create(request: Request):
+        """Новый проект из рабочего места: пустой или из шаблона; первый коммит — от имени конструктора."""
+        b = await request.json()
+        b = b if isinstance(b, dict) else {}
+        name = str(b.get("name") or "").strip()
+        title = str(b.get("title") or "").strip() or None
+        template = str(b.get("template") or "").strip() or None
+        return await to_thread.run_sync(tools.project_create, name, template, "workbench", None, title)
+
     def guard(project: str) -> None:
         """Правки из workbench закрыты, пока проект у агента (D6: очерёдность)."""
         if (a := tasks.active(project)) is not None:

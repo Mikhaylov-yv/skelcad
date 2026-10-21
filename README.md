@@ -52,7 +52,8 @@ docker compose -f compose/stack.yml --env-file compose/.env up -d   # серве
 пароль создаёт деплой); для разработки и тестов `SKELCAD_DATABASE_URL=embedded` поднимает встроенный Postgres
 (`pgserver`) в `<data>/pg`. Индекс одноразовый: `POST /api/graph/reindex` пересобирает его из git.
 
-Рабочее место в браузере (M2): экраны Проекты, Вариант (3D), Лента, Сравнение, Параметры, Агент, Подключение агента;
+Рабочее место в браузере (M2): экраны Проекты (поиск, «Новый проект» — пустой или копия примера, коммит конструктора,
+`POST /api/projects`), Вариант (3D), Лента, Сравнение, Параметры, Агент, Подключение агента;
 папка `web/` (Vite + React + TypeScript, three.js). Разработка:
 `cd web && npm ci && npm run dev` — прокси на локальный `skelcad serve` (`SKELCAD_BACKEND`, по умолчанию
 `http://127.0.0.1:8000`); сборка `npm run build` кладёт статику в `src/skelcad/server/static/`, сервер отдаёт её

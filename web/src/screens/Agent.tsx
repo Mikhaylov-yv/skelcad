@@ -159,6 +159,11 @@ export function Agent() {
       <div className="page agent__body">
         <section className="agent__form" aria-label={S.agent.title}>
           <p className="muted small">{S.agent.hint}</p>
+          {info && info.variants.length === 0 && (
+            <p className="callout small" role="note">
+              {S.agent.emptyProject}
+            </p>
+          )}
           <textarea
             aria-label={S.agent.textLabel}
             rows={5}

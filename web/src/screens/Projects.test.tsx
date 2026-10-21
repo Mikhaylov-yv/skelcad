@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Projects } from "./Projects";
 
 const mount = (entry = "/") =>
@@ -90,6 +90,43 @@ describe("Проекты", () => {
       "/p/bracket/A_fork?part=base_plate",
     );
     expect(screen.getByText("найдено: 2")).toBeInTheDocument();
+  });
+
+  it("создаёт проект из формы: код из названия, POST /api/projects, переход на экран «Агент»", async () => {
+    const posts: { url: string; body: unknown }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          posts.push({ url: String(url), body: JSON.parse(String(init.body)) });
+          const project = { name: "opora_nasosa", title: "Опора насоса", variants: [], last_commit: null };
+          return new Response(JSON.stringify({ summary: "создан проект", project }), { status: 200 });
+        }
+        const templates = [{ id: "plate", title: "Планка с 4 резьбовыми отверстиями M10" }];
+        return new Response(JSON.stringify({ ...payload, templates }), { status: 200 });
+      }),
+    );
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route path="/" element={<Projects />} />
+          <Route path="/p/:project/agent" element={<p>экран агента</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Новый проект" }));
+    fireEvent.change(screen.getByLabelText("Название изделия", { exact: false }), {
+      target: { value: "Опора насоса" },
+    });
+    const code = screen.getByLabelText("Код проекта", { exact: false });
+    expect(code).toHaveValue("opora_nasosa");
+    expect(screen.getByRole("option", { name: /копия примера «Планка/ })).toBeInTheDocument();
+    fireEvent.change(code, { target: { value: "Bad Name" } });
+    expect(screen.getByRole("button", { name: "Создать" })).toBeDisabled();
+    fireEvent.change(code, { target: { value: "opora_nasosa" } });
+    fireEvent.click(screen.getByRole("button", { name: "Создать" }));
+    expect(await screen.findByText("экран агента")).toBeInTheDocument();
+    expect(posts).toEqual([{ url: "/api/projects", body: { name: "opora_nasosa", title: "Опора насоса" } }]);
   });
 
   it("показывает ошибку сервера словами и кнопку «Повторить»", async () => {

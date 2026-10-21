@@ -66,11 +66,14 @@ def build_mcp(srv: Server) -> FastMCP:
         return await run(t.project_list)
 
     @mcp.tool()
-    async def project_create(name: str, template: str | None = None, origin: str | None = None) -> dict:
+    async def project_create(
+        name: str, template: str | None = None, origin: str | None = None, title: str | None = None
+    ) -> dict:
         """Создать проект (git-репозиторий) из шаблона (см. project_list.templates) или пустой (template=empty).
-        name — строчные латинские буквы, цифры, «-», «_». origin — адрес удалённого git-репозитория
-        (пустой репозиторий, ветка main): сервер будет пушить туда каждый коммит и подтягивать правки конструктора."""
-        return await run(t.project_create, name, template, client(), origin)
+        name — строчные латинские буквы, цифры, «-», «_»; title — название изделия для project.yaml (иначе из
+        шаблона или имя). origin — адрес удалённого git-репозитория (пустой репозиторий, ветка main): сервер
+        будет пушить туда каждый коммит и подтягивать правки конструктора."""
+        return await run(t.project_create, name, template, client(), origin, title)
 
     @mcp.tool()
     async def project_read(project: str, section: str | None = None) -> dict:

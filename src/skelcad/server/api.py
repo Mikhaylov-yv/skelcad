@@ -56,7 +56,7 @@ def projects_overview(ws: Workspace, out_dir: Path, tasks=None) -> dict:
     return {
         "summary": f"проектов: {len(items)}" + (": " + ", ".join(i["name"] for i in items) if items else ""),
         "projects": items,
-        "templates": ws.templates_list(),
+        "templates": ws.templates_info(),
     }
 
 

@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { api, ApiError, type ProjectOverview, type SearchResponse } from "../api";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { api, ApiError, type ProjectOverview, type SearchResponse, type TemplateInfo } from "../api";
 import { S } from "../strings";
 import { NumbersRow } from "../ui/NumbersRow";
 import { CommitLine } from "../ui/CommitLine";
 import { relativeTime } from "../ui/format";
 import { entityUrl, kindLabel } from "../ui/Links";
+import { NAME_RE, slug } from "../ui/translit";
 
-type State = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ok"; projects: ProjectOverview[] };
+type State =
+  | { kind: "loading" }
+  | { kind: "error"; message: string }
+  | { kind: "ok"; projects: ProjectOverview[]; templates: TemplateInfo[] };
 type SearchState =
   | { kind: "idle" }
   | { kind: "loading" }
@@ -21,7 +25,7 @@ export function Projects() {
     setSt({ kind: "loading" });
     api
       .projects()
-      .then((r) => setSt({ kind: "ok", projects: r.projects }))
+      .then((r) => setSt({ kind: "ok", projects: r.projects, templates: r.templates }))
       .catch((e: Error) => setSt({ kind: "error", message: e.message }));
   };
   useEffect(load, []);
@@ -56,9 +60,19 @@ export function Projects() {
   const firstVariant = (project: string): string | null =>
     st.kind === "ok" ? (st.projects.find((p) => p.name === project)?.variants[0]?.id ?? null) : null;
 
+  const [creating, setCreating] = useState(false);
+
   return (
     <main className="page">
-      <h1>{S.projects.title}</h1>
+      <div className="projects__head">
+        <h1>{S.projects.title}</h1>
+        {st.kind === "ok" && !creating && (
+          <button type="button" onClick={() => setCreating(true)}>
+            {S.projects.newProject}
+          </button>
+        )}
+      </div>
+      {st.kind === "ok" && creating && <NewProject templates={st.templates} onCancel={() => setCreating(false)} />}
       <form className="search" role="search" onSubmit={submit}>
         <label htmlFor="search-q" className="small muted">
           {S.graph.search}
@@ -135,6 +149,84 @@ export function Projects() {
         </ul>
       )}
     </main>
+  );
+}
+
+/** Форма «Новый проект»: название изделия, код (подставляется транслитерацией, можно поправить), основа —
+ *  пустой проект или копия примера. Создаётся коммитом конструктора; дальше — экран «Агент» этого проекта. */
+function NewProject({ templates, onCancel }: { templates: TemplateInfo[]; onCancel: () => void }) {
+  const navigate = useNavigate();
+  const [title, setTitle] = useState("");
+  const [name, setName] = useState<string | null>(null); // null — код ещё не правили руками
+  const [template, setTemplate] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const code = name ?? slug(title);
+  const valid = NAME_RE.test(code);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!valid || busy) return;
+    setBusy(true);
+    setErr(null);
+    api
+      .projectCreate({ name: code, title: title.trim() || undefined, template: template || undefined })
+      .then((r) => navigate(`/p/${encodeURIComponent(r.project.name)}/agent`))
+      .catch((e: Error) => setErr(e.message))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <form className="projects__new" onSubmit={submit} aria-label={S.projects.newProject}>
+      <h3>{S.projects.newProject}</h3>
+      <p className="muted small" style={{ margin: 0 }}>
+        {S.projects.newHint}
+      </p>
+      <label>
+        {S.projects.newTitle}
+        <input
+          autoFocus
+          value={title}
+          placeholder={S.projects.newTitlePlaceholder}
+          onChange={(e) => setTitle(e.target.value)}
+          disabled={busy}
+        />
+      </label>
+      <label>
+        {S.projects.newName}
+        <input
+          className="mono"
+          value={code}
+          placeholder={S.projects.newNamePlaceholder}
+          onChange={(e) => setName(e.target.value.trim())}
+          aria-invalid={code !== "" && !valid}
+          disabled={busy}
+        />
+        <span className="small">{S.projects.newNameHint}</span>
+      </label>
+      <label>
+        {S.projects.newTemplate}
+        <select value={template} onChange={(e) => setTemplate(e.target.value)} disabled={busy}>
+          <option value="">{S.projects.newTemplateEmpty}</option>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {S.projects.newTemplateFrom(t.title || t.id, t.id)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {err && (
+        <p className="level-error" role="alert" style={{ margin: 0 }}>
+          {err}
+        </p>
+      )}
+      <div className="commit__actions" style={{ margin: 0 }}>
+        <button type="submit" disabled={!valid || busy} aria-busy={busy}>
+          {busy ? S.projects.creating : S.projects.create}
+        </button>
+        <button type="button" className="link" onClick={onCancel} disabled={busy}>
+          {S.projects.cancel}
+        </button>
+      </div>
+    </form>
   );
 }
 

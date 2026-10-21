@@ -121,10 +121,20 @@ export interface LayoutResponse {
   approval: LayoutApproval;
 }
 
+export interface TemplateInfo {
+  id: string;
+  title: string;
+}
+
 export interface ProjectsResponse {
   summary: string;
   projects: ProjectOverview[];
-  templates: string[];
+  templates: TemplateInfo[];
+}
+
+export interface ProjectCreated {
+  summary: string;
+  project: { name: string; title: string; variants: string[] };
 }
 
 export class ApiError extends Error {
@@ -564,6 +574,12 @@ export interface BuildResponse {
 export const api = {
   me: () => getJson<Me>("/api/me"),
   projects: () => getJson<ProjectsResponse>("/api/projects"),
+  projectCreate: (body: { name: string; title?: string; template?: string }) =>
+    getJson<ProjectCreated>("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
   report: (project: string, variant: string) =>
     getJson<Report>(`/api/projects/${encodeURIComponent(project)}/variants/${encodeURIComponent(variant)}/report`),
   tokens: () => getJson<{ tokens: TokenInfo[]; mcp_url: string }>("/api/tokens"),

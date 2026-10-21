@@ -318,6 +318,13 @@ button.danger { color: var(--error); border-color: var(--error); }
 .cmp td.diff { font-weight: 600; }
 
 /* --- граф связей (M2.2) --- */
+.projects__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 16px; }
+.projects__head h1 { margin: 0; }
+.projects__new { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); max-width: 720px; margin: 0 0 16px; }
+.projects__new h3 { margin: 0; }
+.projects__new label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.projects__new input, .projects__new select { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit; background: var(--bg); color: var(--text); min-width: 0; }
+.projects__new input[aria-invalid="true"] { border-color: var(--error); }
 .search { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
 .search input { flex: 1 1 320px; max-width: 640px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font: inherit; background: var(--surface); color: var(--text); }
 .search__results { margin-bottom: 16px; }

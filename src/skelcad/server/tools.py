@@ -152,9 +152,14 @@ class Tools:
         }
 
     def project_create(
-        self, name: str, template: str | None = None, client: str = "agent", origin: str | None = None
+        self,
+        name: str,
+        template: str | None = None,
+        client: str = "agent",
+        origin: str | None = None,
+        title: str | None = None,
     ) -> dict:
-        info = self.ws.create(name, template=template, actor=current_actor(client), origin=origin)
+        info = self.ws.create(name, template=template, actor=current_actor(client), origin=origin, title=title)
         return {"summary": f"создан проект «{name}»" + (f" из шаблона {template}" if template else ""), "project": info}
 
     def project_read(self, project: str, section: str | None = None) -> dict:
