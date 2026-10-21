@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>05 Узлы и разговор — макет рабочего места SkelCAD</title>
+<link rel="stylesheet" href="core.css">
+<style>
+header.top { gap: 10px; }
+.steps { display: flex; align-items: center; margin-left: 10px; }
+.steps button { height: 30px; padding: 0 10px; border: 0; background: transparent; color: var(--muted); font-size: 13px; gap: 7px; border-radius: 6px; }
+.steps button:hover { background: var(--hover); }
+.steps button.cur { color: var(--text); font-weight: 600; background: var(--surface-2); }
+.steps .sep { width: 18px; height: 1px; background: var(--border-strong); }
+.steps .n { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--muted); }
+.steps .n.done { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+.steps .n.wait { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn); }
+.steps .n.agent, .steps .n.next { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.main { grid-template-columns: 260px minmax(0, 1fr) 400px; position: relative; }
+/* дерево узлов изделия */
+.ntree .nrow { padding-right: 10px; }
+.ntree .nrow.root .name { font-weight: 600; }
+.ntree .tag { font-size: 10px; padding: 0 5px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); vertical-align: middle; margin-left: 4px; }
+.ntree .tree__tools .h { flex: 1; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; }
+.ntree .tree__tools button { flex: 0 0 auto; }
+.drawer { position: absolute; left: 0; top: 0; bottom: 0; width: 300px; z-index: 20; box-shadow: var(--shadow); display: grid; background: var(--surface); }
+.drawer .tree { height: 100%; }
+/* рабочая зона: картинка во весь экран, полоса вариантов или узлов снизу */
+.view { position: relative; min-height: 0; display: flex; flex-direction: column; background: #fff; }
+.view .bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); min-height: 45px; }
+.view .bar .tabs { display: flex; gap: 2px; }
+.view .bar .tabs button { height: 28px; border: 0; background: transparent; color: var(--muted); font-size: 13px; }
+.view .bar .tabs button.cur { background: var(--surface-2); color: var(--text); font-weight: 500; }
+.view .bar .spacer { flex: 1; }
+.view .bar .facts .v { font-size: 13px; }
+.view .canvas { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 20px; overflow: hidden; background: #fff; }
+.view .canvas img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.view .canvas .empty { color: var(--muted-2); font-size: 15px; text-align: center; max-width: 440px; }
+.view .canvas .cap { position: absolute; left: 14px; bottom: 10px; padding: 3px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-ink); font-size: 12px; }
+.view .canvas .acts { position: absolute; right: 14px; bottom: 10px; display: flex; gap: 6px; }
+.strip { display: flex; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border); overflow-x: auto; background: var(--surface-2); }
+.strip .it { flex-shrink: 0; width: 190px; display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.strip .it.cur { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.strip .it .pic { height: 90px; border: 0; }
+.strip .it .t { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.strip .it .f { font-size: 11px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+.strip .it .f .error { color: var(--error); }
+.strip .it .pill { align-self: flex-start; }
+/* разговор */
+.chat { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; min-height: 0; border-left: 1px solid var(--border); background: var(--surface); }
+.chat__head { display: flex; align-items: center; gap: 8px; padding: 10px 14px 8px; }
+.seg { display: flex; margin-left: auto; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; height: 26px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 26px; }
+.seg button.on { background: var(--accent-soft); color: var(--accent-ink); }
+.chat__pin { padding: 0 14px 10px; border-bottom: 1px solid var(--border); }
+.chat__list { overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; background: var(--surface-2); }
+.chat__list > * { flex-shrink: 0; }
+.msg { padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-size: 13px; line-height: 18px; max-width: 92%; align-self: flex-start; }
+.msg.you { background: var(--accent-soft); border-color: transparent; align-self: flex-end; max-width: 88%; }
+.msg.sys { align-self: center; background: transparent; border: 0; color: var(--muted-2); font-size: 12px; padding: 0; max-width: 100%; text-align: center; }
+.msg.live { border-color: var(--accent); max-width: 100%; align-self: stretch; }
+.msg .mh { font-size: 11px; color: var(--muted-2); margin-bottom: 2px; }
+.msg .pic { height: 120px; margin-top: 6px; }
+.msg .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.msg .done { font-size: 12px; color: var(--ok); margin-top: 6px; }
+.msg .q { margin-top: 6px; padding-left: 8px; border-left: 3px solid var(--warn-line); }
+.msg .ans { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.chat__composer { padding: 10px 14px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.chat__composer textarea { min-height: 56px; }
+.chat__composer .row { display: flex; align-items: center; gap: 6px; }
+.chat__composer .row .spacer { flex: 1; }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script src="core.js"></script>
+<script>
+// --- Изделие из узлов: насосный агрегат на раме (D24, D25: узел — проект внутри изделия) ---------------------
+function addPumpData(s) {
+  s.folders.push({ id: "nasosy", name: "Насосы" });
+  const brief = "Насосный агрегат: насос К 100-65-200 с двигателем 15 кВт на сварной раме. Рама на полу на анкерах. Всасывание DN80 слева, напор DN50 вверх. Отметка оси насоса 300 от рамы.";
+  s.projects.push(
+    { id: "pump", code: "pump_unit_k100", title: "Насосный агрегат К 100-65-200 на раме", folder: "nasosy", updated: "сегодня 11:40", kind: "product",
+      brief: { done: true, text: brief, sketch: null, by: "вы", when: "вчера 10:02" },
+      layout: { state: "approved", img: "product-layout.svg", by: "вы", when: "вчера 11:40", bases: 3, ifaces: 4, bodies: 2, assumptions: ["двигатель на одной раме с насосом, соосно, муфта упругая", "анкеры М20 ×4 по углам рамы, бетон B20", "патрубки по каталогу насоса: DN80 вход, DN50 выход"] },
+      design: { state: "none", variants: [], chosen: null }, kit: { state: "none", files: [] },
+      history: [{ when: "вчера", who: "вы", what: "Проект «Насосный агрегат К 100-65-200 на раме»" }, { when: "вчера", who: "агент", what: "общая компоновка: рама, зоны насоса и двигателя, патрубки, анкеры" }, { when: "вчера", who: "вы", what: "Компоновка согласована" }, { when: "вчера", who: "агент", what: "узлы: рама, насос (каталог), опоры насоса, трубопровод — зоны и интерфейсы розданы" }] },
+    { id: "frame", parent: "pump", code: "frame", title: "Рама", folder: "nasosy", updated: "вчера 12:30",
+      brief: { done: true, text: "Рама под насос и двигатель: пятно 1800×900, анкеры М20 ×4 по углам, швеллер. Отметка оси 300 обеспечивается опорами насоса.", sketch: null, by: "агент (от изделия)", when: "вчера 11:41" },
+      layout: { state: "approved", img: "product-layout.svg", by: "вы", when: "вчера 11:40", bases: 2, ifaces: 3, bodies: 1, assumptions: ["швеллер по ГОСТ 8240-97", "сварка угловыми швами по контуру"] },
+      design: { state: "done", chosen: "A_frame", variants: [{ id: "A_frame", title: "A. Рама из швеллера 16П", img: "frame-design.svg", sketch: "frame-design.svg", mass: 86.4, kmin: 1.82, kitem: "анкеры", errors: 0, warnings: 0, note: "" }] },
+      kit: { state: "none", files: [] },
+      history: [{ when: "вчера", who: "агент", what: "генератор рамы: швеллер 16П, поперечины 12П, отверстия Ø22; вариант A_frame" }] },
+    { id: "pump_item", parent: "pump", code: "pump_k100", title: "Насос К 100-65-200", folder: "nasosy", updated: "вчера 11:45", kind: "purchased",
+      brief: { done: true, text: "Покупной: насос К 100-65-200 с двигателем 15 кВт, из каталога.", sketch: null, by: "агент (от изделия)", when: "вчера 11:41" },
+      layout: { state: "approved", img: "pump.svg", by: "агент", when: "вчера 11:45", bases: 1, ifaces: 3, bodies: 0, assumptions: [] },
+      design: { state: "done", chosen: "catalog", variants: [{ id: "catalog", title: "К 100-65-200 (каталог)", img: "pump.svg", sketch: "pump.svg", mass: 120, kmin: null, kitem: "", errors: 0, warnings: 0, note: "паспорт и STEP производителя" }] },
+      kit: { state: "ready", when: "вчера", files: [["STEP", "k100-65-200.step", "модель производителя"], ["PDF", "k100-65-200_passport.pdf", "паспорт"]] },
+      history: [{ when: "вчера", who: "агент", what: "насос из каталога: 120 кг, лапы 4×Ø18, DN80/DN50" }] },
+    { id: "supports", parent: "pump", code: "pump_supports", title: "Опоры насоса", folder: "nasosy", updated: "вчера 13:06",
+      brief: { done: true, text: "Опоры под лапы насоса: отметка оси 300 от рамы, лапы 4×Ø18, крепление к раме.", sketch: null, by: "агент (от изделия)", when: "вчера 11:41" },
+      layout: { state: "approved", img: "product-layout.svg", by: "вы", when: "вчера 11:40", bases: 2, ifaces: 2, bodies: 2, assumptions: ["подкладки под каждую лапу, приварены к раме"] },
+      design: { state: "done", chosen: null, variants: [
+        { id: "A_base", title: "A. Подкладки s=6", img: "plate-A_base-iso.png", sketch: "plate-A_base-sketch.png", mass: 4.6, kmin: 1.9, kitem: "смятие", errors: 0, warnings: 1, note: "крепление лап не задано: шпильки или болты" },
+        { id: "B_wide", title: "B. Подкладки широкие s=8", img: "plate-B_wide-iso.png", sketch: "plate-B_wide-sketch.png", mass: 6.8, kmin: 2.4, kitem: "смятие", errors: 0, warnings: 0, note: "" } ] },
+      kit: { state: "none", files: [] },
+      history: [{ when: "вчера", who: "агент", what: "два варианта подкладок под лапы" }] },
+    { id: "piping", parent: "pump", code: "piping", title: "Трубопровод", folder: "nasosy", updated: "вчера 13:20",
+      brief: { done: true, text: "Всасывание DN80 от насоса к стене слева, напор DN50 вверх; опоры по месту.", sketch: null, by: "агент (от изделия)", when: "вчера 11:41" },
+      layout: { state: "approved", img: "product-layout.svg", by: "вы", when: "вчера 11:40", bases: 2, ifaces: 2, bodies: 1, assumptions: ["трасса по стене, два крепления"] },
+      design: { state: "none", variants: [], chosen: null }, kit: { state: "none", files: [] },
+      history: [{ when: "вчера", who: "агент", what: "трасса: всасывание к стене, напор вверх; узлы кронштейна и опоры" }] },
+  );
+  // кронштейн и опора под трубу из примеров становятся узлами трубопровода
+  for (const id of ["pipe_bracket", "pipe_support"]) { const p = s.projects.find(x => x.id === id); p.parent = "piping"; p.folder = "nasosy"; }
+  s.thread = [
+    { id: "m1", node: "pump", who: "you", when: "вчера 10:02", text: brief },
+    { id: "m2", node: "pump", who: "agent", when: "вчера 10:09", text: "Общая компоновка: рама 1800×900 на четырёх анкерах, зона насоса 650×600 и зона двигателя 750×600, всасывание DN80 влево, напор DN50 вверх, ось насоса на 300 от рамы. Допущений 3.", img: "product-layout.svg", buttons: [{ label: "Согласовать компоновку", act: "approve" }, { label: "Поправить на эскизе", act: "edit-layout" }] },
+    { id: "m3", node: "pump", who: "system", when: "вчера 11:40", text: "Компоновка согласована · вы" },
+    { id: "m4", node: "pump", who: "agent", when: "вчера 11:41", text: "Раздал узлам зоны и интерфейсы: Рама — пятно 1800×900 и анкеры М20 ×4; Опоры насоса — лапы 4×Ø18 и отметка оси 300; Трубопровод — патрубки DN80 и DN50; Насос — из каталога. Дальше работаю по узлам." },
+    { id: "m5", node: "pump_item", who: "agent", when: "вчера 11:45", text: "Насос К 100-65-200 взял из каталога: масса 120 кг, лапы 4×Ø18, габарит 1030×400×560, DN80 / DN50. Паспорт и STEP производителя приложены.", img: "pump.svg", buttons: [{ label: "Скачать", act: "download" }] },
+    { id: "m6", node: "frame", who: "agent", when: "вчера 12:30", text: "Рама: продольные швеллеры 16П, три поперечины 12П, четыре отверстия Ø22 под анкеры. Масса 86,4 кг, запас по анкерам 1,82. Ошибок и предупреждений нет.", img: "frame-design.svg", buttons: [{ label: "Выдать комплект", act: "run:kit" }] },
+    { id: "m7", node: "supports", who: "agent", when: "вчера 13:05", text: "Опоры насоса: два варианта подкладок под лапы. A: s=6, 4,6 кг, K 1,9, одно предупреждение. B: широкие s=8, 6,8 кг, K 2,4, без замечаний. Отметка оси 300 выдержана в обоих.", img: "plate-B_wide-iso.png", buttons: [{ label: "Выбрать A_base", act: "choose:A_base" }, { label: "Выбрать B_wide", act: "choose:B_wide" }] },
+    { id: "m8", node: "supports", who: "agent", when: "вчера 13:06", text: "Вопрос: лапы насоса крепить шпильками М16 в резьбовые отверстия подкладок или болтами М16 насквозь через раму?", question: { options: ["Шпильки М16", "Болты М16 насквозь"], answer: null } },
+    { id: "m9", node: "piping", who: "agent", when: "вчера 13:20", text: "Трубопровод: всасывание DN80 от насоса к стене слева, напор DN50 вверх. Два дочерних узла: кронштейн под трубу на стене и опора под трубу на полу." },
+    { id: "m10", node: "pipe_bracket", who: "you", when: "вчера 07:43", text: s.projects.find(x => x.id === "pipe_bracket").brief.text, img: "pipe_bracket-sketch.png" },
+    { id: "m11", node: "pipe_support", who: "agent", when: "3 дня назад", text: "Опора под трубу: два варианта стойки. A из трубы: 12,4 кг, K 1,62, одно предупреждение. B из двух пластин: 14,9 кг, K 1,71.", img: "pipe_support-A_tube-iso.png", buttons: [{ label: "Выбрать A_tube", act: "choose:A_tube" }, { label: "Выбрать B_plates", act: "choose:B_plates" }] },
+    { id: "m12", node: "pipe_support", who: "system", when: "вчера", text: "Выбран вариант A_tube · вы" },
+  ];
+}
+addPumpData(core.state);
+
+// --- Сводные узлы: состояние и следующий шаг из дочерних узлов ---------------------------------------------
+const isAgg = p => core.nodesOf(p.id).length > 0 && !p.design.variants.length;
+const baseNext = core.nextOf.bind(core), baseStage = core.stageState.bind(core);
+core.stageState = (p, sid) => (isAgg(p) ? aggStage(p, sid) : baseStage(p, sid));
+core.nextOf = p => (isAgg(p) ? aggNext(p) : baseNext(p));
+function aggNext(p) {
+  if (p.agent) return baseNext(p);
+  if (!p.brief.done || p.layout.state !== "approved") { const n = baseNext(p); n.title = n.title.replace("Компоновка", "Общая компоновка"); return n; }
+  const kids = core.nodesOf(p.id).map(c => ({ c, n: core.nextOf(c) }));
+  const running = kids.find(k => k.n.kind === "running");
+  if (running) return { stage: "design", kind: "running", title: `Агент работает: ${running.c.title}`, label: "", hint: running.n.hint, short: "у агента" };
+  const you = kids.filter(k => k.n.kind === "you");
+  if (you.length) return { stage: "design", kind: "you", title: `Ждут вас: ${you.map(k => k.c.title).join(", ")}`, hint: you.map(k => `${k.c.title}: ${k.n.label.toLowerCase()}`).join("; "), label: `Открыть «${you[0].c.title}»`, act: "open:" + you[0].c.id, short: `ждут вас: ${you.length}` };
+  const ag = kids.filter(k => k.n.kind === "agent");
+  if (ag.length) return { stage: "design", kind: "agent", title: `Можно поручить агенту: ${ag.map(k => k.c.title).join(", ")}`, hint: ag.map(k => `${k.c.title}: ${k.n.label.toLowerCase()}`).join("; "), label: `Открыть «${ag[0].c.title}»`, act: "open:" + ag[0].c.id, short: `дальше: ${plural(ag.length, "узел", "узла", "узлов")}` };
+  if (p.kit.state === "none") return { stage: "kit", kind: "agent", title: "Все узлы готовы", hint: "Сводный комплект: STEP сборки, спецификация по узлам, отчёт.", label: "Собрать сводный комплект", act: "run:kit", short: "дальше: комплект" };
+  return { stage: "kit", kind: "done", title: "Сводный комплект готов", hint: "STEP сборки, спецификация, отчёт.", label: "Скачать", act: "download", short: "готово" };
+}
+function aggStage(p, sid) {
+  if (sid === "brief" || sid === "layout") return baseStage(p, sid);
+  const st = core.nodesOf(p.id).map(c => core.nextOf(c).kind);
+  if (sid === "design") { if (p.layout.state !== "approved") return "todo"; if (st.includes("running")) return "agent"; if (st.includes("you")) return "wait"; if (st.every(s => s === "done")) return "done"; return "next"; }
+  if (p.kit.state === "ready") return "done";
+  if (p.kit.state === "agent") return "agent";
+  return st.length && st.every(s => s === "done") ? "next" : "todo";
+}
+const NAMES_AGG = { brief: "Задание", layout: "Общая компоновка", design: "Узлы", kit: "Сводный комплект" };
+const stageName = (p, s) => (isAgg(p) ? NAMES_AGG[s.id] : s.name);
+const thumbOf = p => (p.design.variants[0] ? p.design.variants[0].img : p.layout.img || p.brief.sketch || null);
+const leafMass = p => { const v = p.design.variants.find(x => x.id === p.design.chosen) || p.design.variants[0]; return v ? v.mass : 0; };
+function summary(p) {
+  const leaves = core.descendants(p.id).filter(x => !isAgg(x));
+  const mass = leaves.reduce((s, x) => s + leafMass(x), 0);
+  const ks = leaves.map(x => { const v = x.design.variants.find(y => y.id === x.design.chosen) || x.design.variants[0]; return v && v.kmin != null ? v.kmin : null; }).filter(k => k != null);
+  return { nodes: leaves.length, done: leaves.filter(x => core.nextOf(x).kind === "done").length, mass, kmin: ks.length ? Math.min(...ks) : null };
+}
+
+// --- Разговор: сообщения по узлам, события модели превращаются в сообщения ----------------------------------
+const _open = core.open.bind(core);
+core.open = (pid, stage) => { core.ui.jumpChat = true; core.ui.vcur = null; _open(pid, stage); };
+let mseq = 100;
+const pushMsg = m => { core.state.thread.push({ id: "m" + mseq++, when: nowStr(), ...m }); core.ui.jumpChat = true; };
+core.hooks.event = (p, e) => {
+  if (e.kind === "task") pushMsg({ node: p.id, who: "you", text: e.text });
+  else if (e.kind === "report") {
+    const v0 = p.design.variants[0];
+    const img = e.job === "layout" ? p.layout.img : e.job === "design" || e.job === "fix" ? (v0 ? v0.img : null) : null;
+    const buttons = e.job === "layout" ? [{ label: "Согласовать компоновку", act: "approve" }, { label: "Поправить на эскизе", act: "edit-layout" }]
+      : e.job === "design" ? (p.design.variants.length > 1 ? p.design.variants.map(v => ({ label: "Выбрать " + v.id, act: "choose:" + v.id })) : [{ label: "Выдать комплект", act: "run:kit" }])
+      : e.job === "kit" ? [{ label: "Скачать", act: "download" }] : [];
+    pushMsg({ node: p.id, who: "agent", text: p.last ? p.last.report.join(" ") : "Готово.", img, buttons });
+  }
+  else if (e.kind === "approve") pushMsg({ node: p.id, who: "system", text: "Компоновка согласована · вы" });
+  else if (e.kind === "choose") pushMsg({ node: p.id, who: "system", text: `Выбран вариант ${e.v} · вы` });
+  else if (e.kind === "stop") pushMsg({ node: p.id, who: "system", text: "Остановлено · вы" });
+  else if (e.kind === "create") pushMsg({ node: p.id, who: "system", text: `Узел «${p.title}» создан · вы` });
+  else if (e.kind === "download") pushMsg({ node: p.id, who: "system", text: "Комплект скачан · вы" });
+};
+function btnState(node, b) {
+  const p = core.project(node);
+  if (!p) return null;
+  if (b.act === "approve") return p.layout.state === "approved" ? "✓ согласована" : null;
+  if (b.act === "edit-layout") return p.layout.state === "approved" ? "" : null;
+  if (b.act.startsWith("choose:")) return p.design.chosen ? (p.design.chosen === b.act.slice(7) ? "✓ выбран" : "") : null;
+  if (b.act === "run:kit") return p.kit.state === "ready" ? "✓ комплект выдан" : p.kit.state === "agent" ? "…" : null;
+  return null;
+}
+function msgHtml(m, showNode) {
+  if (m.who === "system") return `<div class="msg sys">${esc(m.text)}${showNode ? ` · ${esc((core.project(m.node) || {}).title || "")}` : ""}</div>`;
+  const who = m.who === "you" ? "вы" : "агент";
+  let extra = "";
+  if (m.buttons) {
+    const parts = m.buttons.map(b => { const st = btnState(m.node, b); return st === null ? `<button class="sm" data-act="${b.act}" data-node="${m.node}">${esc(b.label)}</button>` : st ? `<span class="done">${esc(st)}</span>` : ""; }).filter(Boolean);
+    if (parts.length) extra += `<div class="btns">${parts.join("")}</div>`;
+  }
+  if (m.question) extra += m.question.answer == null
+    ? `<div class="btns">${m.question.options.map((o, i) => `<button class="sm" data-act="answer:${m.id}:${i}">${esc(o)}</button>`).join("")}</div>`
+    : `<div class="ans">Ответ: ${esc(m.question.options[m.question.answer])}</div>`;
+  return `<div class="msg ${m.who}"><div class="mh">${who} · ${esc(m.when)}${showNode ? ` · ${esc((core.project(m.node) || {}).title || "")}` : ""}</div><div class="${m.question ? "q" : ""}">${esc(m.text)}</div>${m.img ? pic(m.img, { h: 120, alt: "" }) : ""}${extra}</div>`;
+}
+function threadHtml(p) {
+  const root = core.rootOf(p), scope = core.ui.scope || "node";
+  const ids = scope === "all" ? new Set([root.id, ...core.descendants(root.id).map(x => x.id)]) : new Set([p.id]);
+  const msgs = core.state.thread.filter(m => ids.has(m.node));
+  const live = p.agent ? `<div class="msg agent live"><div class="mh">агент · сейчас</div>${stepsHtml(p.agent.steps, { h: 100, live: true })}<div class="btns"><button class="sm quiet" data-act="stop">Остановить</button></div></div>` : "";
+  return `<aside class="chat"><div class="chat__head"><h3>Разговор</h3><div class="seg"><button class="sm ${scope === "node" ? "on" : ""}" data-act="scope:node" title="Только этот узел">${esc(p.title)}</button><button class="sm ${scope === "all" ? "on" : ""}" data-act="scope:all" title="Все узлы изделия">всё изделие</button></div></div>
+  <div class="chat__pin">${nextHtml(p, { stack: true })}</div>
+  <div class="chat__list" data-keep="chat">${msgs.length ? msgs.map(m => msgHtml(m, scope === "all")).join("") : `<p class="muted xs">Разговор по узлу пуст. Напишите агенту, что нужно: это и будет задание.</p>`}${live}</div>
+  <div class="chat__composer"><textarea data-field="say" placeholder="${p.brief.done ? "Написать агенту: задача, вопрос, замечание…" : "Опишите задание: назначение, нагрузки, к чему крепится…"}" oninput="core.ui.say = this.value">${esc(core.ui.say || "")}</textarea><div class="row"><button class="sm ghost" data-act="attach-chat">Добавить файл</button><span class="spacer"></span><button class="sm" data-act="send">Отправить</button></div></div></aside>`;
+}
+function send() {
+  const p = core.current(), text = (core.ui.say || "").trim();
+  if (!p) return toast("Выберите узел");
+  if (!text) return toast("Напишите, что сделать");
+  core.ui.say = "";
+  const n = core.nextOf(p);
+  if (!p.brief.done) { p.brief.text = text; core.run(p.id, "layout", text); return; }
+  if (n.kind === "agent" && n.act && n.act.startsWith("run:")) { core.run(p.id, n.act.slice(4), text); return; }
+  pushMsg({ node: p.id, who: "you", text });
+  core.emit();
+  const short = text.length > 60 ? text.slice(0, 60) + "…" : text;
+  const reply = () => { pushMsg({ node: p.id, who: "agent", text: n.kind === "you" ? `Принял: «${short}». Жду вашего решения: ${n.label.toLowerCase()}.` : n.kind === "running" ? "Принял, учту, когда закончу текущий шаг." : `Принял: «${short}». Учту при следующем шаге.` }); core.emit(); };
+  if (core.speed) setTimeout(reply, core.speed); else reply();
+}
+function answer(mid, i) {
+  const m = core.state.thread.find(x => x.id === mid);
+  if (!m || !m.question || m.question.answer != null) return;
+  core.commit("ответ агенту", () => { m.question.answer = i; pushMsg({ node: m.node, who: "you", text: m.question.options[i] }); pushMsg({ node: m.node, who: "agent", text: `Принял: ${m.question.options[i].toLowerCase()}. Запишу в допущения узла и учту в деталях.` }); });
+}
+
+// --- Дерево узлов, окно нового узла, меню ---------------------------------------------------------------------
+function nodeTree(root) {
+  const rows = [];
+  const walk = (p, depth) => { const n = core.nextOf(p); rows.push(`<div class="tproj nrow ${depth ? "" : "root"} ${core.cur.project === p.id ? "sel" : ""}" style="padding-left:${12 + depth * 16}px" data-tree="project:${p.id}" title="${esc(n.title)}"><i class="dot ${KIND_DOT[n.kind]}"></i><span class="name">${esc(p.title)}${p.kind === "purchased" ? `<span class="tag">каталог</span>` : ""}</span><span class="st">${esc(n.short)}</span></div>`); for (const c of core.nodesOf(p.id)) walk(c, depth + 1); };
+  walk(root, 0);
+  return `<div class="tree ntree"><div class="tree__tools"><span class="h">Состав изделия</span><button class="sm" data-act="new-node" title="Новый узел внутри выбранного">+ Узел</button></div><div class="tree__list" data-keep="ntree">${rows.join("")}</div></div>`;
+}
+function nodeDialogHtml(root) {
+  const f = core.ui.form, parents = [root, ...core.descendants(root.id)].filter(p => p.kind !== "purchased");
+  return `<div class="veil" data-act="cancel"><form class="dlg" onclick="event.stopPropagation()" onsubmit="event.preventDefault(); core.act('create')"><h2>Новый узел</h2><label class="field">Название узла<input type="text" data-field="title" autofocus placeholder="например, Фундаментные болты" value="${esc(f.title)}" oninput="core.ui.form.title = this.value"></label><label class="field">Внутри<select data-field="parent" onchange="core.ui.form.parent = this.value">${parents.map(p => `<option value="${p.id}" ${p.id === f.parent ? "selected" : ""}>${esc(p.title)}</option>`).join("")}</select></label><p class="hint">Узел — свой проект внутри изделия: получает зону и интерфейсы от родителя, отдаёт наверх массу и замечания.</p><div class="actions"><button type="button" data-act="cancel">Отмена</button><button type="submit" class="primary" data-act="create">Создать</button></div></form></div>`;
+}
+const baseMenu = treeMenu;
+treeMenu = ref => {
+  const [kind, id] = ref.split(":"), p = kind === "project" ? core.project(id) : null;
+  if (p && (p.parent || isAgg(p))) return [
+    { label: "Открыть", run: () => core.open(id) },
+    { label: "Новый узел внутри", run: () => core.act("new-node", { dataset: { parent: id } }) },
+    { label: "Переименовать", run: () => core.act("rename") },
+    "|",
+    { label: p.parent ? "Удалить узел" : "Удалить проект", danger: true, run: () => core.act("delete:" + id) },
+  ];
+  return baseMenu(ref);
+};
+
+// --- Рабочая зона -------------------------------------------------------------------------------------------
+function curVariant(p) { const vs = p.design.variants; return vs.find(v => v.id === core.ui.vcur) || vs.find(v => v.id === p.design.chosen) || vs[0] || null; }
+function viewOf(p, sid) {
+  if (p.agent) { const last = [...p.agent.steps].reverse().find(s => s.done && s.img); if (last) return { img: last.img, caption: "агент смотрел: " + last.t }; return { img: null, empty: "Агент работает: " + (p.agent.steps.length ? p.agent.steps[p.agent.steps.length - 1].t : "") }; }
+  const v = curVariant(p);
+  if (isAgg(p) && (sid === "design" || sid === "kit")) return { img: p.layout.img, caption: "общая компоновка: зоны узлов" };
+  if (sid === "brief") return { img: p.brief.sketch, empty: p.brief.done ? "Набросок к заданию не приложен. Задание — первое сообщение в разговоре справа." : "Опишите задание в разговоре справа и приложите набросок." };
+  if (sid === "layout") return { img: p.layout.img, empty: p.brief.done ? "Компоновки ещё нет: поручите агенту в разговоре справа." : "Компоновка появится после задания." };
+  if (sid === "design") return { img: v ? (core.cur.view === "sketch" ? v.sketch : v.img) : null, empty: p.layout.state === "approved" ? "Деталей ещё нет: поручите агенту." : "Детали — после согласования компоновки." };
+  return { img: v ? v.sketch : null, empty: "Комплект — после выбора варианта." };
+}
+function viewHtml(p) {
+  const sid = core.cur.stage || core.nextOf(p).stage, vw = viewOf(p, sid), vs = p.design.variants, v = curVariant(p);
+  const agg = isAgg(p);
+  let bar = "";
+  if (agg) { const s = summary(p); bar = facts([["узлов", s.nodes], ["готово", s.done], ["масса узлов, кг", fmt(s.mass, 1)], ["K min", s.kmin == null ? "—" : fmt(s.kmin), s.kmin != null && s.kmin < 1.5 ? "error" : ""]]); }
+  else if (sid === "design" && v) bar = `<div class="tabs"><button class="${core.cur.view !== "sketch" ? "cur" : ""}" data-act="view:main">3D</button><button class="${core.cur.view === "sketch" ? "cur" : ""}" data-act="view:sketch">Эскиз с размерами</button></div>${facts([["вариант", esc(v.title)], ["масса, кг", fmt(v.mass)], ["K min", v.kmin == null ? "—" : fmt(v.kmin), v.kmin != null && v.kmin < 1.5 ? "error" : ""], ["замечания", v.errors ? `${v.errors} ош.` : v.warnings ? `${v.warnings} пред.` : "нет", v.errors ? "error" : v.warnings ? "warn" : ""]])}`;
+  else if (sid === "layout" && p.layout.img) bar = `<div class="tabs"><button class="cur">Главный</button><button>Сверху</button><button>Слева</button></div>${facts([["базы", p.layout.bases], ["интерфейсы", p.layout.ifaces], ["обстановка", p.layout.bodies]])}`;
+  const acts = sid === "layout" && p.layout.img && !p.agent ? `<div class="acts"><button class="sm" data-act="edit-layout">Поправить на эскизе</button><button class="sm" data-act="mark">Обвести замечание</button></div>` : "";
+  let strip = "";
+  if (agg) strip = `<div class="strip nstrip">${core.nodesOf(p.id).map(c => { const n = core.nextOf(c); return `<div class="it" data-act="open:${c.id}">${pic(thumbOf(c), { h: 90, alt: "" })}<div class="t">${esc(c.title)}</div><span class="pill ${KIND_DOT[n.kind]}">${esc(n.short)}</span>${isAgg(c) ? `<div class="f"><span>${plural(core.descendants(c.id).length, "узел", "узла", "узлов")}</span><span>${fmt(summary(c).mass, 1)} кг</span></div>` : c.design.variants.length ? `<div class="f"><span>${fmt(leafMass(c), 1)} кг</span>${(() => { const vv = c.design.variants.find(x => x.id === c.design.chosen) || c.design.variants[0]; return vv.kmin != null ? `<span class="${vv.kmin < 1.5 ? "error" : ""}">K ${fmt(vv.kmin)}</span>` : ""; })()}</div>` : ""}</div>`; }).join("")}</div>`;
+  else if ((sid === "design" || sid === "kit") && vs.length > 1) strip = `<div class="strip">${vs.map(x => `<div class="it ${v && v.id === x.id ? "cur" : ""}" data-act="vcur:${x.id}">${pic(x.img, { h: 90, alt: "" })}<div class="t">${esc(x.title)}</div><div class="f"><span>${fmt(x.mass)} кг</span><span class="${x.kmin != null && x.kmin < 1.5 ? "error" : ""}">K ${x.kmin == null ? "—" : fmt(x.kmin)}</span>${p.design.chosen === x.id ? `<span class="check">✓ выбран</span>` : ""}</div>${p.design.chosen !== x.id ? `<button class="sm" data-act="choose:${x.id}">Выбрать</button>` : ""}</div>`).join("")}</div>`;
+  else if (sid === "kit" && p.kit.state === "ready") strip = `<div class="strip" style="flex-direction:column;gap:6px">${kitHtml(p)}</div>`;
+  return `<div class="view"><div class="bar">${bar}<span class="spacer"></span><span class="muted xs">${esc(stageName(p, STAGES.find(s => s.id === sid)))}</span><button class="sm quiet" data-act="delete:${p.id}" title="${p.parent ? "Удалить узел" : "Удалить проект"}">${p.parent ? "Удалить узел" : "Удалить проект"}</button></div><div class="canvas">${vw.img ? `<img src="${IMG}${vw.img}" alt="">` : `<div class="empty">${esc(vw.empty)}</div>`}${vw.caption ? `<div class="cap">${esc(vw.caption)}</div>` : ""}${acts}</div>${strip}</div>`;
+}
+function render() {
+  const p = core.current() || core.project("pump"), root = core.rootOf(p), f = core.folder(root.folder);
+  const sid = core.cur.stage || core.nextOf(p).stage;
+  const steps = `<div class="steps">${core.stages(p).map((s, i) => `${i ? `<span class="sep"></span>` : ""}<button class="${s.id === sid ? "cur" : ""}" data-act="stage:${s.id}"><span class="n ${s.state}">${s.state === "done" ? "✓" : i + 1}</span>${stageName(p, s)}</button>`).join("")}</div>`;
+  let crumbs = [f.name, root.title].concat(p.id !== root.id ? (p.parent && p.parent !== root.id ? [core.project(p.parent).title, p.title] : [p.title]) : []);
+  if (crumbs.length > 3) crumbs = [crumbs[0], "…", ...crumbs.slice(-2)];  // глубокий узел: папка › … › родитель › узел
+  document.getElementById("app").innerHTML = `
+  <header class="top"><span class="brand">SkelCAD</span><button class="sm quiet" data-act="drawer" title="Папки и проекты">☰ Проекты</button><span class="crumbs">${crumbs.map((c, i) => (i === crumbs.length - 1 ? `<b>${esc(c)}</b>` : `<span>${esc(c)}</span><span>›</span>`)).join("")}</span>${steps}<span class="spacer"></span><span class="user">mikhaylov_yv</span></header>
+  <div class="main">${core.ui.drawer ? `<div class="drawer">${treeHtml()}</div>` : ""}${nodeTree(root)}${viewHtml(p)}${threadHtml(p)}</div>${core.ui.dialog === "node" ? nodeDialogHtml(root) : dialogHtml()}`;
+  if (core.ui.jumpChat) { core.ui.jumpChat = false; queueMicrotask(() => { const l = document.querySelector(".chat__list"); if (l) l.scrollTop = l.scrollHeight; }); }
+}
+mount(render, {
+  name: "05 Узлы и разговор", how: "слева состав изделия (узлы как проекты внутри проекта), в центре картинка узла, справа разговор с агентом: задачи, отчёты с картинками, решения кнопками в сообщениях",
+  act: (a, el) => {
+    if (a.startsWith("vcur:")) { core.ui.vcur = a.slice(5); core.emit(); return true; }
+    if (a.startsWith("scope:")) { core.ui.scope = a.slice(6); core.ui.jumpChat = true; core.emit(); return true; }
+    if (a === "send") { send(); return true; }
+    if (a.startsWith("answer:")) { const [, mid, i] = a.split(":"); answer(mid, +i); return true; }
+    if (a === "attach-chat") { toast("В макете: файл уйдёт агенту вместе с сообщением"); return true; }
+    if (a === "new-node") { const p = core.current(); core.ui.dialog = "node"; core.ui.form = { title: "", parent: (el && el.dataset && el.dataset.parent) || (p ? (isAgg(p) ? p.id : p.parent || p.id) : "pump") }; core.emit(); return true; }
+    if (a === "create" && core.ui.dialog === "node") { core.createNode(core.ui.form.parent, core.ui.form.title); return true; }
+    if (el && el.dataset && el.dataset.node && el.dataset.node !== core.cur.project) { const p = core.project(el.dataset.node); if (p) { core.cur.project = p.id; core.cur.folder = core.rootOf(p).folder; core.cur.stage = null; } }
+    return false;
+  },
+});
+document.addEventListener("click", e => { if (core.ui.drawer && !e.target.closest(".drawer") && !e.target.closest('[data-act="drawer"]')) { core.ui.drawer = false; core.emit(); } }, true);
+core.open("pump");
+</script>
+</body>
+</html>

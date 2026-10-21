@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 815.0 480.0" font-family="Arial, sans-serif">
+<rect width="100%" height="100%" fill="#fff"/>
+<text x="120" y="34" font-size="15" font-weight="bold" fill="#1b1f24">Насос К 100-65-200 с двигателем 15 кВт — из каталога</text>
+<rect x="120" y="330.0" width="515.0" height="10.0" fill="#e6ebf1" stroke="#1b1f24" stroke-width="1.5"/>
+<circle cx="235.0" cy="180.0" r="85.0" fill="#eef2f6" stroke="#1b1f24" stroke-width="1.5"/><circle cx="235.0" cy="180.0" r="30.0" fill="#fff" stroke="#1b1f24" stroke-width="1"/>
+<rect x="115.0" y="155.0" width="40.0" height="50.0" fill="#eef2f6" stroke="#1b1f24" stroke-width="1.5"/><text x="115.0" y="150.0" font-size="12" fill="#1f5fbf">DN80 вход</text>
+<rect x="219.0" y="50.0" width="32.0" height="45.0" fill="#eef2f6" stroke="#1b1f24" stroke-width="1.5"/><text x="255.0" y="65.0" font-size="12" fill="#1f5fbf">DN50 выход</text>
+<rect x="160.0" y="315.0" width="30.0" height="15.0" fill="#dfe6ee" stroke="#1b1f24" stroke-width="1.2"/>
+<rect x="280.0" y="315.0" width="30.0" height="15.0" fill="#dfe6ee" stroke="#1b1f24" stroke-width="1.2"/>
+<rect x="165.0" y="230.0" width="140.0" height="85.0" fill="#eef2f6" stroke="#1b1f24" stroke-width="1.2"/>
+<rect x="320.0" y="170.0" width="60.0" height="20.0" fill="#dfe6ee" stroke="#1b1f24" stroke-width="1.2"/>
+<rect x="380.0" y="105.0" width="240.0" height="150.0" rx="10.0" fill="#eef2f6" stroke="#1b1f24" stroke-width="1.5"/><rect x="400.0" y="80.0" width="80.0" height="25.0" fill="#eef2f6" stroke="#1b1f24" stroke-width="1.2"/>
+<rect x="400.0" y="255.0" width="200.0" height="75.0" fill="#eef2f6" stroke="#1b1f24" stroke-width="1.2"/>
+<text x="500.0" y="184.0" text-anchor="middle" font-size="13" fill="#1b1f24">двигатель 15 кВт, 2900 об/мин</text>
+<line x1="90.0" y1="180.0" x2="670.0" y2="180.0" stroke="#1f5fbf" stroke-width="1" stroke-dasharray="14 4 3 4"/>
+<line x1="120" y1="365.0" x2="635.0" y2="365.0" stroke="#1b1f24" stroke-width="1"/>
+<polygon points="120,365.0 130,361.5 130,368.5" fill="#1b1f24"/><polygon points="635.0,365.0 625.0,361.5 625.0,368.5" fill="#1b1f24"/>
+<text x="377.5" y="359.0" text-anchor="middle" font-size="14" fill="#1b1f24">1030</text>
+<line x1="95.0" y1="180.0" x2="95.0" y2="340.0" stroke="#1b1f24" stroke-width="1"/>
+<polygon points="95.0,180.0 91.5,190.0 98.5,190.0" fill="#1b1f24"/><polygon points="95.0,340.0 91.5,330.0 98.5,330.0" fill="#1b1f24"/>
+<text x="89.0" y="260.0" text-anchor="middle" font-size="14" fill="#1b1f24" transform="rotate(-90 89.0 260.0)">300 (ось)</text>
+<text x="120" y="387.5" font-size="12" fill="#5b6470">масса 120 кг · лапы 4×Ø18 · габарит 1030×400×560 · паспорт и STEP производителя</text>
+</svg>

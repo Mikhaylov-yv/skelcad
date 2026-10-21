@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1176.0 628.0" font-family="Arial, sans-serif">
+<defs><pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#9aa3ad" stroke-width="1"/></pattern></defs>
+<rect width="100%" height="100%" fill="#fff"/>
+<text x="300" y="36" font-size="16" font-weight="bold" fill="#1b1f24">Насосный агрегат К 100-65-200 на раме — общая компоновка</text><text x="300" y="54" font-size="12" fill="#5b6470">вид сверху; зоны узлов пунктиром, интерфейсы синим</text>
+<rect x="300" y="70" width="756.0" height="25.2" fill="#e6ebf1" stroke="#1b1f24" stroke-width="1.5"/>
+<rect x="300" y="422.8" width="756.0" height="25.2" fill="#e6ebf1" stroke="#1b1f24" stroke-width="1.5"/>
+<rect x="300" y="95.2" width="25.2" height="327.6" fill="#e6ebf1" stroke="#1b1f24" stroke-width="1.5"/>
+<rect x="665.4" y="95.2" width="25.2" height="327.6" fill="#e6ebf1" stroke="#1b1f24" stroke-width="1.5"/>
+<rect x="1030.8" y="95.2" width="25.2" height="327.6" fill="#e6ebf1" stroke="#1b1f24" stroke-width="1.5"/>
+<circle cx="312.6" cy="82.6" r="4.62" fill="#fff" stroke="#1b1f24" stroke-width="1.2"/>
+<line x1="305.04" y1="82.6" x2="320.16" y2="82.6" stroke="#1f5fbf" stroke-width=".8" stroke-dasharray="6 2 2 2"/><line x1="312.6" y1="75.03999999999999" x2="312.6" y2="90.16" stroke="#1f5fbf" stroke-width=".8" stroke-dasharray="6 2 2 2"/>
+<circle cx="1043.4" cy="82.6" r="4.62" fill="#fff" stroke="#1b1f24" stroke-width="1.2"/>
+<line x1="1035.8400000000001" y1="82.6" x2="1050.96" y2="82.6" stroke="#1f5fbf" stroke-width=".8" stroke-dasharray="6 2 2 2"/><line x1="1043.4" y1="75.03999999999999" x2="1043.4" y2="90.16" stroke="#1f5fbf" stroke-width=".8" stroke-dasharray="6 2 2 2"/>
+<circle cx="312.6" cy="435.4" r="4.62" fill="#fff" stroke="#1b1f24" stroke-width="1.2"/>
+<line x1="305.04" y1="435.4" x2="320.16" y2="435.4" stroke="#1f5fbf" stroke-width=".8" stroke-dasharray="6 2 2 2"/><line x1="312.6" y1="427.84" x2="312.6" y2="442.96" stroke="#1f5fbf" stroke-width=".8" stroke-dasharray="6 2 2 2"/>
+<circle cx="1043.4" cy="435.4" r="4.62" fill="#fff" stroke="#1b1f24" stroke-width="1.2"/>
+<line x1="1035.8400000000001" y1="435.4" x2="1050.96" y2="435.4" stroke="#1f5fbf" stroke-width=".8" stroke-dasharray="6 2 2 2"/><line x1="1043.4" y1="427.84" x2="1043.4" y2="442.96" stroke="#1f5fbf" stroke-width=".8" stroke-dasharray="6 2 2 2"/>
+<rect x="384.0" y="133.0" width="273.0" height="252.0" fill="#eaf1fb" fill-opacity=".55" stroke="#1f5fbf" stroke-width="1.2" stroke-dasharray="7 4"/>
+<text x="392.0" y="151.0" font-size="13" fill="#1f5fbf">Зона насоса 650×600</text><text x="392.0" y="167.0" font-size="11" fill="#174a94">узел «Насос» (покупной)</text>
+<rect x="699.0" y="133.0" width="315.0" height="252.0" fill="#eaf1fb" fill-opacity=".55" stroke="#1f5fbf" stroke-width="1.2" stroke-dasharray="7 4"/>
+<text x="707.0" y="151.0" font-size="13" fill="#1f5fbf">Зона двигателя 750×600</text><text x="707.0" y="167.0" font-size="11" fill="#174a94">узел «Насос» (покупной)</text>
+<rect x="411.3" y="164.5" width="29.4" height="21.0" fill="#fbf3e4" stroke="#9a5b00" stroke-width="1.2"/>
+<rect x="600.3" y="164.5" width="29.4" height="21.0" fill="#fbf3e4" stroke="#9a5b00" stroke-width="1.2"/>
+<rect x="411.3" y="332.5" width="29.4" height="21.0" fill="#fbf3e4" stroke="#9a5b00" stroke-width="1.2"/>
+<rect x="600.3" y="332.5" width="29.4" height="21.0" fill="#fbf3e4" stroke="#9a5b00" stroke-width="1.2"/>
+<text x="411.3" y="366.1" font-size="12" fill="#9a5b00">лапы насоса 4×Ø18 → узел «Опоры насоса», отметка оси 300</text>
+<circle cx="384.0" cy="259.0" r="16.8" fill="none" stroke="#1f5fbf" stroke-width="1.5"/><line x1="367.2" y1="259.0" x2="216.0" y2="259.0" stroke="#1f5fbf" stroke-width="2.5"/>
+<text x="216.0" y="253.96" font-size="12" fill="#1f5fbf">всасывание DN80</text><text x="216.0" y="270.76" font-size="11" fill="#174a94">→ узел «Трубопровод»</text>
+<circle cx="518.4" cy="259.0" r="10.5" fill="none" stroke="#1f5fbf" stroke-width="1.5"/><text x="531.0" y="261.1" font-size="12" fill="#1f5fbf">напор DN50 вверх</text>
+<line x1="363.0" y1="259.0" x2="1035.0" y2="259.0" stroke="#1f5fbf" stroke-width="1" stroke-dasharray="14 4 3 4"/><text x="930.0" y="256.48" font-size="11" fill="#1f5fbf">shaft_axis</text>
+<text x="300" y="511.0" font-size="13" fill="#4b5563">Зоны и интерфейсы розданы узлам: Рама — пятно 1800×900 и анкеры М20 ×4;</text><text x="300" y="527.8" font-size="13" fill="#4b5563">Опоры насоса — лапы и отметка оси 300; Трубопровод — патрубки DN80 / DN50.</text>
+<line x1="300" y1="481.6" x2="1056.0" y2="481.6" stroke="#1b1f24" stroke-width="1"/>
+<polygon points="300,481.6 310,478.1 310,485.1" fill="#1b1f24"/><polygon points="1056.0,481.6 1046.0,478.1 1046.0,485.1" fill="#1b1f24"/>
+<text x="678.0" y="475.6" text-anchor="middle" font-size="14" fill="#1b1f24">1800</text>
+<line x1="190.8" y1="70" x2="190.8" y2="448.0" stroke="#1b1f24" stroke-width="1"/>
+<polygon points="190.8,70 187.3,80 194.3,80" fill="#1b1f24"/><polygon points="190.8,448.0 187.3,438.0 194.3,438.0" fill="#1b1f24"/>
+<text x="184.8" y="259.0" text-anchor="middle" font-size="14" fill="#1b1f24" transform="rotate(-90 184.8 259.0)">900</text>
+</svg>

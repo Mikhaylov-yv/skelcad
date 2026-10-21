@@ -174,7 +174,7 @@ function finishJob(p, job) {
     p.last = { job, report: [bolt ? "Болт М16×130 ГОСТ 7798-70, гайка, две шайбы; отверстие в пакете Ø18." : "Собран базовый вариант.", "2 коммита. Ошибок нет, одно предупреждение: " + p.design.variants[0].note + ".", "Можно выдавать комплект или задать нагрузку — тогда посчитаю запас."] };
     p.history.push({ when, who: "агент", what: bolt ? "генератор деталей: болт, гайка, шайбы; вариант A_base" : "генератор деталей; вариант A_base" });
   } else if (job === "kit") {
-    const v = p.design.chosen || p.design.variants[0].id;
+    const v = p.design.chosen || (p.design.variants[0] && p.design.variants[0].id) || "all";
     p.kit = { state: "ready", when, files: [["STEP", `${p.code}_${v}.step`, "сборка AP242"], ["PDF", `${p.code}_${v}_sketch.pdf`, "эскиз с размерами, 3 вида"], ["PDF", `${p.code}_${v}_spec.pdf`, "спецификация"], ["PDF", `${p.code}_${v}_report.pdf`, "отчёт: запасы, допущения"]] };
     p.last = { job, report: [`Комплект по варианту ${v}: STEP, эскиз, спецификация, отчёт.`, "Ошибок нет."] };
     p.history.push({ when, who: "агент", what: `комплект по варианту ${v}` });
@@ -186,6 +186,7 @@ function finishJob(p, job) {
   p.updated = "сегодня " + when;
 }
 
+const TASK_TEXT = { layout: "Сделай компоновку по заданию", design: "Сделай детали по согласованной компоновке", kit: "Собери комплект по выбранному варианту", fix: "Устрани ошибки" };
 // --- Ядро: состояние, выбор, отмена, следующий шаг, имитация агента ----------------------------------
 const core = {
   state: initialState(), undo: [], listeners: [], log: [], speed: 650, hook: null,
@@ -195,7 +196,13 @@ const core = {
   emit() { for (const fn of this.listeners) fn(); },
   project(id) { return this.state.projects.find(p => p.id === id) || null; },
   folder(id) { return this.state.folders.find(f => f.id === id) || null; },
-  projectsIn(fid) { return this.state.projects.filter(p => p.folder === fid); },
+  projectsIn(fid) { return this.state.projects.filter(p => p.folder === fid && !p.parent); },
+  nodesOf(pid) { return this.state.projects.filter(p => p.parent === pid); },
+  rootOf(p) { let r = p; while (r && r.parent) r = this.project(r.parent) || r; return r; },
+  descendants(pid) { const out = []; const walk = id => { for (const c of this.nodesOf(id)) { out.push(c); walk(c.id); } }; walk(pid); return out; },
+  // события для макетов (лента разговора и т. п.): hooks.event(p, {kind, ...})
+  hooks: {},
+  event(p, e) { if (this.hooks.event) this.hooks.event(p, e); },
   current() { return this.cur.project ? this.project(this.cur.project) : null; },
   // снимок для отмены: таймеры агента не сериализуются — действия, которые отменяются, его не трогают
   commit(label, fn) {
@@ -221,7 +228,7 @@ const core = {
   open(pid, stage) {
     const p = this.project(pid);
     if (!p) return;
-    this.cur.project = pid; this.cur.folder = p.folder; this.cur.stage = stage || this.nextOf(p).stage; this.ui.details = false; this.ui.drawer = false;
+    this.cur.project = pid; this.cur.folder = this.rootOf(p).folder; this.cur.stage = stage || this.nextOf(p).stage; this.ui.details = false; this.ui.drawer = false;
     this.log.push("open:" + pid);
     this.emit();
   },
@@ -277,9 +284,9 @@ const core = {
       case "next": { if (!p) return; const n = this.nextOf(p); if (n.disabled) return toast("Опишите задание — хотя бы одной фразой"); return this.act(n.act, el); }
       case "run": return this.run(p.id, arg);
       case "stop": return this.stop(p && p.id);
-      case "approve": return this.commit("согласование компоновки", () => { if (!p || !["waiting", "changed"].includes(p.layout.state)) return "Согласовывать нечего"; p.layout.state = "approved"; p.layout.by = "вы"; p.layout.when = nowStr(); p.history.push({ when: nowStr(), who: "вы", what: "Компоновка согласована" }); this.cur.stage = "design"; });
-      case "choose": return this.commit("выбор варианта " + arg, () => { if (!p) return "Нет проекта"; p.design.chosen = arg; p.history.push({ when: nowStr(), who: "вы", what: "Выбран вариант " + arg }); this.cur.stage = "kit"; });
-      case "download": this.log.push("download:" + (p && p.id)); return toast("Комплект скачан: STEP, эскиз, спецификация, отчёт");
+      case "approve": return this.commit("согласование компоновки", () => { if (!p || !["waiting", "changed"].includes(p.layout.state)) return "Согласовывать нечего"; p.layout.state = "approved"; p.layout.by = "вы"; p.layout.when = nowStr(); p.history.push({ when: nowStr(), who: "вы", what: "Компоновка согласована" }); this.cur.stage = "design"; this.event(p, { kind: "approve" }); });
+      case "choose": return this.commit("выбор варианта " + arg, () => { if (!p) return "Нет проекта"; p.design.chosen = arg; p.history.push({ when: nowStr(), who: "вы", what: "Выбран вариант " + arg }); this.cur.stage = "kit"; this.event(p, { kind: "choose", v: arg }); });
+      case "download": this.log.push("download:" + (p && p.id)); if (p) this.event(p, { kind: "download" }); return toast("Комплект скачан: STEP, эскиз, спецификация, отчёт");
       case "attach": return this.commit("набросок к заданию", () => { if (!p) return "Нет проекта"; p.brief.sketch = "pipe_bracket-sketch.png"; });
       case "sketch": this.ui.sketch[arg] = !this.ui.sketch[arg]; return this.emit();
       case "details": this.ui.details = !this.ui.details; return this.emit();
@@ -311,6 +318,21 @@ const core = {
     });
     if (ok) toast(`Проект «${title}» создан. Опишите задание.`);
   },
+  createNode(parent, title) {
+    title = (title || "").trim();
+    const root = this.project(parent);
+    if (!title) return toast("Назовите узел");
+    if (!root) return toast("Нет изделия");
+    const id = "n" + Date.now().toString(36);
+    const ok = this.commit("создание узла", () => {
+      this.state.projects.push({ id, code: title.toLowerCase().replace(/[^a-zа-яё0-9]+/gi, "_").replace(/^_|_$/g, "").slice(0, 32), title, parent, folder: this.rootOf(root).folder, updated: "сейчас",
+        brief: { done: false, text: "", sketch: null }, layout: { state: "none" }, design: { state: "none", variants: [], chosen: null }, kit: { state: "none", files: [] },
+        history: [{ when: nowStr(), who: "вы", what: `Узел «${title}»` }] });
+      this.ui.dialog = null;
+      this.cur.project = id; this.cur.stage = "brief";
+    });
+    if (ok) { this.event(this.project(id), { kind: "create" }); toast(`Узел «${title}» создан. Опишите задание.`); }
+  },
   createFolder(name) {
     name = (name || "").trim();
     if (!name) return toast("Назовите папку");
@@ -321,8 +343,9 @@ const core = {
     const p = this.project(pid);
     if (!p) return toast("Нет проекта");
     if (p.agent) return toast("Проект у агента: сначала остановите задачу");
-    this.commit("удаление проекта", () => { this.state.projects = this.state.projects.filter(x => x.id !== pid); if (this.cur.project === pid) { this.cur.project = null; this.cur.stage = null; } });
-    toast(`Проект «${p.title}» удалён`, { undo: true });
+    const gone = new Set([pid, ...this.descendants(pid).map(x => x.id)]);
+    this.commit(p.parent ? "удаление узла" : "удаление проекта", () => { this.state.projects = this.state.projects.filter(x => !gone.has(x.id)); if (gone.has(this.cur.project)) { this.cur.project = p.parent || null; this.cur.stage = null; } });
+    toast(`${p.parent ? "Узел" : "Проект"} «${p.title}» удалён`, { undo: true });
   },
   deleteFolder(fid) {
     const f = this.folder(fid);
@@ -339,7 +362,7 @@ const core = {
     document.querySelectorAll('[data-act="next"]').forEach(b => (b.disabled = dis));
   },
   // --- имитация агента: шаги по таймеру; speed = 0 — всё сразу (прогон сценариев)
-  run(pid, job) {
+  run(pid, job, text) {
     const p = this.project(pid);
     if (!p || p.agent) return;
     if (job === "layout" && !p.brief.done) { if (!(p.brief.text || "").trim()) return toast("Опишите задание"); p.brief.done = true; p.brief.by = "вы"; p.brief.when = nowStr(); }
@@ -350,12 +373,13 @@ const core = {
     p.agent = { job, steps: [], started: Date.now() };
     this.cur.stage = job === "fix" ? "design" : job;
     this.log.push("run:" + job);
+    this.event(p, { kind: "task", job, text: text || TASK_TEXT[job] });
     let i = 0;
     const tick = () => {
       if (!p.agent) return;
       if (i > 0) { const s = p.agent.steps[i - 1]; s.done = true; s.sec = 2 + ((i * 7) % 9); }
       if (i < steps.length) { p.agent.steps.push({ ...steps[i], done: false }); i++; this.emit(); if (this.speed) p.agent.timer = setTimeout(tick, this.speed); else tick(); }
-      else { const done = p.agent.steps; p.agent = null; finishJob(p, job); if (p.last) p.last.steps = done; clock += 3; this.emit(); }
+      else { const done = p.agent.steps; p.agent = null; finishJob(p, job); if (p.last) p.last.steps = done; clock += 3; this.event(p, { kind: "report", job }); this.emit(); }
     };
     tick();
   },
@@ -369,6 +393,7 @@ const core = {
     if (job === "design" || job === "fix") p.design.state = p.design.variants.length ? "done" : "none";
     if (job === "kit") p.kit.state = "none";
     p.last = { job, report: ["Остановлено вами. Сделанное осталось в истории, модель не тронута."], steps: null };
+    this.event(p, { kind: "stop" });
     this.emit();
   },
 };
@@ -401,8 +426,8 @@ function projRow(p) {
   const n = core.nextOf(p);
   return `<div class="tproj ${core.cur.project === p.id ? "sel" : ""}" data-tree="project:${p.id}" title="${esc(n.title)}"><i class="dot ${KIND_DOT[n.kind]}"></i><span class="name">${esc(p.title)}</span><span class="st">${esc(n.short)}</span></div>`;
 }
-function nextHtml(p, { size = "", stop = true, stack = false } = {}) {
-  const n = core.nextOf(p);
+function nextHtml(p, { size = "", stop = true, stack = false, n = null } = {}) {
+  n = n || core.nextOf(p);
   const cls = { you: "wait", agent: "", running: "agent", done: "done" }[n.kind];
   const btn = n.kind === "running" ? (stop ? `<button class="sm" data-act="stop">Остановить</button>` : "")
     : n.kind === "done" ? `<button data-act="download">Скачать</button>`
@@ -511,7 +536,7 @@ document.addEventListener("contextmenu", e => {
 });
 document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "я" || e.code === "KeyZ") && !e.target.matches("input, textarea")) { e.preventDefault(); core.undoLast(); }
-  if (e.key === "Escape") { core.ui.dialog = null; hideMenu(); core.emit(); }
+  if (e.key === "Escape") { core.ui.dialog = null; core.ui.drawer = false; hideMenu(); core.emit(); }
 });
 function mount(render, { name, how, act } = {}) {
   core.hook = act || null;

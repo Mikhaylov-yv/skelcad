@@ -70,7 +70,8 @@
    "total": 14
   },
   "actions": 25,
-  "pass": 10
+  "pass": 10,
+  "flow": "default"
  },
  "v02-timeline.html": {
   "file": "v02-timeline.html",
@@ -143,7 +144,8 @@
    "total": 14
   },
   "actions": 25,
-  "pass": 10
+  "pass": 10,
+  "flow": "default"
  },
  "v03-desk.html": {
   "file": "v03-desk.html",
@@ -216,7 +218,8 @@
    "total": 15
   },
   "actions": 25,
-  "pass": 10
+  "pass": 10,
+  "flow": "default"
  },
  "v04-board.html": {
   "file": "v04-board.html",
@@ -289,6 +292,81 @@
    "total": 22
   },
   "actions": 25,
-  "pass": 10
+  "pass": 10,
+  "flow": "default"
+ },
+ "v05-nodes.html": {
+  "file": "v05-nodes.html",
+  "name": "05 Узлы и разговор",
+  "scenarios": [
+   {
+    "title": "Открыть узел «Опоры насоса» в составе изделия",
+    "ok": true,
+    "actions": 1,
+    "err": ""
+   },
+   {
+    "title": "Ответить на вопрос агента в разговоре",
+    "ok": true,
+    "actions": 1,
+    "err": ""
+   },
+   {
+    "title": "Выбрать вариант опор кнопкой в сообщении агента",
+    "ok": true,
+    "actions": 1,
+    "err": ""
+   },
+   {
+    "title": "Поручить агенту комплект рамы одной кнопкой",
+    "ok": true,
+    "actions": 2,
+    "err": ""
+   },
+   {
+    "title": "Написать агенту задачу словами: компоновка кронштейна",
+    "ok": true,
+    "actions": 4,
+    "err": ""
+   },
+   {
+    "title": "Согласовать компоновку кнопкой в сообщении агента",
+    "ok": true,
+    "actions": 1,
+    "err": ""
+   },
+   {
+    "title": "Открыть изделие целиком: сводка по узлам",
+    "ok": true,
+    "actions": 1,
+    "err": ""
+   },
+   {
+    "title": "Переключить разговор на всё изделие",
+    "ok": true,
+    "actions": 1,
+    "err": ""
+   },
+   {
+    "title": "Добавить узел «Фундаментные болты», удалить и вернуть",
+    "ok": true,
+    "actions": 6,
+    "err": ""
+   },
+   {
+    "title": "Перейти к другому изделию через «Проекты»",
+    "ok": true,
+    "actions": 2,
+    "err": ""
+   }
+  ],
+  "errors": [],
+  "controls": {
+   "visible": 24,
+   "total": 24
+  },
+  "actions": 20,
+  "pass": 10,
+  "flow": "nodes"
  }
 }

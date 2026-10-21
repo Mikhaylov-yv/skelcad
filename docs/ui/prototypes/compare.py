@@ -8,7 +8,7 @@ DIR = Path(__file__).parent
 variants = json.loads((DIR / "variants.json").read_text(encoding="utf-8"))
 results = json.loads((DIR / "results.json").read_text(encoding="utf-8"))
 picks = json.loads((DIR / "picks.json").read_text(encoding="utf-8")) if (DIR / "picks.json").exists() else {"top": [], "notes": {}}
-SHOTS = [("0", "папка"), ("1", "агент за работой"), ("2", "детали готовы"), ("3", "выбор варианта"), ("4", "новый проект: компоновка")]
+SHOTS_DEFAULT = ["папка", "агент за работой", "детали готовы", "выбор варианта", "новый проект: компоновка"]
 
 rows, cards = [], []
 for v in variants:
@@ -20,14 +20,14 @@ for v in variants:
     n = len(r["scenarios"])
     rows.append(
         f'<tr class="{"top" if top else ""}"><td><a href="{v["file"]}" target="_blank">{escape(r["name"])}</a>'
-        f'{" <span class=pick>выбран</span>" if top else ""}</td>'
+        f'{" <span class=pick>выбран</span>" if top else ""}{" <span class=muted>(сценарии по узлам)</span>" if v.get("scenarios") == "nodes" else ""}</td>'
         f'<td class="n {"ok" if r["pass"] == n else "bad"}">{r["pass"]} / {n}</td><td class="n">{r["actions"]}</td>'
         f'<td class="n">{r["controls"]["visible"]} / {r["controls"]["total"]}</td><td class="n">{len(r["errors"])}</td>'
         f'<td>{escape("; ".join(s["title"] for s in r["scenarios"] if not s["ok"]) or "—")}</td></tr>'
     )
     shots = "".join(
         f'<a href="shots/{key}-{v["file"][4:-5]}-{s}.png" target="_blank" title="{t}"><img src="shots/{key}-{v["file"][4:-5]}-{s}.png" alt="{t}"><span>{t}</span></a>'
-        for s, t in SHOTS
+        for s, t in enumerate(v.get("shots", SHOTS_DEFAULT))
         if (DIR / "shots" / f"{key}-{v['file'][4:-5]}-{s}.png").exists()
     )
     per = "".join(f'<span class="sc {"" if s["ok"] else "bad"}" title="{escape(s["title"])}">{s["actions"]}</span>' for s in r["scenarios"])
@@ -42,6 +42,8 @@ for v in variants:
     )
 
 scen = results[variants[0]["file"]]["scenarios"] if variants and variants[0]["file"] in results else []
+scen_nodes = next((results[x["file"]]["scenarios"] for x in variants if x.get("scenarios") == "nodes" and x["file"] in results), [])
+scen_nodes_html = ('<p class="muted">Изделие из узлов и разговор (05):</p><ol class="sc">' + "".join(f"<li>{escape(s['title'])}</li>" for s in scen_nodes) + "</ol>") if scen_nodes else ""
 html = f"""<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Макеты рабочего места SkelCAD</title>
 <style>
 body {{ margin: 0; padding: 24px 20px 60px; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1b1f24; background: #f3f4f6; }}
@@ -65,6 +67,7 @@ tr.top td {{ background: #eaf1fb; }}
 ol.sc {{ columns: 2; margin: 6px 0; }} .rule {{ padding: 10px 12px; border-left: 3px solid #1f5fbf; background: #fff; margin: 8px 0; }}
 </style></head><body><div class="wrap">
 <h1>Рабочее место SkelCAD: четыре макета сквозного сценария</h1>
+<p class="muted">После первого сравнения конструктор выбрал направление «Рабочий стол» (03) и уточнил: слева нужна навигация по узлам одного изделия, а не по проектам; справа — единое место общения с агентом. Это сделано в макете 05 «Узлы и разговор» на изделии из нескольких узлов (насосный агрегат на раме).</p>
 <p class="muted">Повод — замечание конструктора после проекта «Болт обычный М16»: интерфейс перегружен, главная страница должна быть деревом папок с названиями проектов, непонятно, что делать после согласования компоновки, нужно больше графики и меньше текста. Макеты собраны с чистого листа на одной модели данных: проекты, которые сейчас лежат на сервере (болт, специальный болт), и примеры (кронштейн, опора, планка). Каждый макет прогнан одним и тем же набором из {len(scen)} сценариев конструктора: действия считает Playwright (щелчок, клавиша = 1; ввод текста = 2). Открыть макет — щелчок по названию; всё работает локально, без сервера.</p>
 
 <h2>Сквозной сценарий, общий для всех макетов</h2>
@@ -84,7 +87,9 @@ ol.sc {{ columns: 2; margin: 6px 0; }} .rule {{ padding: 10px 12px; border-left:
 <div class="grid">{"".join(cards)}</div>
 
 <h2>Сценарии прогона</h2>
+<p class="muted">Папки и проекты (01–04):</p>
 <ol class="sc">{"".join(f"<li>{escape(s['title'])}</li>" for s in scen)}</ol>
+{scen_nodes_html}
 <p class="muted">Скрипт: <code>node run.mjs</code> (Playwright из <code>web/node_modules</code>) → <code>results.json</code> и <code>shots/</code>; затем <code>python3 compare.py</code> → эта страница.</p>
 </div></body></html>"""
 (DIR / "index.html").write_text(html, encoding="utf-8")
