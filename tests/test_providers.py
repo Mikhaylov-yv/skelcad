@@ -87,6 +87,16 @@ def fake_transport(calls: list):
             )
         if req.headers.get("authorization") == "Bearer bad":
             return httpx.Response(401, json={"error": {"message": "invalid key"}})
+        if "litellm" in str(req.url):  # LiteLLM: стоимость в заголовке, usage без cost
+            return httpx.Response(
+                200,
+                headers={"x-litellm-response-cost": "0.00042"},
+                json={
+                    "model": "deepseek-v4",
+                    "choices": [{"message": {"role": "assistant", "content": "ок"}}],
+                    "usage": {"prompt_tokens": 7, "completion_tokens": 1},
+                },
+            )
         return httpx.Response(
             200,
             json={
@@ -125,6 +135,8 @@ def test_models_and_test_chat(fake_llm):
     assert "usage" not in body  # не OpenRouter — без расширения
     with pytest.raises(P.ProviderError, match="укажите модель"):
         P.test_chat("https://x/v1", "k", "")
+    res = P.test_chat("https://litellm.home/v1", "sk-lite", "deepseek-v4")
+    assert res["cost"] == 0.00042 and res["prompt_tokens"] == 7 and "usage" not in json.loads(fake_llm[-1][3])
 
 
 @pytest.fixture

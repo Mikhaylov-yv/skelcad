@@ -30,8 +30,13 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:?}
       SKELCAD_DATABASE_URL: postgresql://skelcad:${PG_PASSWORD:?}@db:5432/skelcad
       SKELCAD_SECRET_KEY: ${SECRET_KEY:?}
+      # проверка провайдеров и список моделей ходят к LiteLLM/OpenRouter из сервера: корни хоста (с CA сети .br)
+      SSL_CERT_FILE: /certs/ca-bundle.crt
     volumes:
       - data:/data
+      - /etc/ssl/certs/ca-certificates.crt:/certs/ca-bundle.crt:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # провайдеры на этом хосте: LiteLLM :4000, Ollama :11434
     depends_on:
       db:
         condition: service_healthy
@@ -99,10 +104,13 @@ services:
       SKELCAD_SERVER_URL: http://server:8000/mcp
       SKELCAD_AGENT_TOKEN: ${AGENT_TOKEN:?}
       SKELCAD_AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-60}
-      SSL_CERT_FILE: /certs/ca.crt
+      # корни хоста: системный bundle уже содержит CA сети .br (LiteLLM, Keycloak) и публичные (OpenRouter)
+      SSL_CERT_FILE: /certs/ca-bundle.crt
     volumes:
       - data:/data
-      - /etc/ssl/home_certs/ca.crt:/certs/ca.crt:ro
+      - /etc/ssl/certs/ca-certificates.crt:/certs/ca-bundle.crt:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       server:
         condition: service_healthy

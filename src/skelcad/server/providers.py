@@ -28,8 +28,14 @@ PRESETS = [
     },
     {"id": "openai", "title": "OpenAI", "base_url": "https://api.openai.com/v1", "model": ""},
     {"id": "deepseek", "title": "DeepSeek", "base_url": "https://api.deepseek.com/v1", "model": "deepseek-chat"},
-    {"id": "ollama", "title": "Ollama (своя машина)", "base_url": "http://host.docker.internal:11434/v1", "model": ""},
-    {"id": "litellm", "title": "LiteLLM", "base_url": "http://litellm:4000/v1", "model": ""},
+    {
+        "id": "litellm", "title": "LiteLLM (этот хост, :4000)", "base_url": "http://host.docker.internal:4000/v1",
+        "model": "",
+    },
+    {
+        "id": "ollama", "title": "Ollama (этот хост, :11434)", "base_url": "http://host.docker.internal:11434/v1",
+        "model": "",
+    },
 ]  # fmt: skip
 TEST_PROMPT = "Ответь одним словом: ок"
 
@@ -322,8 +328,21 @@ def test_chat(base_url: str, api_key: str, model: str) -> dict:
         "seconds": round(time.monotonic() - t0, 2),
         "prompt_tokens": usage.get("prompt_tokens"),
         "completion_tokens": usage.get("completion_tokens"),
-        "cost": usage.get("cost"),
+        "cost": response_cost(usage, r.headers),
     }
+
+
+def response_cost(usage: dict, headers) -> float | None:
+    """Стоимость ответа: OpenRouter кладёт usage.cost (при usage.include), LiteLLM — заголовок
+    x-litellm-response-cost."""
+    for raw in (usage.get("cost"), headers.get("x-litellm-response-cost") if headers is not None else None):
+        if raw is None or raw == "":
+            continue
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def env_fallback() -> dict:

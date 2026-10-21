@@ -35,7 +35,7 @@ from typing import Any, Protocol
 
 import httpx
 
-from skelcad.server.providers import ProviderError, ProviderStore, is_openrouter
+from skelcad.server.providers import ProviderError, ProviderStore, is_openrouter, response_cost
 from skelcad.server.tasks import TaskStore
 
 log = logging.getLogger("skelcad.agent")
@@ -199,10 +199,9 @@ class OpenAICompatible:
         self.usage["calls"] += 1
         for k in ("prompt_tokens", "completion_tokens"):
             self.usage[k] += int(u.get(k) or 0)
-        try:
-            self.usage["cost"] = round(self.usage["cost"] + float(u.get("cost") or 0), 6)
-        except (TypeError, ValueError):
-            pass
+        cost = response_cost(u, r.headers)
+        if cost:
+            self.usage["cost"] = round(self.usage["cost"] + cost, 6)
         return data["choices"][0]["message"]
 
 
