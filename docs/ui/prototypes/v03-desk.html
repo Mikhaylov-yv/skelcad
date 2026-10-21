@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>03 Рабочий стол — макет рабочего места SkelCAD</title>
+<link rel="stylesheet" href="core.css">
+<style>
+header.top { gap: 10px; }
+.steps { display: flex; align-items: center; gap: 0; margin-left: 10px; }
+.steps button { height: 30px; padding: 0 10px; border: 0; background: transparent; color: var(--muted); font-size: 13px; gap: 7px; border-radius: 6px; }
+.steps button:hover { background: var(--hover); }
+.steps button.cur { color: var(--text); font-weight: 600; background: var(--surface-2); }
+.steps .sep { width: 18px; height: 1px; background: var(--border-strong); }
+.steps .n { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--muted); }
+.steps .n.done { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+.steps .n.wait { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn); }
+.steps .n.agent, .steps .n.next { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.main { grid-template-columns: minmax(0, 1fr) 380px; position: relative; }
+.main.pinned { grid-template-columns: 240px minmax(0, 1fr) 380px; }
+.view { position: relative; min-height: 0; display: flex; flex-direction: column; background: #fff; }
+.view .bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.view .bar .tabs { display: flex; gap: 2px; }
+.view .bar .tabs button { height: 28px; border: 0; background: transparent; color: var(--muted); font-size: 13px; }
+.view .bar .tabs button.cur { background: var(--surface-2); color: var(--text); font-weight: 500; }
+.view .bar .spacer { flex: 1; }
+.view .canvas { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 20px; overflow: hidden; background: #fff; }
+.view .canvas img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.view .canvas .empty { color: var(--muted-2); font-size: 15px; text-align: center; max-width: 420px; }
+.view .canvas { position: relative; }
+.view .canvas .cap { position: absolute; left: 14px; bottom: 10px; padding: 3px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-ink); font-size: 12px; }
+.strip { display: flex; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border); overflow-x: auto; background: var(--surface-2); }
+.strip .it { flex-shrink: 0; width: 180px; display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.strip .it.cur { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.strip .it .pic { height: 90px; border: 0; }
+.strip .it .t { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.strip .it .f { font-size: 11px; color: var(--muted); display: flex; gap: 8px; }
+.strip .it .f .error { color: var(--error); }
+.side { min-height: 0; overflow: auto; border-left: 1px solid var(--border); background: var(--surface); padding: 14px 16px 30px; display: flex; flex-direction: column; gap: 12px; }
+.drawer { position: absolute; left: 0; top: 0; bottom: 0; width: 300px; z-index: 20; box-shadow: var(--shadow); display: grid; }
+.drawer .tree { height: 100%; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; padding: 20px; overflow: auto; flex: 1; min-height: 0; align-content: start; background: var(--bg); }
+.gallery .g { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.gallery .g:hover { border-color: var(--border-strong); }
+.gallery .g .pic { height: 140px; border: 0; background: var(--surface-2); }
+.gallery .g .t { font-weight: 600; }
+.gallery .g .pill { align-self: flex-start; }
+.gallery .g.new { align-items: center; justify-content: center; border-style: dashed; color: var(--muted); background: transparent; }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script src="core.js"></script>
+<script>
+const thumbOf = p => p.design.variants.length ? p.design.variants[0].img : p.layout.img ? p.layout.img : p.brief.sketch || null;
+function curVariant(p) { const vs = p.design.variants; return vs.find(v => v.id === core.ui.vcur) || vs.find(v => v.id === p.design.chosen) || vs[0] || null; }
+function viewOf(p, sid) {
+  const v = curVariant(p);
+  if (p.agent) { const last = [...p.agent.steps].reverse().find(s => s.done && s.img); if (last) return { img: last.img, caption: "агент смотрел: " + last.t }; return { img: null, empty: "Агент работает: " + (p.agent.steps.length ? p.agent.steps[p.agent.steps.length - 1].t : "") }; }
+  if (sid === "brief") return { img: p.brief.sketch, empty: p.brief.done ? "Набросок к заданию не приложен. Текст задания — справа." : "Опишите задание справа и приложите набросок." };
+  if (sid === "layout") return { img: p.layout.img, empty: p.brief.done ? "Компоновки ещё нет: поручите агенту — он опишет скелет и обстановку по заданию." : "Компоновка появится после задания." };
+  if (sid === "design") return { img: v ? (core.cur.view === "sketch" ? v.sketch : v.img) : null, empty: p.layout.state === "approved" ? "Деталей ещё нет: поручите агенту." : "Детали — после согласования компоновки." };
+  return { img: v ? v.sketch : null, empty: "Комплект — после выбора варианта." };
+}
+function sideFor(p, sid) {
+  const v = curVariant(p);
+  if (sid === "brief") return p.brief.done ? `<h3>Задание</h3><p style="font-size:15px;line-height:22px">${esc(p.brief.text)}</p><p class="muted xs">${esc(p.brief.by)} · ${esc(p.brief.when)}</p>` : `<h3>Задание</h3>${briefHtml(p)}`;
+  if (sid === "layout") { const L = p.layout; return `<h3>Компоновка</h3>${L.state === "none" ? `<p class="muted xs">${STAGES[1].hint}</p>` : `${facts([["базы", L.bases], ["интерфейсы", L.ifaces], ["обстановка", L.bodies]])}<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="sm ghost" data-act="edit-layout">Поправить на эскизе</button><button class="sm ghost" data-act="mark">Обвести замечание</button></div>${L.assumptions ? `<details class="more"><summary>Допущения агента: ${L.assumptions.length}</summary><ul class="xs muted" style="margin:6px 0 0;padding-left:18px">${L.assumptions.map(a => `<li>${esc(a)}</li>`).join("")}</ul></details>` : ""}`}`; }
+  if (sid === "design") return `<h3>Конструкция</h3>${v ? `<div><b>${esc(v.title)}</b>${p.design.chosen === v.id ? ` <span class="pill agent">выбран</span>` : ""}</div>${facts([["масса, кг", fmt(v.mass)], ["K min", v.kmin == null ? "—" : fmt(v.kmin), v.kmin != null && v.kmin < 1.5 ? "error" : ""], ["замечания", v.errors ? `${v.errors} ош.` : v.warnings ? `${v.warnings} пред.` : "нет", v.errors ? "error" : v.warnings ? "warn" : ""]])}${v.note ? `<p class="xs muted">${esc(v.note)}</p>` : ""}${p.design.variants.length > 1 && p.design.chosen !== v.id ? `<div><button class="sm" data-act="choose:${v.id}">Выбрать ${v.id}</button></div>` : ""}` : `<p class="muted xs">${STAGES[2].hint}</p>`}`;
+  return `<h3>Комплект</h3>${kitHtml(p)}`;
+}
+function projectView(p) {
+  const sid = core.cur.stage || core.nextOf(p).stage;
+  const vw = viewOf(p, sid);
+  const vs = p.design.variants;
+  const tabs = sid === "design" && vs.length ? `<div class="tabs"><button class="${core.cur.view !== "sketch" ? "cur" : ""}" data-act="view:main">3D</button><button class="${core.cur.view === "sketch" ? "cur" : ""}" data-act="view:sketch">Эскиз с размерами</button></div>` : sid === "layout" && p.layout.img ? `<div class="tabs"><button class="cur">Главный</button><button>Сверху</button><button>Слева</button></div>` : "";
+  const strip = (sid === "design" || sid === "kit") && vs.length > 1 ? `<div class="strip">${vs.map(v => `<div class="it ${curVariant(p).id === v.id ? "cur" : ""}" data-act="vcur:${v.id}">${pic(v.img, { h: 90, alt: "" })}<div class="t">${esc(v.title)}</div><div class="f"><span>${fmt(v.mass)} кг</span><span class="${v.kmin != null && v.kmin < 1.5 ? "error" : ""}">K ${v.kmin == null ? "—" : fmt(v.kmin)}</span>${p.design.chosen === v.id ? `<span class="check">✓ выбран</span>` : ""}</div>${p.design.chosen !== v.id ? `<button class="sm" data-act="choose:${v.id}">Выбрать</button>` : ""}</div>`).join("")}</div>` : "";
+  return `<div class="view"><div class="bar">${tabs}<span class="spacer"></span><span class="muted xs">${esc(STAGES.find(s => s.id === sid).name)}</span></div><div class="canvas">${vw.img ? `<img src="${IMG}${vw.img}" alt="">` : `<div class="empty">${esc(vw.empty)}</div>`}${vw.caption ? `<div class="cap">${esc(vw.caption)}</div>` : ""}</div>${strip}</div>
+  <aside class="side" data-keep="side"><h3>Сейчас</h3>${nextHtml(p, { stack: true })}${agentHtml(p, { h: 110, idle: false })}${sideFor(p, sid)}<details class="more"><summary>История: ${p.history.length}</summary><div style="margin-top:6px">${historyHtml(p, 6)}</div></details><div><button class="sm quiet" data-act="delete:${p.id}">Удалить проект</button></div></aside>`;
+}
+function folderView(f) {
+  const ps = core.projectsIn(f.id);
+  return `<div class="view"><div class="gallery">${ps.map(p => { const n = core.nextOf(p); return `<div class="g" data-act="open:${p.id}">${pic(thumbOf(p), { h: 140, alt: "" })}<div class="t">${esc(p.title)}</div><span class="pill ${KIND_DOT[n.kind]}">${esc(n.short)}</span></div>`; }).join("")}<div class="g new" data-act="new-project" data-folder="${f.id}">+ Новый проект</div></div></div>
+  <aside class="side"><h3>${esc(f.name)}</h3><p class="muted xs">${plural(ps.length, "проект", "проекта", "проектов")}. Плашка под названием — что дальше по проекту.</p>${howHtml(["Экран — картинка: компоновка, 3D или эскиз. Этапы изделия — в шапке, нажмите этап, чтобы увидеть его картинку.", "Справа «Сейчас»: один следующий шаг и ход работы агента с картинками.", "Дерево папок слева сворачивается кнопкой «Проекты» в шапке, чтобы картинке было просторнее; правая кнопка по проекту — удалить."])}</aside>`;
+}
+function render() {
+  const p = core.current(), f = core.folder(core.cur.folder);
+  const sid = p ? (core.cur.stage || core.nextOf(p).stage) : null;
+  const steps = p ? `<div class="steps">${core.stages(p).map((s, i) => `${i ? `<span class="sep"></span>` : ""}<button class="${s.id === sid ? "cur" : ""}" data-act="stage:${s.id}"><span class="n ${s.state}">${s.state === "done" ? "✓" : i + 1}</span>${s.name}</button>`).join("")}</div>` : "";
+  document.getElementById("app").innerHTML = `
+  <header class="top"><span class="brand">SkelCAD</span><button class="sm quiet" data-act="pin" title="${core.ui.pin ? "Скрыть папки и проекты" : "Показать папки и проекты"}">☰ Проекты</button><span class="crumbs"><span>${esc(f.name)}</span>${p ? `<span>›</span><b>${esc(p.title)}</b>` : ""}</span>${steps}<span class="spacer"></span><span class="user">mikhaylov_yv</span></header>
+  <div class="main ${core.ui.pin ? "pinned" : ""}">${core.ui.pin ? treeHtml() : ""}${p ? projectView(p) : folderView(f)}</div>${dialogHtml()}`;
+}
+mount(render, { name: "03 Рабочий стол", how: "картинка во весь экран, этапы в шапке, справа «Сейчас» — один следующий шаг и агент; дерево папок выдвигается кнопкой", act: (a) => { if (a.startsWith("vcur:")) { core.ui.vcur = a.slice(5); core.emit(); return true; } if (a === "pin") { core.ui.pin = !core.ui.pin; core.emit(); return true; } return false; } });
+core.ui.pin = true; core.emit();
+</script>
+</body>
+</html>

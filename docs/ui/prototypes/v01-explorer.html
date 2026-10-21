@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>01 Проводник — макет рабочего места SkelCAD</title>
+<link rel="stylesheet" href="core.css">
+<style>
+.main { grid-template-columns: 260px minmax(0, 1fr) 340px; }
+.center { min-height: 0; overflow: auto; padding: 16px 20px 40px; display: flex; flex-direction: column; gap: 14px; }
+.side { min-height: 0; overflow: auto; border-left: 1px solid var(--border); background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.head { display: flex; align-items: center; gap: 12px; }
+.head .spacer { flex: 1; }
+.path { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.tile { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; text-align: left; }
+.tile:hover { border-color: var(--border-strong); }
+.tile.cur { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.tile.todo { opacity: .6; }
+.tile .h { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.tile .h .n { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); }
+.tile .h .n.done { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+.tile .h .n.wait { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn); }
+.tile .h .n.agent { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.tile .pic { height: 96px; border: 0; background: var(--surface-2); }
+.tile .txt { height: 96px; padding: 8px; font-size: 12px; color: var(--muted); line-height: 16px; overflow: hidden; border-radius: var(--radius); background: var(--surface-2); }
+.tile .s { font-size: 12px; color: var(--muted); }
+.stage { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.stage .h2 { display: flex; align-items: center; gap: 10px; }
+.rows { display: flex; flex-direction: column; gap: 8px; }
+.prow { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.prow:hover { border-color: var(--border-strong); }
+.prow .pic { height: 64px; border: 0; background: var(--surface-2); }
+.prow .t { font-weight: 600; }
+.prow .mini { display: flex; gap: 4px; margin-top: 6px; }
+.prow .mini span { height: 18px; padding: 0 7px; border-radius: 999px; font-size: 11px; line-height: 18px; background: var(--surface-2); color: var(--muted-2); border: 1px solid var(--border); }
+.prow .mini span.done { color: var(--muted); }
+.prow .mini span.wait { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn); }
+.prow .mini span.agent, .prow .mini span.next { background: var(--accent-soft); border-color: transparent; color: var(--accent-ink); }
+.prow .r { text-align: right; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script src="core.js"></script>
+<script>
+const thumbOf = p => p.design.variants.length ? p.design.variants[0].img : p.layout.img ? p.layout.img : p.brief.sketch || null;
+const stageThumb = (p, s) => s.id === "brief" ? p.brief.sketch : s.id === "layout" ? (p.layout.img || null) : s.id === "design" ? (p.design.variants[0] ? p.design.variants[0].img : null) : null;
+const stateLabel = { done: "готово", wait: "ждёт вас", agent: "у агента", next: "следующий", todo: "позже" };
+
+function folderView(f) {
+  const ps = core.projectsIn(f.id);
+  return `<div class="head"><h1>${esc(f.name)}</h1><span class="muted">${plural(ps.length, "проект", "проекта", "проектов")}</span><span class="spacer"></span><button data-act="new-project" data-folder="${f.id}">+ Проект</button></div>
+  ${ps.length ? `<div class="rows">${ps.map(p => { const n = core.nextOf(p); return `<div class="prow" data-act="open:${p.id}">${pic(thumbOf(p), { h: 64, alt: "" })}<div><div class="t">${esc(p.title)}</div><div class="mini">${core.stages(p).map(s => `<span class="${s.state}" title="${s.name}: ${stateLabel[s.state]}">${s.name}</span>`).join("")}</div></div><div class="r"><span class="pill ${KIND_DOT[n.kind]}">${esc(n.short)}</span><div style="margin-top:6px">${esc(p.updated)}</div></div></div>`; }).join("")}</div>` : `<p class="muted">В папке пусто. Нажмите «+ Проект».</p>`}
+  ${howHtml(["<b>Задание</b> — опишите изделие словами, приложите набросок. <b>Компоновка</b> — агент покажет скелет и обстановку, вы согласуете.", "<b>Конструкция</b> — агент делает детали и варианты, вы сравниваете и выбираете.", "<b>Комплект</b> — STEP, эскизы, спецификация, отчёт. В дереве слева у каждого проекта написано, что дальше."])}`;
+}
+function projectView(p) {
+  const stages = core.stages(p);
+  const sid = core.cur.stage || core.nextOf(p).stage;
+  const s = STAGES.find(x => x.id === sid);
+  const body = sid === "brief" ? briefHtml(p) : sid === "layout" ? layoutHtml(p, { h: 380 }) : sid === "design" ? designHtml(p, { h: 160 }) : kitHtml(p);
+  return `<div class="head"><h1>${esc(p.title)}</h1><span class="muted mono">${esc(p.code)}</span><span class="spacer"></span><span class="muted xs">${esc(p.updated)}</span><button class="sm quiet" data-act="delete:${p.id}">Удалить</button></div>
+  <div class="path">${stages.map((s, i) => `<div class="tile ${s.id === sid ? "cur" : ""} ${s.state}" data-act="stage:${s.id}" role="button" tabindex="0"><div class="h"><span class="n ${s.state}">${s.state === "done" ? "✓" : i + 1}</span><span>${s.name}</span></div>${s.id === "kit" ? (p.kit.state === "ready" ? `<div class="pic" style="height:96px;flex-direction:column;gap:2px;font-size:12px;color:var(--muted)"><b style="color:var(--text)">4 файла</b>STEP · эскиз · спецификация · отчёт</div>` : pic(null, { h: 96, alt: "" })) : s.id === "brief" && !p.brief.sketch ? `<div class="txt">${esc((p.brief.text || "ещё не описано").slice(0, 120))}</div>` : pic(stageThumb(p, s), { h: 96, alt: "" })}<div class="s">${stateLabel[s.state]}</div></div>`).join("")}</div>
+  ${nextHtml(p)}
+  <div class="card stage"><div class="h2"><h2>${s.name}</h2><span class="muted xs">${esc(s.hint)}</span></div>${body}</div>
+  <div class="card stage"><h3>История</h3>${historyHtml(p, 5)}</div>`;
+}
+function render() {
+  const p = core.current(), f = core.folder(core.cur.folder);
+  document.getElementById("app").innerHTML = `
+  <header class="top"><span class="brand">SkelCAD</span><span class="crumbs"><span>Проекты</span><span>›</span><span>${esc(f.name)}</span>${p ? `<span>›</span><b>${esc(p.title)}</b>` : ""}</span><span class="spacer"></span><span class="user">mikhaylov_yv</span></header>
+  <div class="main">${treeHtml()}<div class="center" data-keep="center">${p ? projectView(p) : folderView(f)}</div>
+  <aside class="side" data-keep="side"><h3>Агент</h3>${p ? agentHtml(p, { h: 120 }) : `<p class="muted xs">Выберите проект — здесь будет видно, что делает агент: шаг за шагом, с картинками, на которые он смотрел.</p>`}</aside></div>${dialogHtml()}`;
+}
+mount(render, { name: "01 Проводник", how: "три области как в проводнике: дерево папок слева, этапы изделия плитками по центру, агент справа" });
+</script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>02 Лента проекта — макет рабочего места SkelCAD</title>
+<link rel="stylesheet" href="core.css">
+<style>
+.main { grid-template-columns: 260px minmax(0, 1fr); }
+.center { min-height: 0; overflow: auto; padding: 20px 28px 60px; }
+.doc { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.head { display: flex; align-items: center; gap: 12px; }
+.head .spacer { flex: 1; }
+.tl { display: flex; flex-direction: column; }
+.sec { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 0 14px; }
+.sec .rail { display: flex; flex-direction: column; align-items: center; }
+.sec .rail .n { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; background: var(--surface); border: 2px solid var(--border-strong); color: var(--muted); flex-shrink: 0; }
+.sec .rail .n.done { border-color: var(--ok); color: var(--ok); }
+.sec .rail .n.wait { border-color: #d99a1e; color: var(--warn); background: var(--warn-soft); }
+.sec .rail .n.agent, .sec .rail .n.next { border-color: var(--accent); color: var(--accent); }
+.sec .rail .line { flex: 1; width: 2px; background: var(--border); margin: 4px 0; min-height: 18px; }
+.sec:last-child .rail .line { background: transparent; }
+.sec .body { padding-bottom: 22px; display: flex; flex-direction: column; gap: 10px; }
+.sec .h { display: flex; align-items: center; gap: 10px; min-height: 28px; }
+.sec.todo .h h2 { color: var(--muted-2); }
+.sec.todo .body { padding-bottom: 14px; }
+.sec .card { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.pcard { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.pcard:hover { border-color: var(--border-strong); }
+.pcard .pic { height: 150px; border: 0; background: var(--surface-2); }
+.pcard .t { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.pcard .t .pill { margin-left: auto; }
+.pcard .nx { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script src="core.js"></script>
+<script>
+const thumbOf = p => p.design.variants.length ? p.design.variants[0].img : p.layout.img ? p.layout.img : p.brief.sketch || null;
+function folderView(f) {
+  const ps = core.projectsIn(f.id);
+  return `<div class="head"><h1>${esc(f.name)}</h1><span class="muted">${plural(ps.length, "проект", "проекта", "проектов")}</span><span class="spacer"></span><button data-act="new-project" data-folder="${f.id}">+ Проект</button></div>
+  ${ps.length ? `<div class="cards">${ps.map(p => { const n = core.nextOf(p); return `<div class="pcard" data-act="open:${p.id}">${pic(thumbOf(p), { h: 150, alt: "" })}<div class="t"><span>${esc(p.title)}</span><span class="pill ${KIND_DOT[n.kind]}">${esc(n.short)}</span></div><div class="nx">${esc(n.title)}</div><div class="muted xs">${esc(p.updated)}</div></div>`; }).join("")}</div>` : `<p class="muted">В папке пусто. Нажмите «+ Проект».</p>`}
+  ${howHtml(["Проект — одна страница сверху вниз: задание → компоновка → конструкция → комплект. Где работа остановилась, там карточка «что дальше».", "Агент работает прямо в своём разделе: видно каждый шаг и картинку, на которую он смотрел.", "В дереве слева у каждого проекта написано, что дальше; правая кнопка — создать или удалить."])}`;
+}
+function section(p, s, i) {
+  const nx = core.nextOf(p);
+  const here = nx.stage === s.id;
+  const todo = s.state === "todo";
+  let body = "";
+  if (!todo) {
+    body = s.id === "brief" ? briefHtml(p, { h: 240 }) : s.id === "layout" ? layoutHtml(p, { h: 360, actions: !here || nx.kind !== "you" }) : s.id === "design" ? designHtml(p, { h: 170 }) : kitHtml(p);
+  }
+  const pill = s.state === "done" ? `<span class="pill done">готово</span>` : s.state === "wait" ? `<span class="pill wait">ждёт вас</span>` : s.state === "agent" ? `<span class="pill agent">у агента</span>` : s.state === "next" ? `<span class="pill">следующий шаг</span>` : "";
+  const after = { brief: "", layout: "после задания", design: "после согласования компоновки", kit: "после выбора варианта" }[s.id];
+  return `<div class="sec ${s.state}"><div class="rail"><div class="n ${s.state}">${s.state === "done" ? "✓" : i + 1}</div><div class="line"></div></div><div class="body"><div class="h"><h2>${s.name}</h2>${pill}${todo ? `<span class="muted xs">${after}</span>` : `<span class="muted xs">${esc(s.hint)}</span>`}</div>${todo ? "" : `<div class="card">${here ? nextHtml(p) : ""}${here && (p.agent || p.last) ? agentHtml(p, { h: 130, idle: false }) : ""}${body}</div>`}</div></div>`;
+}
+function projectView(p) {
+  const stages = core.stages(p);
+  return `<div class="head"><h1>${esc(p.title)}</h1><span class="muted mono">${esc(p.code)}</span><span class="spacer"></span><span class="muted xs">${esc(p.updated)}</span><button class="sm quiet" data-act="delete:${p.id}">Удалить</button></div>
+  <div class="tl">${stages.map((s, i) => section(p, s, i)).join("")}</div>
+  <div class="card" style="padding:14px 16px"><h3>История</h3>${historyHtml(p, 6)}</div>`;
+}
+function render() {
+  const p = core.current(), f = core.folder(core.cur.folder);
+  document.getElementById("app").innerHTML = `
+  <header class="top"><span class="brand">SkelCAD</span><span class="crumbs"><span>Проекты</span><span>›</span><span>${esc(f.name)}</span>${p ? `<span>›</span><b>${esc(p.title)}</b>` : ""}</span><span class="spacer"></span><span class="user">mikhaylov_yv</span></header>
+  <div class="main">${treeHtml()}<div class="center" data-keep="center"><div class="doc">${p ? projectView(p) : folderView(f)}</div></div></div>${dialogHtml()}`;
+}
+const _open = core.open.bind(core); core.open = (pid, stage) => { core.ui.jump = true; _open(pid, stage); };
+mount(render, { name: "02 Лента проекта", how: "проект — одна страница сверху вниз по этапам; «что дальше» и ход агента стоят в том разделе, где остановилась работа" });
+</script>
+</body>
+</html>

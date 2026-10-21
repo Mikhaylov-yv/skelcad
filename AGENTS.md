@@ -71,7 +71,8 @@
 - Документы: `docs/architecture/01-vision-and-architecture.md` (замысел), `02-decisions.md`
   (журнал решений), `03-m0-plan.md`, `04-m1-plan.md`, `05-m2-plan.md`, `06-m2-1-sketches-plan.md`, `07-m2-2-graph-plan.md` (планы этапов со статусом и дорожная карта),
   `08-m2-3-layout-input-plan.md` (ввод компоновки от конструктора), `09-m2-4-calm-ui-plan.md` (ход работы агента
-  словами, спокойная палитра; D30–D31).
+  словами, спокойная палитра; D30–D31), `10-m2-5-workbench-plan.md` (рабочее место с чистого листа: дерево папок, этапы,
+  один следующий шаг; макеты `docs/ui/prototypes/`; D32, обсуждается).
 - Код: `src/skelcad/core` (модель), `geom` (OCCT; `layout.py` — компоновочный эскиз), `rules` (плагины),
   `graph/` (граф связей в Postgres: словарь сущностей и связей, индексатор, запросы; D27),
   `pipeline.py`, `server/` (FastAPI + MCP + git-проекты; `api.py`, `attachments.py` (вложения конструктора, D28),

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>04 Доска — макет рабочего места SkelCAD</title>
+<link rel="stylesheet" href="core.css">
+<style>
+.main { grid-template-columns: 240px minmax(0, 1fr); }
+.center { min-height: 0; overflow: auto; padding: 16px 20px 40px; display: flex; flex-direction: column; gap: 14px; }
+.head { display: flex; align-items: center; gap: 12px; }
+.head .spacer { flex: 1; }
+.board { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 12px; align-items: start; }
+.col { display: flex; flex-direction: column; gap: 10px; padding: 10px; border-radius: 10px; background: #e9ecf1; min-height: 240px; }
+.col.todo { background: transparent; border: 1px dashed var(--border-strong); }
+.col .ch { display: flex; align-items: center; gap: 8px; padding: 2px 4px; font-weight: 600; }
+.col .ch .pill { margin-left: auto; }
+.col.todo .ch { color: var(--muted-2); }
+.kcard { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); box-shadow: 0 1px 2px rgb(27 31 36 / .05); }
+.kcard .pic { height: 150px; border: 0; background: var(--surface-2); }
+.kcard .t { font-weight: 600; font-size: 13px; }
+.kcard p { font-size: 13px; }
+.col .next { flex-direction: column; align-items: stretch; }
+.col .next .t b { font-size: 13px; }
+.col .agent { padding: 10px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
+.lanes { display: grid; grid-template-columns: 220px repeat(4, minmax(0, 1fr)); gap: 8px; align-items: stretch; }
+.lanes .lh { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding: 4px 8px; }
+.lanes .ln { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.lanes .ln:hover { border-color: var(--border-strong); }
+.lanes .ln .t { font-weight: 600; }
+.lanes .lc { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); color: var(--muted); font-size: 12px; min-height: 64px; cursor: pointer; }
+.lanes .lc .pic { width: 56px; height: 44px; flex-shrink: 0; border: 0; background: #fff; border: 1px solid var(--border); }
+.lanes .lc.done { background: var(--surface); color: var(--muted); }
+.lanes .lc.wait { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn); }
+.lanes .lc.agent { background: var(--accent-soft); border-color: transparent; color: var(--accent-ink); }
+.lanes .lc.next { background: var(--accent-soft); border-color: transparent; color: var(--accent-ink); font-weight: 500; }
+.lanes .lc.todo { border-style: dashed; background: transparent; color: var(--muted-2); }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script src="core.js"></script>
+<script>
+const stageThumb = (p, s) => s.id === "brief" ? p.brief.sketch : s.id === "layout" ? (p.layout.img || null) : s.id === "design" ? (p.design.variants[0] ? p.design.variants[0].img : null) : null;
+const cellText = (p, s) => {
+  if (s.state === "todo") return "—";
+  if (s.id === "brief") return p.brief.done ? "описано" : "опишите";
+  if (s.id === "layout") return p.layout.state === "approved" ? "согласована" : p.layout.state === "agent" ? "у агента" : p.layout.state === "none" ? "поручить агенту" : "согласовать";
+  if (s.id === "design") { const n = p.design.variants.length; return p.design.state === "agent" ? "у агента" : n ? (p.design.chosen ? `выбран ${p.design.chosen}` : `${plural(n, "вариант", "варианта", "вариантов")} — выбрать`) : "поручить агенту"; }
+  return p.kit.state === "ready" ? "4 файла" : p.kit.state === "agent" ? "у агента" : "выдать";
+};
+function folderView(f) {
+  const ps = core.projectsIn(f.id);
+  return `<div class="head"><h1>${esc(f.name)}</h1><span class="muted">${plural(ps.length, "проект", "проекта", "проектов")}</span><span class="spacer"></span><button data-act="new-project" data-folder="${f.id}">+ Проект</button></div>
+  ${ps.length ? `<div class="lanes"><div></div>${STAGES.map(s => `<div class="lh">${s.name}</div>`).join("")}${ps.map(p => `<div class="ln" data-act="open:${p.id}"><div class="t">${esc(p.title)}</div><div class="muted xs">${esc(p.updated)}</div></div>${core.stages(p).map(s => `<div class="lc ${s.state}" data-act="open:${p.id}" data-stage="${s.id}">${stageThumb(p, s) && s.state !== "todo" ? pic(stageThumb(p, s), { h: 44, alt: "" }) : ""}<span>${esc(cellText(p, s))}</span></div>`).join("")}`).join("")}</div>` : `<p class="muted">В папке пусто. Нажмите «+ Проект».</p>`}
+  ${howHtml(["Строка — проект, столбцы — этапы: задание, компоновка, конструкция, комплект. Янтарная клетка ждёт вас, синяя — следующий шаг или агент.", "Откройте проект — те же четыре столбца, в них карточки: текст и набросок, эскиз компоновки, варианты с числами, файлы комплекта.", "Папки и проекты — дерево слева, правая кнопка — создать или удалить."])}`;
+}
+function column(p, s) {
+  const nx = core.nextOf(p);
+  const here = nx.stage === s.id;
+  const pill = s.state === "done" ? `<span class="pill done">готово</span>` : s.state === "wait" ? `<span class="pill wait">ждёт вас</span>` : s.state === "agent" ? `<span class="pill agent">у агента</span>` : "";
+  let cards = "";
+  if (s.state !== "todo") {
+    if (s.id === "brief") cards = `<div class="kcard">${p.brief.done ? `<p>${esc(p.brief.text)}</p><span class="muted xs">${esc(p.brief.by)} · ${esc(p.brief.when)}</span>` : briefHtml(p)}</div>${p.brief.sketch && p.brief.done ? `<div class="kcard">${pic(p.brief.sketch, { h: 150, alt: "набросок" })}<span class="muted xs">набросок</span></div>` : ""}`;
+    else if (s.id === "layout") cards = p.layout.img ? `<div class="kcard">${pic(p.layout.img, { h: 170, alt: "компоновка" })}${facts([["базы", p.layout.bases], ["интерф.", p.layout.ifaces], ["обстан.", p.layout.bodies]])}${p.layout.state === "approved" ? `<span class="muted xs">✓ согласована · ${esc(p.layout.when)}</span>` : `<div style="display:flex;gap:6px;flex-wrap:wrap">${!here ? `<button class="sm" data-act="approve">Согласовать</button>` : ""}<button class="sm ghost" data-act="edit-layout">Поправить</button><button class="sm ghost" data-act="mark">Обвести</button></div>`}${p.layout.assumptions ? `<details class="more"><summary>Допущения: ${p.layout.assumptions.length}</summary><ul class="xs muted" style="margin:6px 0 0;padding-left:16px">${p.layout.assumptions.map(a => `<li>${esc(a)}</li>`).join("")}</ul></details>` : ""}</div>` : "";
+    else if (s.id === "design") cards = p.design.variants.map(v => variantCard(p, v, { h: 140 })).join("");
+    else cards = p.kit.state === "ready" ? `<div class="kcard">${kitHtml(p)}</div>` : "";
+  }
+  return `<div class="col ${s.state}"><div class="ch"><span>${s.name}</span>${pill}</div>${here ? nextHtml(p, { stop: true }) : ""}${here && (p.agent || p.last) ? `<div class="agent">${agentHtml(p, { h: 100, idle: false })}</div>` : ""}${cards}</div>`;
+}
+function projectView(p) {
+  return `<div class="head"><h1>${esc(p.title)}</h1><span class="muted mono">${esc(p.code)}</span><span class="spacer"></span><span class="muted xs">${esc(p.updated)}</span><button class="sm quiet" data-act="delete:${p.id}">Удалить</button></div>
+  <div class="board">${core.stages(p).map(s => column(p, s)).join("")}</div>
+  <div class="card" style="padding:14px 16px"><h3>История</h3>${historyHtml(p, 6)}</div>`;
+}
+function render() {
+  const p = core.current(), f = core.folder(core.cur.folder);
+  document.getElementById("app").innerHTML = `
+  <header class="top"><span class="brand">SkelCAD</span><span class="crumbs"><span>Проекты</span><span>›</span><span>${esc(f.name)}</span>${p ? `<span>›</span><b>${esc(p.title)}</b>` : ""}</span><span class="spacer"></span><span class="user">mikhaylov_yv</span></header>
+  <div class="main">${treeHtml()}<div class="center" data-keep="center">${p ? projectView(p) : folderView(f)}</div></div>${dialogHtml()}`;
+}
+mount(render, { name: "04 Доска", how: "этапы — столбцы, в них карточки: в папке строка на проект (матрица проекты × этапы), в проекте — карточки с картинками; «что дальше» — в своём столбце" });
+</script>
+</body>
+</html>
