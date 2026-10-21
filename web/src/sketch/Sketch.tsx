@@ -3,10 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type LayoutView } from "../api";
 import { S } from "../strings";
+import type { Handle } from "./edit";
 
 export interface SketchPin {
   id: string;
   point: [number, number, number]; // мм, координаты модели
+  resolved?: boolean;
+}
+
+export interface SketchStroke {
+  id: string;
+  points: [number, number, number][]; // мм, координаты модели (вид — тот, на котором рисуется)
   resolved?: boolean;
 }
 
@@ -21,6 +28,14 @@ export interface SketchProps {
   onHover?: (ref: string | null) => void;
   viewBox?: number[]; // общий viewBox (сравнение в одном масштабе, наложение)
   className?: string;
+  // правка компоновки (M2.3): ручки у выбранной сущности, контур черновика, перетаскивание ручки
+  handles?: Handle[];
+  ghost?: [number, number, number, number] | null; // (umin, vmin, umax, vmax) в координатах вида
+  onHandleDrag?: (id: string, du: number, dv: number, done: boolean) => void;
+  // росчерки пометок (M2.3 шаг 3): готовые — ломаные поверх эскиза; drawMode — рисование нового
+  strokes?: SketchStroke[];
+  drawMode?: boolean;
+  onStroke?: (points: [number, number, number][]) => void;
 }
 
 /** Точка модели → координаты вида (u, v): u = знак·координата по оси вида. */
@@ -50,14 +65,29 @@ export function Sketch({
   onHover,
   viewBox,
   className,
+  handles,
+  ghost,
+  onHandleDrag,
+  strokes,
+  drawMode,
+  onStroke,
 }: SketchProps) {
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const host = useRef<HTMLDivElement>(null);
   const [tf, setTf] = useState({ x: 0, y: 0, k: 1 });
-  const drag = useRef<{ x: number; y: number; tx: number; ty: number; moved: boolean; ref: string | null } | null>(
-    null,
-  );
+  const drag = useRef<{
+    x: number;
+    y: number;
+    tx: number;
+    ty: number;
+    moved: boolean;
+    ref: string | null;
+    handle: string | null; // перетаскивается ручка правки, а не лист
+    su: number; // точка начала в координатах вида
+    sv: number;
+    draw: [number, number][] | null; // рисуется росчерк: точки в координатах вида
+  } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -120,9 +150,116 @@ export function Sketch({
     root.appendChild(g);
   }, [pinKey, pins, svg, view]);
 
+  // росчерки пометок: ломаные внутри SVG, в координатах вида
+  const strokeKey = useMemo(() => JSON.stringify(strokes ?? []), [strokes]);
+  useEffect(() => {
+    const root = host.current?.querySelector("svg");
+    if (!root || !svg) return;
+    root.querySelector("g.strokes")?.remove();
+    if (!strokes || strokes.length === 0) return;
+    const vb = view.viewBox;
+    const w = Math.max(vb[2], vb[3]) / 400;
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute("class", "strokes");
+    for (const st of strokes) {
+      if (st.points.length < 2) continue;
+      const pts = st.points.map((p) => toView(view, p));
+      const pl = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      pl.setAttribute("points", pts.map(([u, v]) => `${u},${-v}`).join(" "));
+      pl.setAttribute("stroke-width", String(w));
+      pl.setAttribute("class", st.resolved ? "resolved" : "");
+      pl.setAttribute("data-stroke", st.id);
+      const t = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      t.textContent = st.id;
+      pl.appendChild(t);
+      g.appendChild(pl);
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.setAttribute("x", String(pts[0][0] + w * 2));
+      label.setAttribute("y", String(-pts[0][1] - w * 2));
+      label.textContent = st.id;
+      g.appendChild(label);
+    }
+    root.appendChild(g);
+  }, [strokeKey, strokes, svg, view]);
+
+  /** Рисование росчерка: временная ломаная обновляется прямо в DOM, без перерисовки React. */
+  const liveStroke = (pts: [number, number][] | null) => {
+    const root = host.current?.querySelector("svg");
+    if (!root) return;
+    let g = root.querySelector("g.strokes");
+    if (!g) {
+      g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.setAttribute("class", "strokes");
+      root.appendChild(g);
+    }
+    g.querySelector("polyline.live")?.remove();
+    if (!pts || pts.length < 2) return;
+    const vb = view.viewBox;
+    const pl = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    pl.setAttribute("class", "live");
+    pl.setAttribute("points", pts.map(([u, v]) => `${u},${-v}`).join(" "));
+    pl.setAttribute("stroke-width", String(Math.max(vb[2], vb[3]) / 400));
+    g.appendChild(pl);
+  };
+
+  // ручки правки и контур черновика: группа внутри SVG, в координатах вида
+  const handleKey = useMemo(() => JSON.stringify([handles ?? [], ghost ?? null]), [handles, ghost]);
+  useEffect(() => {
+    const root = host.current?.querySelector("svg");
+    if (!root || !svg) return;
+    root.querySelector("g.handles")?.remove();
+    if ((!handles || handles.length === 0) && !ghost) return;
+    const vb = view.viewBox;
+    const r = Math.max(vb[2], vb[3]) / 90;
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute("class", "handles");
+    if (ghost) {
+      const [umin, vmin, umax, vmax] = ghost;
+      const rc = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rc.setAttribute("class", "ghost");
+      rc.setAttribute("x", String(umin));
+      rc.setAttribute("y", String(-vmax));
+      rc.setAttribute("width", String(Math.max(0, umax - umin)));
+      rc.setAttribute("height", String(Math.max(0, vmax - vmin)));
+      g.appendChild(rc);
+    }
+    for (const h of handles ?? []) {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", h.kind === "move" ? "circle" : "rect");
+      if (h.kind === "move") {
+        el.setAttribute("cx", String(h.u));
+        el.setAttribute("cy", String(-h.v));
+        el.setAttribute("r", String(r));
+      } else {
+        el.setAttribute("x", String(h.u - r * 0.8));
+        el.setAttribute("y", String(-h.v - r * 0.8));
+        el.setAttribute("width", String(r * 1.6));
+        el.setAttribute("height", String(r * 1.6));
+      }
+      el.setAttribute("data-handle", h.id);
+      el.setAttribute("style", `cursor: ${h.cursor}`);
+      const t = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      t.textContent = h.title;
+      el.appendChild(t);
+      g.appendChild(el);
+    }
+    root.appendChild(g);
+  }, [handleKey, handles, ghost, svg, view]);
+
   const refAt = (target: EventTarget | null): string | null => {
     const el = (target as Element | null)?.closest?.("[data-ref]") as Element | null;
     return el?.getAttribute("data-ref") ?? null;
+  };
+  const handleAt = (target: EventTarget | null): string | null => {
+    const el = (target as Element | null)?.closest?.("[data-handle]") as Element | null;
+    return el?.getAttribute("data-handle") ?? null;
+  };
+  /** Точка указателя в координатах вида (u, v): через матрицу SVG; null, если SVG ещё нет. */
+  const viewPoint = (clientX: number, clientY: number): [number, number] | null => {
+    const svgEl = host.current?.querySelector("svg");
+    const ctm = svgEl?.getScreenCTM?.();
+    if (!ctm) return null;
+    const pt = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
+    return [pt.x, -pt.y];
   };
 
   const onWheel = useCallback((e: React.WheelEvent) => {
@@ -144,7 +281,20 @@ export function Sketch({
 
   const onDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    drag.current = { x: e.clientX, y: e.clientY, tx: tf.x, ty: tf.y, moved: false, ref: refAt(e.target) };
+    const handle = onHandleDrag ? handleAt(e.target) : null;
+    const start = handle || (drawMode && onStroke) ? viewPoint(e.clientX, e.clientY) : null;
+    drag.current = {
+      x: e.clientX,
+      y: e.clientY,
+      tx: tf.x,
+      ty: tf.y,
+      moved: false,
+      ref: refAt(e.target),
+      handle: start ? handle : null,
+      su: start?.[0] ?? 0,
+      sv: start?.[1] ?? 0,
+      draw: !handle && drawMode && onStroke && start ? [start] : null,
+    };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
   const onMove = (e: React.PointerEvent) => {
@@ -153,12 +303,38 @@ export function Sketch({
     const dx = e.clientX - d.x;
     const dy = e.clientY - d.y;
     if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
-    if (d.moved) setTf((t) => ({ ...t, x: d.tx + dx, y: d.ty + dy }));
+    if (!d.moved) return;
+    if (d.draw) {
+      const p = viewPoint(e.clientX, e.clientY);
+      const last = d.draw[d.draw.length - 1];
+      if (p && Math.hypot(p[0] - last[0], p[1] - last[1]) >= Math.max(view.viewBox[2], view.viewBox[3]) / 300) {
+        d.draw.push(p);
+        liveStroke(d.draw);
+      }
+      return;
+    }
+    if (d.handle) {
+      const p = viewPoint(e.clientX, e.clientY);
+      if (p) onHandleDrag?.(d.handle, p[0] - d.su, p[1] - d.sv, false);
+      return;
+    }
+    setTf((t) => ({ ...t, x: d.tx + dx, y: d.ty + dy }));
   };
   const onUp = (e: React.PointerEvent) => {
     const d = drag.current;
     drag.current = null;
-    if (!d || d.moved) return;
+    if (!d) return;
+    if (d.draw) {
+      liveStroke(null);
+      if (d.moved && d.draw.length >= 2) onStroke?.(d.draw.map(([u, v]) => fromView(view, u, v)));
+      return;
+    }
+    if (d.handle) {
+      const p = viewPoint(e.clientX, e.clientY);
+      if (d.moved && p) onHandleDrag?.(d.handle, p[0] - d.su, p[1] - d.sv, true);
+      return;
+    }
+    if (d.moved) return;
     // клик без перетаскивания: сущность под курсором и точка модели
     const svgEl = host.current?.querySelector("svg");
     let point: [number, number, number] | undefined;
@@ -174,7 +350,13 @@ export function Sketch({
 
   return (
     <div
-      className={"sketch" + (pinMode ? " sketch--pinning" : "") + (className ? " " + className : "")}
+      className={
+        "sketch" +
+        (pinMode ? " sketch--pinning" : "") +
+        (drawMode ? " sketch--drawing" : "") +
+        (handles && handles.length ? " sketch--editing" : "") +
+        (className ? " " + className : "")
+      }
       ref={host}
       onWheel={onWheel}
       onPointerDown={onDown}

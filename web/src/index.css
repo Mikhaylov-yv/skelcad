@@ -273,6 +273,24 @@ button.danger { color: var(--error); border-color: var(--error); }
 .sketch [data-ref].selected { stroke: #e5541e; stroke-width: 1.5; }
 .sketch text[data-ref].selected { fill: #e5541e; stroke: none; font-weight: 700; }
 .sketch__hover { margin-left: auto; color: var(--accent); }
+.sketch--editing [data-ref] { cursor: pointer; }
+.sketch--drawing, .sketch--drawing [data-ref] { cursor: crosshair; }
+.sketch .handles rect, .sketch .handles circle { fill: #fff; stroke: #e5541e; stroke-width: 0.6px; vector-effect: non-scaling-stroke; }
+.sketch .handles [data-handle="move"] { fill: #e5541e; fill-opacity: 0.85; }
+.sketch .handles .ghost { fill: none; stroke: #e5541e; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+.sketch .handles text { font-size: 10px; fill: #e5541e; pointer-events: none; }
+.sketch .dims [data-ref]:hover { stroke: #e5541e; fill: #e5541e; }
+.sketch .strokes polyline { fill: none; stroke: #e08a00; stroke-opacity: 0.9; stroke-linecap: round; stroke-linejoin: round; }
+.sketch .strokes polyline.resolved { stroke: #1b7f3b; stroke-opacity: 0.6; }
+.sketch .strokes polyline.live { stroke: #e5541e; stroke-dasharray: 4 3; }
+.sketch .strokes text { font-size: 10px; fill: #e08a00; font-weight: 600; pointer-events: none; }
+.edit { display: grid; gap: 6px; margin: 4px 0 12px; padding: 8px 10px; border: 1px solid var(--accent); border-radius: var(--radius); background: var(--surface); }
+.edit__fields { display: grid; gap: 6px; }
+.edit__field { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.edit__field label { font-size: 13px; color: var(--muted); }
+.edit__vec { display: inline-flex; gap: 4px; }
+.edit input[type="number"], .edit input[type="text"] { width: 72px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 4px; font: inherit; background: var(--bg); color: var(--text); }
+.edit input.edit__msg { width: 100%; box-sizing: border-box; }
 .sketch__foot { padding: 6px 12px; border-top: 1px solid var(--border); background: var(--surface); }
 .approval { display: grid; gap: 6px; margin: 4px 0 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 

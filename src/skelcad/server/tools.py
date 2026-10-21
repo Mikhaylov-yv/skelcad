@@ -230,6 +230,7 @@ class Tools:
             + (f" {i['variant']}" if i.get("variant") else "")
             + (f" {i['part']}" if i.get("part") else "")
             + (f" @{i['point']}" if i.get("point") else "")
+            + (f" [{review.describe_stroke(i['stroke'])}]" if i.get("stroke") else "")
             + f": {i['text']}"
             + (f" — ответ: {i['answer']}" if i.get("answer") else "")
             for i in items
@@ -250,10 +251,13 @@ class Tools:
         part: str | None = None,
         point: list[float] | None = None,
         client: str = "agent",
+        stroke: dict | None = None,
     ) -> dict:
         from skelcad.server import review
 
-        res = review.add(self.ws, project, text, current_actor(client), variant=variant, part=part, point=point)
+        res = review.add(
+            self.ws, project, text, current_actor(client), variant=variant, part=part, point=point, stroke=stroke
+        )
         return {"summary": f"{res['item']['id']}: {res['item']['text']}", **res}
 
     # ---------------------------------------------------------------- вложения конструктора (M2.3, D28)
@@ -607,6 +611,8 @@ class Tools:
                 res = json.loads(jf.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 res = None
+            if res and res.get("entities") and "geom" not in res["entities"][0]:
+                res = None  # кэш старого формата (без геометрии для ручек) — перестроить
         if res is None:
             d.mkdir(parents=True, exist_ok=True)  # воркер пишет только внутрь out_dir — родителей создаёт сервер
             res = self.srv.runner.run(

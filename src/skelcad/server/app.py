@@ -232,6 +232,13 @@ def create_app(srv: Server | None = None) -> FastAPI:
         guard(name)
         return await to_thread.run_sync(api.layout_approve, srv.workspace, name)
 
+    @app.post("/api/projects/{name}/layout/edit")
+    async def api_layout_edit(name: str, request: Request):
+        """Правка компоновки с эскиза: положение и размеры сущностей скелета и обстановки, размер числом (M2.3)."""
+        guard(name)
+        body = await request.json()
+        return await to_thread.run_sync(api.layout_edit, tools, name, body if isinstance(body, dict) else {})
+
     # ---------------- граф связей (M2.2, D27)
     @app.get("/api/graph/search")
     async def api_graph_search(q: str, project: str | None = None, kind: str | None = None, limit: int = 50):
@@ -288,7 +295,14 @@ def create_app(srv: Server | None = None) -> FastAPI:
         guard(name)
         b = await request.json()
         return await to_thread.run_sync(
-            tools.review_add, name, b.get("text", ""), b.get("variant"), b.get("part"), b.get("point"), "workbench"
+            tools.review_add,
+            name,
+            b.get("text", ""),
+            b.get("variant"),
+            b.get("part"),
+            b.get("point"),
+            "workbench",
+            b.get("stroke"),
         )
 
     @app.post("/api/projects/{name}/review/{item_id}/resolve")

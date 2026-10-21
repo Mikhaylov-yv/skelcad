@@ -18,7 +18,9 @@
 **Цикл работы.**
 
 1. `project_list`, `project_read` — что за изделие, какие варианты, какие стандарты; `review_list` —
-   открытые замечания конструктора (пометки на модели), на каждое нужен `review_resolve` с ответом.
+   открытые замечания конструктора (пометки на модели; росчерк на компоновочном эскизе — вид и точки в мм,
+   место обведено или показано стрелкой: смотри `render(layout=true, view=<вид росчерка>)`), на каждое нужен
+   `review_resolve` с ответом.
    Новое изделие начинай с компоновки: в `project.yaml` опиши требования (нагрузки `Fv`/`Fh`/`Fa`/`Fx`…),
    скелет (`datums`, `interfaces`, `envelopes` keep_in / keep_out) и обстановку `skeleton.surroundings`
    (стена, пол, труба, ответная деталь, соседнее оборудование — plane / box / cylinder с ролью и именем),
@@ -28,7 +30,9 @@
    вложение проекта: `project_read` → `attachments`, посмотреть — `attachment(project, path)` (изображение;
    `.excalidraw` — сводка элементов). Читай набросок так: опорное (стена, пол, труба, ответная деталь) —
    `surroundings` и `datums`; где изделие крепится и что несёт — `interfaces` и нагрузки; подписанные числа —
-   размеры, неподписанное оцени по пропорциям и запиши в `assumptions`.
+   размеры, неподписанное оцени по пропорциям и запиши в `assumptions`. Конструктор может поправить компоновку
+   сам прямо на эскизе — в истории появятся его коммиты «компоновка с эскиза: …»: перечитай скелет
+   (`project_read` → `skeleton` или `links`) перед следующим шагом и не перезаписывай его значения своими.
 2. `check` или `build` — текущее состояние: замечания (error / warning / info), запасы K, масса.
 3. Заземлиться: `measure` (расстояния, зазоры, пересечения, массы, ЦТ), `context_search` /
    `context_lookup` (каталоги: крепёж, анкеры, материалы, трубы), `render` (посмотреть вид); связи по
@@ -67,7 +71,8 @@
 - Код: `src/skelcad/core` (модель), `geom` (OCCT; `layout.py` — компоновочный эскиз), `rules` (плагины),
   `graph/` (граф связей в Postgres: словарь сущностей и связей, индексатор, запросы; D27),
   `pipeline.py`, `server/` (FastAPI + MCP + git-проекты; `api.py`, `attachments.py` (вложения конструктора, D28),
-  `auth.py`, `layout.py` (согласование компоновки), `params.py`, `review.py`, `tasks.py`, `tokens.py`),
+  `auth.py`, `layout.py` (согласование компоновки), `layout_edit.py` (правка компоновки с эскиза на месте в
+  `project.yaml`), `params.py`, `review.py`, `tasks.py`, `tokens.py`),
   `worker.py` (изолированное исполнение кода проектов), `agent.py` (встроенный агент из workbench),
   `measure.py`, `render.py`, `diff.py`. Workbench — `web/` (Vite + React + TS, three.js). Пакет стандарта — `packages/std-gost`.
 - Проверки перед коммитом: `uv run ruff check src tests && uv run ruff format src tests &&

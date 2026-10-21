@@ -199,7 +199,24 @@ def op_layout(args: dict) -> dict:
             g = generate(m, pd.ctx)
         except Exception as e:  # noqa: BLE001
             notes.append(f"геометрия не построена: {type(e).__name__}: {e}")
-    res = write_layout(m, g, Path(args["out_dir"]), m.variant or m.id, args.get("views"), args.get("png", True))
+    marks: list[dict] = []
+    rf = root / "review.yaml"
+    if rf.is_file():  # открытые замечания конструктора — точки и росчерки поверх эскиза (M2.3)
+        try:
+            import yaml
+
+            data = yaml.safe_load(rf.read_text(encoding="utf-8")) or {}
+            items = data.get("items") if isinstance(data, dict) else data
+            marks = [
+                i
+                for i in (items or [])
+                if isinstance(i, dict) and i.get("status", "open") == "open" and (i.get("point") or i.get("stroke"))
+            ]
+        except Exception as e:  # noqa: BLE001 — замечания не должны ломать компоновку
+            notes.append(f"review.yaml не прочитан: {e}")
+    res = write_layout(
+        m, g, Path(args["out_dir"]), m.variant or m.id, args.get("views"), args.get("png", True), marks=marks
+    )
     res["notes"] = notes + res["notes"]
     return res
 

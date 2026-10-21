@@ -1,10 +1,11 @@
 // Режим «Компоновка» экрана «Вариант»: эскиз по скелету и обстановке (без сборки), состав компоновки,
 // состояние согласования и кнопка «Компоновка согласована».
-import { useCallback, useEffect, useState } from "react";
-import { api, type LayoutEntity, type LayoutResponse } from "../api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api, type LayoutDim, type LayoutEntity, type LayoutResponse } from "../api";
 import { S } from "../strings";
 import { relativeTime } from "../ui/format";
-import { Sketch, type SketchPin } from "./Sketch";
+import { applyDrag, bbox3, handlesFor, viewBox, type Geom } from "./edit";
+import { Sketch, type SketchPin, type SketchStroke } from "./Sketch";
 
 const VIEWS = ["main", "left", "top"] as const;
 type ViewName = (typeof VIEWS)[number];
@@ -18,6 +19,17 @@ export interface LayoutPaneProps {
   reloadNonce?: number;
   onPick?: (ref: string | null, point?: [number, number, number]) => void;
   onData?: (layout: LayoutResponse | null) => void;
+  // правка компоновки (M2.3 шаг 2): режим «Править», черновик геометрии выбранной сущности, клик по размеру
+  editing?: boolean;
+  editable?: boolean;
+  onToggleEdit?: () => void;
+  draft?: Geom | null;
+  onDraft?: (g: Geom | null) => void;
+  onDimPick?: (dim: LayoutDim) => void;
+  // росчерки пометок (M2.3 шаг 3): готовые по видам и рисование нового
+  strokes?: (SketchStroke & { view: string })[];
+  drawMode?: boolean;
+  onStroke?: (view: string, points: [number, number, number][]) => void;
 }
 
 export function LayoutPane({
@@ -29,6 +41,15 @@ export function LayoutPane({
   reloadNonce,
   onPick,
   onData,
+  editing,
+  editable,
+  onToggleEdit,
+  draft,
+  onDraft,
+  onDimPick,
+  strokes,
+  drawMode,
+  onStroke,
 }: LayoutPaneProps) {
   const [data, setData] = useState<LayoutResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +75,43 @@ export function LayoutPane({
   const v = data?.views[view];
   const hoverName = hover ? (data?.entities.find((e) => e.ref === hover)?.name ?? hover) : null;
   const dims = data?.dims.filter((d) => d.view === view) ?? [];
+
+  // ручки и контур черновика у выбранной сущности (только в режиме «Править»)
+  const entity = editing && selected.length === 1 ? (data?.entities.find((e) => e.ref === selected[0]) ?? null) : null;
+  const base = (entity?.geom as Geom | undefined) ?? null;
+  const geom = draft ?? base;
+  const sceneHalf = v ? Math.max(v.viewBox[2], v.viewBox[3]) / 2 : 500;
+  const handles = useMemo(
+    () => (entity && geom && v ? handlesFor(entity, geom, v, sceneHalf) : []),
+    [entity, geom, v, sceneHalf],
+  );
+  const ghost = useMemo(() => {
+    if (!entity || !draft || !v) return null;
+    const bb = bbox3(entity, draft, sceneHalf);
+    return bb ? viewBox(v, bb[0], bb[1]) : null;
+  }, [entity, draft, v, sceneHalf]);
+  const onHandleDrag = useCallback(
+    (id: string, du: number, dv: number) => {
+      if (!entity || !base || !v) return;
+      onDraft?.(applyDrag(entity, base, v, id, du, dv));
+    },
+    [entity, base, v, onDraft],
+  );
+  const viewStrokes = useMemo(() => (strokes ?? []).filter((s) => s.view === view), [strokes, view]);
+  const onStrokeDone = useCallback((points: [number, number, number][]) => onStroke?.(view, points), [onStroke, view]);
+  const pick = useCallback(
+    (ref: string | null, point?: [number, number, number]) => {
+      if (editing && ref?.startsWith("dim:") && onDimPick) {
+        const d = data?.dims.find((x) => "dim:" + x.id === ref);
+        if (d) {
+          onDimPick(d);
+          return;
+        }
+      }
+      onPick?.(ref, point);
+    },
+    [editing, onDimPick, data, onPick],
+  );
   return (
     <>
       <div className="toolbar">
@@ -64,7 +122,12 @@ export function LayoutPane({
           </button>
         ))}
         <button onClick={() => setFit((n) => n + 1)}>{S.layout.fit}</button>
-        <span className="muted small">{S.layout.zoomHint}</span>
+        {onToggleEdit && (
+          <button onClick={onToggleEdit} aria-pressed={!!editing} disabled={!editable} title={S.layout.editHint}>
+            {S.layout.edit}
+          </button>
+        )}
+        <span className="muted small">{editing ? S.layout.editHint : S.layout.zoomHint}</span>
         {hoverName && (
           <span className="small sketch__hover" aria-live="polite">
             {hoverName}
@@ -89,11 +152,18 @@ export function LayoutPane({
             pins={pins}
             pinMode={pinMode}
             fitNonce={fit}
-            onPick={onPick}
+            onPick={pick}
             onHover={setHover}
+            handles={editing ? handles : undefined}
+            ghost={editing ? ghost : null}
+            onHandleDrag={editing && entity ? onHandleDrag : undefined}
+            strokes={viewStrokes}
+            drawMode={drawMode}
+            onStroke={drawMode ? onStrokeDone : undefined}
           />
         )}
         {pinMode && <p className="canvas__note muted">{S.layout.pinHere}</p>}
+        {drawMode && <p className="canvas__note muted">{S.review.drawing}</p>}
       </div>
       {data && (
         <div className="sketch__foot small muted">

@@ -118,6 +118,28 @@ def layout_approve(ws: Workspace, project: str) -> dict:
     return layout.approve(ws, project, current_actor("workbench"))
 
 
+def layout_edit(tools, project: str, body: dict) -> dict:
+    """Правка компоновки с эскиза (M2.3): {edits: [{ref, set}]} или {dim, value} (+ message) → коммит конструктора."""
+    from skelcad.server import layout
+    from skelcad.server import layout_edit as LE
+
+    actor = current_actor("workbench")
+    message = body.get("message") or None
+    if body.get("dim"):
+        dims = tools.layout(project, body.get("variant") or None)["dims"]
+        res = LE.edit_dim(tools.ws, project, dims, str(body["dim"]), body.get("value"), actor, message)
+    else:
+        edits = body.get("edits") or (
+            [{"ref": body["ref"], "set": body.get("changes") or {}}] if body.get("ref") else []
+        )
+        if not isinstance(edits, list) or not edits:
+            raise ValueError("нужны правки: edits: [{ref, set: {поле: значение}}] или dim + value")
+        res = LE.edit(tools.ws, project, edits, actor, message)
+    res["approval"] = layout.state(tools.ws, project)
+    res["summary"] = f"коммит {res['commit']['commit']}: " + "; ".join(res["applied"])
+    return res
+
+
 # ---------------------------------------------------------------- лента коммитов
 
 AGENT_RE = re.compile(r"^SkelCAD agent \((.+)\)$")

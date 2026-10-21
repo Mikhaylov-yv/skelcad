@@ -39,7 +39,8 @@ VIEWS: dict[str, dict] = {
     "top": {"u": (0, 1.0), "v": (1, 1.0), "depth": 2, "eye": (0, 0, DIST), "up": (0, 1, 0), "title": "вид сверху"},
 }
 AXES = "XYZ"
-LAYERS = ("surroundings", "envelopes", "datums", "interfaces", "parts", "loads", "dims", "labels")
+LAYERS = ("surroundings", "envelopes", "datums", "interfaces", "parts", "loads", "dims", "labels", "marks")
+C_MARK = "#e08a00"
 
 # цвета — презентационные атрибуты; интерфейс переопределяет их по классам (тёмная тема)
 C_SURR = "#6b7a8a"
@@ -749,6 +750,34 @@ def legend_lines(m: Project) -> list[str]:
     return lines
 
 
+def entity_geom(e: Any) -> dict:
+    """Числовые поля сущности для ручек на эскизе (M2.3): положение и размеры; направления — только для чтения."""
+    if isinstance(e, Datum):
+        return {"origin": list(e.origin), "direction": list(e.direction) if e.direction else None}
+    if isinstance(e, Interface):
+        body = e.body
+        return {
+            "datum": e.datum,
+            "body": {
+                "center": list(body.center),
+                "axis": list(body.axis),
+                "diameter": body.diameter,
+                "length": body.length,
+            }
+            if body
+            else None,
+        }
+    if isinstance(e, Envelope):
+        return {"min": list(e.min), "max": list(e.max)}
+    if isinstance(e, PlaneBody):
+        return {"origin": list(e.origin), "normal": list(e.normal), "extent": e.extent, "thickness": e.thickness}
+    if isinstance(e, BoxBody):
+        return {"min": list(e.min), "max": list(e.max)}
+    if isinstance(e, CylinderBody):
+        return {"center": list(e.center), "axis": list(e.axis), "diameter": e.diameter, "length": e.length}
+    return {}
+
+
 def entities(m: Project) -> list[dict]:
     out = []
     groups = (
@@ -775,6 +804,7 @@ def entities(m: Project) -> list[dict]:
                     "status": e.status,
                     "source": e.source,
                     "note": note,
+                    "geom": entity_geom(e),
                 }
             )
     return out
@@ -819,8 +849,47 @@ def parts_projection(m: Project, g, views: list[str]) -> Projection:
     return out, ((bb.min.X, bb.min.Y, bb.min.Z), (bb.max.X, bb.max.Y, bb.max.Z))
 
 
-def write_layout(m: Project, g, out: Path, prefix: str, views: list[str] | None = None, png: bool = True) -> dict:
-    """Компоновочный эскиз по видам: <prefix>_layout_<view>.svg (+ .png) и <prefix>_layout.json в out/."""
+def draw_marks(sh: Sheet, marks: list[dict]) -> int:
+    """Пометки конструктора (review.yaml): точка — кружок с номером, росчерк — ломаная на своём виде.
+    Возвращает число пометок, попавших на вид."""
+    n = 0
+    fs = sh.fs
+    r = 0.6 * fs
+    for mk in marks:
+        mid = str(mk.get("id") or "")
+        st = mk.get("stroke") if isinstance(mk.get("stroke"), dict) else None
+        if st and st.get("view") == sh.view and len(st.get("points") or []) >= 2:
+            pts = [to_view(sh.view, (float(p[0]), float(p[1]), float(p[2]))) for p in st["points"]]
+            sh._bb(*pts)
+            path = " ".join(sh.pt(*p) for p in pts)
+            sh.raw(
+                "marks",
+                f'<polyline points="{path}" fill="none" stroke="{C_MARK}" stroke-width="{sh.f(sh.lw * 2.2)}" '
+                f'stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.9" data-mark="{_esc(mid)}"/>',
+            )
+            sh.text("marks", (pts[0][0] + 0.4 * fs, pts[0][1] + 0.4 * fs), mid, 0.9 * fs, color=C_MARK, weight="600")
+            n += 1
+            continue
+        pt = mk.get("point")
+        if isinstance(pt, list | tuple) and len(pt) == 3 and not st:
+            c = to_view(sh.view, (float(pt[0]), float(pt[1]), float(pt[2])))
+            sh.circle("marks", c, r, C_MARK, sh.lw * 1.2, fill="rgba(224,138,0,0.35)", title=mid)
+            sh.text("marks", (c[0] + r + 0.2 * fs, c[1] + 0.3 * fs), mid, 0.9 * fs, color=C_MARK, weight="600")
+            n += 1
+    return n
+
+
+def write_layout(
+    m: Project,
+    g,
+    out: Path,
+    prefix: str,
+    views: list[str] | None = None,
+    png: bool = True,
+    marks: list[dict] | None = None,
+) -> dict:
+    """Компоновочный эскиз по видам: <prefix>_layout_<view>.svg (+ .png) и <prefix>_layout.json в out/.
+    marks — открытые замечания конструктора (точки и росчерки) из review.yaml: рисуются поверх, видны агенту в PNG."""
     views = [v for v in (views or list(VIEWS)) if v in VIEWS] or list(VIEWS)
     out.mkdir(parents=True, exist_ok=True)
     notes: list[str] = []
@@ -873,7 +942,10 @@ def write_layout(m: Project, g, out: Path, prefix: str, views: list[str] | None 
         sh.base = tuple(sh.bb)  # размеры — снаружи всего нарисованного
         loads = draw_loads(sh, m, at3)
         auto_dims(sh, m)
+        n_marks = draw_marks(sh, marks or [])
         sub = s["title"] + (", детали собранного варианта тонкой линией" if parts_svg.get(view) else "")
+        if n_marks:
+            sub += f"; пометок конструктора: {n_marks}"
         svg = sh.emit(f"{title} — компоновка", sub, legend)
         file = f"{prefix}_layout_{view}.svg"
         (out / file).write_text(svg, encoding="utf-8")
@@ -897,6 +969,7 @@ def write_layout(m: Project, g, out: Path, prefix: str, views: list[str] | None 
             "v": [AXES[va], vs],
             "depth": [AXES[da], round((lo3[da] + hi3[da]) / 2, 1)],
             "title": s["title"],
+            "marks": n_marks,
         }
         res["dims"] += sh.dims
         if not res["loads"]:

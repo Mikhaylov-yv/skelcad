@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { api, ApiError, type GraphNode, type LayoutResponse, type Report, type ReviewItem } from "../api";
+import {
+  api,
+  ApiError,
+  type GraphNode,
+  type LayoutDim,
+  type LayoutResponse,
+  type Report,
+  type ReviewItem,
+  type ReviewStroke,
+} from "../api";
 import { S } from "../strings";
 import { NumbersRow } from "../ui/NumbersRow";
 import { Findings } from "../ui/Findings";
@@ -11,6 +20,8 @@ import { indexNodes, nodesForRef } from "../three/refs";
 import { useProjectState } from "../ui/useProjectState";
 import { AgentBanner } from "../ui/AgentBanner";
 import { ApprovalBox, LayoutPane, LayoutTree } from "../sketch/LayoutPane";
+import { LayoutEditPanel } from "../sketch/LayoutEdit";
+import type { Geom } from "../sketch/edit";
 import { Sketch } from "../sketch/Sketch";
 import { Links } from "../ui/Links";
 
@@ -59,6 +70,23 @@ export function Variant() {
   const [layoutSel, setLayoutSel] = useState<string[]>(() => (params.get("ref") ? [params.get("ref")!] : []));
   const [layoutNonce, setLayoutNonce] = useState(0);
   const onLayoutData = useCallback((d: LayoutResponse | null) => setLayout(d), []);
+  // правка компоновки на эскизе (M2.3 шаг 2): режим, черновик выбранной сущности, выбранный размер
+  const [editOn, setEditOn] = useState(false);
+  const [draftFor, setDraftFor] = useState<{ ref: string; geom: Geom } | null>(null); // черновик привязан к сущности
+  const [dimPick, setDimPick] = useState<LayoutDim | null>(null);
+  const editEntity = layoutSel.length === 1 ? (layout?.entities.find((e) => e.ref === layoutSel[0]) ?? null) : null;
+  const editable = !locked && layout?.approval.state !== "invalid";
+  const editing = editOn && editable;
+  const draft = draftFor && draftFor.ref === layoutSel[0] ? draftFor.geom : null;
+  const setDraft = useCallback(
+    (g: Geom | null) => setDraftFor(g && layoutSel[0] ? { ref: layoutSel[0], geom: g } : null),
+    [layoutSel],
+  );
+  const onLayoutApplied = useCallback(() => {
+    setDraftFor(null);
+    setDimPick(null);
+    setLayoutNonce((n) => n + 1);
+  }, []);
 
   const load = useCallback(() => {
     if (!variant) {
@@ -157,7 +185,13 @@ export function Variant() {
   const [pinAt, setPinAt] = useState<{
     part: string | null;
     point: [number, number, number];
+    stroke?: ReviewStroke; // росчерк на компоновочном эскизе (M2.3)
   } | null>(null);
+  const [drawMode, setDrawMode] = useState(false);
+  const onStroke = useCallback((view: string, points: [number, number, number][]) => {
+    setPinAt({ part: null, point: points[0], stroke: { view, points } });
+    setDrawMode(false);
+  }, []);
   const [pinText, setPinText] = useState("");
   const [pinBusy, setPinBusy] = useState(false);
   const [pinErr, setPinErr] = useState<string | null>(null);
@@ -232,6 +266,7 @@ export function Variant() {
         variant,
         part: pinAt?.part ?? null,
         point: pinAt?.point ?? null,
+        ...(pinAt?.stroke ? { stroke: pinAt.stroke } : {}),
       })
       .then(() => {
         setPinText("");
@@ -251,13 +286,22 @@ export function Variant() {
   const pins = useMemo(
     () => [
       ...review
-        .filter((r) => r.point && (!r.variant || r.variant === variant))
+        .filter((r) => r.point && !r.stroke && (!r.variant || r.variant === variant))
         .map((r) => ({
           id: r.id,
           point: r.point!,
           resolved: r.status === "resolved",
         })),
-      ...(pinAt ? [{ id: "_new", point: pinAt.point }] : []),
+      ...(pinAt && !pinAt.stroke ? [{ id: "_new", point: pinAt.point }] : []),
+    ],
+    [review, variant, pinAt],
+  );
+  const strokes = useMemo(
+    () => [
+      ...review
+        .filter((r) => r.stroke && (!r.variant || r.variant === variant))
+        .map((r) => ({ id: r.id, view: r.stroke!.view, points: r.stroke!.points, resolved: r.status === "resolved" })),
+      ...(pinAt?.stroke ? [{ id: "R?", view: pinAt.stroke.view, points: pinAt.stroke.points }] : []),
     ],
     [review, variant, pinAt],
   );
@@ -582,6 +626,15 @@ export function Variant() {
                 reloadNonce={layoutNonce}
                 onPick={onSketchPick}
                 onData={onLayoutData}
+                editing={editing}
+                editable={editable}
+                onToggleEdit={() => setEditOn((x) => !x)}
+                draft={draft}
+                onDraft={setDraft}
+                onDimPick={setDimPick}
+                strokes={strokes}
+                drawMode={drawMode}
+                onStroke={onStroke}
               />
             ) : report ? (
               <>
@@ -674,6 +727,21 @@ export function Variant() {
           </section>
 
           <aside className="pane pane--info">
+            {mode === "layout" && layout && editing && (
+              <LayoutEditPanel
+                project={project}
+                variant={variant || undefined}
+                entity={editEntity}
+                base={(editEntity?.geom as Geom | undefined) ?? null}
+                draft={draft}
+                onDraft={setDraft}
+                dim={dimPick}
+                onDimDone={() => setDimPick(null)}
+                onApplied={onLayoutApplied}
+                onSelectRef={(r) => setLayoutSel([r])}
+                locked={locked}
+              />
+            )}
             {mode === "layout" && layout && (
               <ApprovalBox
                 project={project}
@@ -691,10 +759,25 @@ export function Variant() {
             <h3>{S.review.title}</h3>
             <section className="review" aria-label={S.review.title}>
               <div className="commit__actions">
-                {!pinMode && !pinAt && (
+                {!pinMode && !drawMode && !pinAt && (
                   <button onClick={() => setPinMode(true)} aria-pressed={pinMode} disabled={locked}>
                     {S.review.pin}
                   </button>
+                )}
+                {mode === "layout" && !pinMode && !drawMode && !pinAt && (
+                  <button onClick={() => setDrawMode(true)} aria-pressed={drawMode} disabled={locked}>
+                    {S.review.draw}
+                  </button>
+                )}
+                {drawMode && (
+                  <>
+                    <span className="muted small" aria-live="polite">
+                      {S.review.drawing}
+                    </span>
+                    <button className="link" onClick={() => setDrawMode(false)}>
+                      {S.review.cancelDraw}
+                    </button>
+                  </>
                 )}
                 {pinMode && (
                   <>
@@ -716,7 +799,12 @@ export function Variant() {
                   }}
                 >
                   <p className="small muted">
-                    {S.review.at(pinAt.part ?? "—")} · {S.review.atPoint(pinAt.point)}
+                    {pinAt.stroke
+                      ? S.review.strokeAt(
+                          S.variant.views[pinAt.stroke.view] ?? pinAt.stroke.view,
+                          pinAt.stroke.points.length,
+                        )
+                      : `${S.review.at(pinAt.part ?? "—")} · ${S.review.atPoint(pinAt.point)}`}
                   </p>
                   <textarea
                     aria-label={S.review.textLabel}
@@ -760,6 +848,12 @@ export function Variant() {
                       </button>{" "}
                       <span>{r.text}</span>
                       {r.part && <span className="muted small"> · {r.part}</span>}
+                      {r.stroke && (
+                        <span className="muted small">
+                          {" "}
+                          · {S.review.strokeShort(S.variant.views[r.stroke.view] ?? r.stroke.view)}
+                        </span>
+                      )}
                       {r.answer && (
                         <div className="small ok">
                           {S.review.answer}: {r.answer}

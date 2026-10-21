@@ -68,6 +68,23 @@ export interface LayoutEntity {
   status: string;
   source: string;
   note: string;
+  geom?: Record<string, unknown>; // числовые поля для ручек (M2.3): origin / min / max / center / diameter / …
+}
+
+/** Правка компоновки с эскиза (M2.3): правки сущностей или размер числом; ответ — коммит конструктора. */
+export interface LayoutEditRequest {
+  edits?: { ref: string; set: Record<string, number | number[]> }[];
+  dim?: string;
+  value?: number;
+  variant?: string;
+  message?: string;
+}
+
+export interface LayoutEditResponse {
+  summary: string;
+  commit: Commit;
+  applied: string[];
+  approval: LayoutApproval;
 }
 
 export interface LayoutApproval {
@@ -348,9 +365,15 @@ export interface ReviewItem {
   variant?: string;
   part?: string;
   point?: [number, number, number];
+  stroke?: ReviewStroke; // росчерк на компоновочном эскизе (M2.3): вид и точки модели
   answer?: string;
   resolved_by?: string;
   resolved_at?: string;
+}
+
+export interface ReviewStroke {
+  view: string; // main | left | top
+  points: [number, number, number][];
 }
 
 export type TaskStatus = "queued" | "running" | "done" | "failed" | "stopped" | "limit";
@@ -543,6 +566,7 @@ export const api = {
       variant?: string;
       part?: string | null;
       point?: number[] | null;
+      stroke?: ReviewStroke | null;
     },
   ) =>
     getJson<{ item: ReviewItem }>(`/api/projects/${encodeURIComponent(project)}/review`, {
@@ -625,6 +649,12 @@ export const api = {
       `/api/projects/${encodeURIComponent(project)}/layout` +
         (variant ? `?variant=${encodeURIComponent(variant)}` : ""),
     ),
+  layoutEdit: (project: string, body: LayoutEditRequest) =>
+    getJson<LayoutEditResponse>(`/api/projects/${encodeURIComponent(project)}/layout/edit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
   layoutApprove: (project: string) =>
     getJson<LayoutApproval & { commit: Commit }>(`/api/projects/${encodeURIComponent(project)}/layout/approve`, {
       method: "POST",
