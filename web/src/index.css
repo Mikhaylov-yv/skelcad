@@ -232,6 +232,19 @@ button.danger { color: var(--error); border-color: var(--error); }
 .status-done { color: var(--ok); border-color: var(--ok); }
 .status-failed { color: var(--error); border-color: var(--error); }
 .status-stopped, .status-limit { color: var(--warning); border-color: var(--warning); }
+.attachments { display: grid; gap: 6px; }
+.attachments__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.attachments__item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); min-width: 0; }
+.attachments__item.selected { border-color: var(--accent); }
+.attachments__item label { display: grid; grid-template-columns: auto 56px minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; cursor: pointer; }
+.attachments__item img, .attachments__icon { width: 56px; height: 40px; object-fit: contain; background: #fff; border: 1px solid var(--border); border-radius: 4px; }
+.attachments__icon { display: grid; place-items: center; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.attachments__text { display: grid; min-width: 0; }
+.attachments__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachments__meta { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent__form > * { min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips a { font-size: 12px; padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; text-decoration: none; }
 @media (max-width: 1000px) { .agent__body { grid-template-columns: 1fr; } }
 
 /* --- токены, выдача --- */

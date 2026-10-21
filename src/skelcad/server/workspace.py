@@ -204,7 +204,8 @@ class Workspace:
         p = git(self.path(name), "ls-files").stdout.split()
         return sorted(p)
 
-    def write_files(self, name: str, files: dict[str, str], message: str, actor: Actor) -> dict:
+    def write_files(self, name: str, files: dict[str, str | bytes | None], message: str, actor: Actor) -> dict:
+        """Записать файлы и закоммитить одним коммитом. Содержимое: текст, bytes (вложения) или None — удалить."""
         if not files:
             raise WorkspaceError("нет файлов для записи")
         if not (message or "").strip():
@@ -217,6 +218,8 @@ class Workspace:
             if content is None:
                 if f.exists():
                     f.unlink()
+            elif isinstance(content, bytes):
+                f.write_bytes(content)
             else:
                 f.write_text(content, encoding="utf-8")
             written.append(f.relative_to(root).as_posix())

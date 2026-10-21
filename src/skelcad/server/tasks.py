@@ -36,9 +36,21 @@ class TaskStore:
             raise TaskError(f"нет задачи «{task_id}»")
         return d
 
-    def create(self, project: str, text: str, user: str, variant: str | None = None, max_steps: int = 60) -> dict:
+    def create(
+        self,
+        project: str,
+        text: str,
+        user: str,
+        variant: str | None = None,
+        max_steps: int = 60,
+        attachments: list[str] | None = None,
+    ) -> dict:
+        """attachments — пути вложений проекта (attachments/<файл>), которые агент получит с задачей как изображения."""
         if not (text or "").strip():
             raise TaskError("нужен текст задачи")
+        atts = [str(a).strip() for a in (attachments or []) if str(a).strip()]
+        if any(not a.startswith("attachments/") or a.count("/") != 1 for a in atts):
+            raise TaskError("вложения задачи — пути attachments/<файл> из проекта")
         if (a := self.active(project)) is not None:
             raise TaskError(f"проект уже у агента: задача {a['id']} ({a['status']}); дождитесь или остановите её")
         # миллисекунды в ключе: list() и claim() сортируют по имени папки, две задачи в одну секунду шли вразнобой
@@ -53,6 +65,7 @@ class TaskStore:
             "user": user,
             "created": _now(),
             "max_steps": max_steps,
+            "attachments": atts,
         }
         (d / "task.json").write_text(json.dumps(task, ensure_ascii=False, indent=1), encoding="utf-8")
         (d / "events.jsonl").touch()

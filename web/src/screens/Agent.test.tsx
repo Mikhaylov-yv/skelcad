@@ -89,3 +89,59 @@ describe("Задача агенту", () => {
     expect(body).toEqual({ text: "подними K", variant: "A_fork" });
   });
 });
+
+describe("Вложения к задаче", () => {
+  it("загружает файл коммитом, отмечает его к задаче и передаёт пути в задачу", async () => {
+    const item = {
+      path: "attachments/20261021-0900-eskiz.png",
+      name: "20261021-0900-eskiz.png",
+      kind: "image",
+      mime: "image/png",
+      bytes: 2048,
+      width: 800,
+      height: 600,
+      author: "ivanov",
+      date: "2026-10-21T09:00:00+00:00",
+    };
+    let uploaded = false;
+    let taskBody: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith("/api/projects")) return new Response(JSON.stringify(projects), { status: 200 });
+        if (url.endsWith("/attachments") && init?.method === "POST") {
+          if (!(init.body instanceof FormData)) throw new Error("ожидалась форма");
+          uploaded = true;
+          return new Response(JSON.stringify({ item, commit: { commit: "abc", author: "ivanov" } }), { status: 200 });
+        }
+        if (url.endsWith("/attachments"))
+          return new Response(JSON.stringify({ items: uploaded ? [item] : [] }), { status: 200 });
+        if (url.endsWith("/tasks") && init?.method === "POST") {
+          taskBody = JSON.parse(String(init.body));
+          return new Response(JSON.stringify({ ...task, attachments: [item.path] }), { status: 200 });
+        }
+        if (url.endsWith("/tasks")) return new Response(JSON.stringify({ tasks: [], active: null }), { status: 200 });
+        if (url.includes("/events")) return new Response(JSON.stringify(events), { status: 200 });
+        return new Response("{}", { status: 404 });
+      }),
+    );
+    render(
+      <MemoryRouter initialEntries={["/p/bracket/agent"]}>
+        <Routes>
+          <Route path="/p/:project/agent" element={<Agent />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("Вложений пока нет.")).toBeInTheDocument();
+    const file = new File([new Uint8Array([137, 80, 78, 71])], "Эскиз.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("Добавить файл"), { target: { files: [file] } });
+    await waitFor(() => expect(screen.getByText(item.name)).toBeInTheDocument());
+    const box = screen.getByLabelText(`Приложить ${item.name} к задаче`) as HTMLInputElement;
+    expect(box.checked).toBe(true); // новый файл сразу отмечен к задаче
+    expect(screen.getByText("вложений: 1")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Текст задачи"), { target: { value: "по наброску" } });
+    fireEvent.click(screen.getByRole("button", { name: "Запустить" }));
+    await waitFor(() => expect(taskBody).not.toBeNull());
+    expect(taskBody).toEqual({ text: "по наброску", attachments: [item.path] });
+  });
+});

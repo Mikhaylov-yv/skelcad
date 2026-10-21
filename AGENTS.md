@@ -24,7 +24,11 @@
    (стена, пол, труба, ответная деталь, соседнее оборудование — plane / box / cylinder с ролью и именем),
    посмотри `render(layout=true)` и дождись согласования конструктора (`project_read` → `layout`:
    none / approved / changed; отметка — файл `layout.yaml` конструктора, не трогай его). Детали — после
-   согласования; изменил скелет — согласуй заново.
+   согласования; изменил скелет — согласуй заново. Набросок конструктора (от руки, фото, экспорт доски) —
+   вложение проекта: `project_read` → `attachments`, посмотреть — `attachment(project, path)` (изображение;
+   `.excalidraw` — сводка элементов). Читай набросок так: опорное (стена, пол, труба, ответная деталь) —
+   `surroundings` и `datums`; где изделие крепится и что несёт — `interfaces` и нагрузки; подписанные числа —
+   размеры, неподписанное оцени по пропорциям и запиши в `assumptions`.
 2. `check` или `build` — текущее состояние: замечания (error / warning / info), запасы K, масса.
 3. Заземлиться: `measure` (расстояния, зазоры, пересечения, массы, ЦТ), `context_search` /
    `context_lookup` (каталоги: крепёж, анкеры, материалы, трубы), `render` (посмотреть вид); связи по
@@ -62,8 +66,8 @@
   `08-m2-3-layout-input-plan.md` (ввод компоновки от конструктора).
 - Код: `src/skelcad/core` (модель), `geom` (OCCT; `layout.py` — компоновочный эскиз), `rules` (плагины),
   `graph/` (граф связей в Postgres: словарь сущностей и связей, индексатор, запросы; D27),
-  `pipeline.py`, `server/` (FastAPI + MCP + git-проекты; `api.py`, `auth.py`, `layout.py` (согласование
-  компоновки), `params.py`, `review.py`, `tasks.py`, `tokens.py`),
+  `pipeline.py`, `server/` (FastAPI + MCP + git-проекты; `api.py`, `attachments.py` (вложения конструктора, D28),
+  `auth.py`, `layout.py` (согласование компоновки), `params.py`, `review.py`, `tasks.py`, `tokens.py`),
   `worker.py` (изолированное исполнение кода проектов), `agent.py` (встроенный агент из workbench),
   `measure.py`, `render.py`, `diff.py`. Workbench — `web/` (Vite + React + TS, three.js). Пакет стандарта — `packages/std-gost`.
 - Проверки перед коммитом: `uv run ruff check src tests && uv run ruff format src tests &&

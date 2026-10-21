@@ -21,7 +21,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from anyio import to_thread
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -172,7 +172,33 @@ def create_app(srv: Server | None = None) -> FastAPI:
         if name not in srv.workspace.names():
             raise HTTPException(400, f"нет проекта «{name}»")
         who = request.state.principal.name
-        return await to_thread.run_sync(tasks.create, name, b.get("text", ""), who, b.get("variant"))
+        atts = b.get("attachments") or []
+        if not isinstance(atts, list):
+            raise HTTPException(400, "attachments: ожидался список путей")
+        for a in atts:
+            await to_thread.run_sync(tools.attachment_path, name, str(a))  # каждое вложение должно существовать
+        return await to_thread.run_sync(tasks.create, name, b.get("text", ""), who, b.get("variant"), 60, atts)
+
+    # ---------- вложения конструктора (M2.3, D28)
+    @app.get("/api/projects/{name}/attachments")
+    async def api_attachments(name: str):
+        return await to_thread.run_sync(tools.attachments, name)
+
+    @app.post("/api/projects/{name}/attachments")
+    async def api_attachment_upload(name: str, file: UploadFile = File(...), note: str = Form("")):  # noqa: B008
+        guard(name)
+        data = await file.read()
+        return await to_thread.run_sync(tools.attachment_add, name, file.filename or "file", data, note, "workbench")
+
+    @app.get("/api/projects/{name}/attachments/{file}")
+    async def api_attachment_file(name: str, file: str):
+        res = await to_thread.run_sync(tools.attachment_path, name, file)
+        return FileResponse(res["file"], media_type=res["mime"], headers={"Cache-Control": "private, max-age=3600"})
+
+    @app.delete("/api/projects/{name}/attachments/{file}")
+    async def api_attachment_delete(name: str, file: str):
+        guard(name)
+        return await to_thread.run_sync(tools.attachment_remove, name, file, "workbench")
 
     @app.get("/api/tasks/{task_id}")
     async def api_task(task_id: str):

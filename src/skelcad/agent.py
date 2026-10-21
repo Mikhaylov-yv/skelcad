@@ -43,7 +43,24 @@ SYSTEM = """Ты — агент-конструктор SkelCAD. Работаеш
 check/build → measure/context_search/render → files_write → build → diff(HEAD~1 → HEAD) → … → compare → отчёт.
 Правила: замечания уровня error не оставляй; числа — из measure и каталогов; параметры — в variants/*.yaml;
 одно логическое изменение — один коммит; тупиковый шаг — revert. Единицы: мм, кН, кг. Отвечай по-русски.
+Вложения конструктора (набросок от руки, фото, экспорт доски) приходят с задачей как изображения; все вложения
+проекта — project_read → attachments, посмотреть ещё раз — attachment(project, path). Набросок — исходный
+документ компоновки: опорное на нём (стена, пол, труба, ответная деталь) — skeleton.surroundings и datums; где
+изделие крепится и что несёт — interfaces и нагрузки requirements; подписанные числа — размеры, неподписанное
+оцени по пропорциям и запиши в assumptions. Опиши скелет в project.yaml, посмотри render(layout=true) и
+остановись: детали — после того, как конструктор согласует компоновку.
 В конце напиши короткий отчёт конструктору: что сделано, какие коммиты, какие допущения, что осталось."""
+
+
+class ToolOutput(str):
+    """Текст результата инструмента; изображения из ответа MCP — в .images: [{"mime": "image/png", "b64": …}]."""
+
+    images: list[dict]
+
+    def __new__(cls, text: str, images: list[dict] | None = None):
+        o = super().__new__(cls, text)
+        o.images = images or []
+        return o
 
 
 class ToolBridge(Protocol):
@@ -132,16 +149,17 @@ class McpBridge:
             return await session.call_tool(name, args)
 
         res = self._call(go, name, args)
-        parts = []
+        parts, images = [], []
         for c in res.content:
             if getattr(c, "type", "") == "text":
                 parts.append(c.text)
             elif getattr(c, "type", "") == "image":
-                parts.append("[изображение получено]")
+                images.append({"mime": getattr(c, "mimeType", None) or "image/png", "b64": c.data})
+                parts.append("[изображение — передано модели]")
         text = "\n".join(parts) or json.dumps(getattr(res, "structuredContent", None) or {}, ensure_ascii=False)
         if res.isError:
             text = "ОШИБКА: " + text
-        return text
+        return ToolOutput(text, images)
 
 
 # ---------------------------------------------------------------- OpenAI-совместимый провайдер
@@ -185,6 +203,21 @@ def _clip(s: str, n: int = 6000) -> str:
     return s if len(s) <= n else s[:n] + f"\n… (обрезано, всего {len(s)} символов)"
 
 
+def task_text(task: dict) -> str:
+    """Текст задачи для модели: проект, вариант, задача конструктора, список вложений."""
+    variant = f" Вариант: {task['variant']}." if task.get("variant") else ""
+    text = f"Проект «{task['project']}».{variant}\n\nЗадача от конструктора ({task.get('user', '?')}):\n{task['text']}"
+    atts = task.get("attachments") or []
+    if atts:
+        text += "\n\nВложения конструктора к задаче (изображения ниже; посмотреть снова — attachment): "
+        text += ", ".join(atts)
+    return text
+
+
+def _image_parts(images: list[dict]) -> list[dict]:
+    return [{"type": "image_url", "image_url": {"url": f"data:{im['mime']};base64,{im['b64']}"}} for im in images]
+
+
 def run_loop(
     task: dict,
     llm: LLM,
@@ -195,10 +228,21 @@ def run_loop(
 ) -> dict:
     """Цикл агента. Возвращает {status, result, steps}."""
     tools = openai_tools(bridge.list_tools())
-    variant = f" Вариант: {task['variant']}." if task.get("variant") else ""
-    user = f"Проект «{task['project']}».{variant}\n\nЗадача от конструктора ({task.get('user', '?')}):\n{task['text']}"
-    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
+    user = task_text(task)
     emit("start", runner="openai", tools=len(tools))
+    # вложения задачи — сразу в первое сообщение как изображения (модель видит набросок, не дожидаясь вызова)
+    content: list[dict] = [{"type": "text", "text": user}]
+    for path in task.get("attachments") or []:
+        try:
+            out = bridge.call("attachment", {"project": task["project"], "path": path})
+        except Exception as e:  # noqa: BLE001 — вложение не читается: модель узнает из текста
+            out = ToolOutput(f"ОШИБКА вложения {path}: {type(e).__name__}: {e}")
+        images = getattr(out, "images", None) or []
+        content.append({"type": "text", "text": f"Вложение {path}: {_clip(str(out), 2000)}"})
+        content += _image_parts(images)
+        emit("attachment", path=path, images=len(images), text=_clip(str(out), 300))
+    first: str | list[dict] = content if len(content) > 1 else user
+    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": first}]
     steps = 0
     max_steps = int(task.get("max_steps") or 60)
     while True:
@@ -219,6 +263,7 @@ def run_loop(
         if not calls:
             emit("done", text=content)
             return {"status": "done", "result": content, "steps": steps}
+        pictures: list[dict] = []  # изображения из инструментов этого шага — одним сообщением после ответов
         for call in calls:
             fn = call.get("function") or {}
             name = fn.get("name") or ""
@@ -232,8 +277,18 @@ def run_loop(
                 out = bridge.call(name, args)
             except Exception as e:  # noqa: BLE001 — ошибку инструмента отдаём модели текстом
                 out = f"ОШИБКА вызова {name}: {type(e).__name__}: {e}"
-            emit("tool_result", name=name, text=_clip(out, 1500), seconds=round(time.monotonic() - t0, 1))
-            messages.append({"role": "tool", "tool_call_id": call.get("id") or name, "content": _clip(out)})
+            images = getattr(out, "images", None) or []
+            emit("tool_result", name=name, text=_clip(str(out), 1500), seconds=round(time.monotonic() - t0, 1))
+            messages.append({"role": "tool", "tool_call_id": call.get("id") or name, "content": _clip(str(out))})
+            for im in images:
+                label = f"Изображение из {name} {json.dumps(args, ensure_ascii=False)[:200]}:"
+                pictures.append({"type": "text", "text": label})
+                pictures += _image_parts([im])
+        if pictures:
+            # Chat Completions: картинки в ответе инструмента принимают не все провайдеры — отдаём их
+            # пользовательским сообщением сразу после ответов инструментов
+            messages.append({"role": "user", "content": pictures})
+            emit("images", count=sum(1 for p in pictures if p["type"] == "image_url"))
 
 
 # ---------------------------------------------------------------- headless Claude Code
@@ -255,8 +310,7 @@ def run_claude_code(task: dict, server_url: str, token: str | None, emit, should
             ),
             encoding="utf-8",
         )
-        variant = f" Вариант: {task['variant']}." if task.get("variant") else ""
-        prompt = f"{SYSTEM}\n\nПроект «{task['project']}».{variant}\n\nЗадача от конструктора:\n{task['text']}"
+        prompt = f"{SYSTEM}\n\n{task_text(task)}"
         env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
         cmd = [
             exe, "-p", prompt, "--mcp-config", str(cfg), "--strict-mcp-config",

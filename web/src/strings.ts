@@ -268,6 +268,27 @@ export const S = {
     byUser: (u: string) => `поставил ${u}`,
     call: "вызов",
     said: "агент",
+    attachments: "Вложения",
+    attachmentsHint:
+      "Набросок от руки, фото, экспорт из доски: файл сохраняется в репозиторий проекта вашим коммитом, отмеченные уходят агенту с задачей как изображения.",
+    upload: "Добавить файл",
+    uploading: "Загружаю…",
+    pasteHint: "или вставьте картинку из буфера в текст задачи (Ctrl+V)",
+    accept: "png, jpg, webp, svg, pdf, excalidraw; до 16 МБ, картинка уменьшается до 3000 px",
+    noAttachments: "Вложений пока нет.",
+    attach: (name: string) => `Приложить ${name} к задаче`,
+    deleteFile: (name: string) => `Удалить ${name}`,
+    deleteConfirm: (name: string) => `Удалить вложение ${name}? Это коммит, его можно откатить в ленте.`,
+    kinds: { image: "изображение", svg: "SVG", pdf: "PDF", excalidraw: "доска", file: "файл" } as Record<
+      string,
+      string
+    >,
+    withTask: (n: number) => `вложений: ${n}`,
+    taskAttachments: "Вложения задачи",
+    sentAttachment: (path: string, n: number) =>
+      n > 0 ? `вложение ${path} передано модели как изображение` : `вложение ${path} передано модели текстом`,
+    sentImages: (n: number) =>
+      n === 1 ? "изображение из инструмента передано модели" : `изображений передано модели: ${n}`,
   },
   tokens: {
     title: "Подключение агента",

@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { api, type AgentTask, type ProjectOverview, type TaskEvent } from "../api";
+import { api, attachmentUrl, type AgentTask, type Attachment, type ProjectOverview, type TaskEvent } from "../api";
 import { S } from "../strings";
 import { relativeTime } from "../ui/format";
+
+const ACCEPT = ".png,.jpg,.jpeg,.webp,.svg,.pdf,.excalidraw,image/png,image/jpeg,image/webp,image/svg+xml";
 
 export function Agent() {
   const { project = "" } = useParams();
@@ -15,6 +17,10 @@ export function Agent() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [files, setFiles] = useState<Attachment[]>([]);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
     api
@@ -26,26 +32,90 @@ export function Agent() {
       })
       .catch((e: Error) => setErr(e.message));
   }, [project]);
+  const loadFiles = useCallback(
+    () =>
+      api
+        .attachments(project)
+        .then((r) => setFiles(r.items))
+        .catch(() => undefined),
+    [project],
+  );
   useEffect(() => {
     load();
+    loadFiles();
     api
       .projects()
       .then((r) => setInfo(r.projects.find((p) => p.name === project) ?? null))
       .catch(() => undefined);
-  }, [project, load]);
+  }, [project, load, loadFiles]);
   useEffect(() => {
     if (!active) return;
     const h = window.setInterval(load, 3000);
     return () => window.clearInterval(h);
   }, [active, load]);
 
+  /** Загрузить файлы по одному: каждый — коммит конструктора; новые сразу отмечаются «к задаче». */
+  const upload = (list: File[]) => {
+    if (!list.length) return;
+    setUploading(true);
+    setErr(null);
+    (async () => {
+      for (const f of list) {
+        const r = await api.attachmentUpload(project, f);
+        setPicked((p) => new Set(p).add(r.item.path));
+      }
+    })()
+      .catch((e: Error) => setErr(e.message))
+      .finally(() => {
+        setUploading(false);
+        loadFiles();
+      });
+  };
+  const onPick = (e: ChangeEvent<HTMLInputElement>) => {
+    upload(Array.from(e.target.files ?? []));
+    e.target.value = "";
+  };
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith("image/"));
+    if (!pasted.length || active) return;
+    e.preventDefault();
+    upload(
+      pasted.map((f, i) =>
+        f.name && f.name !== "image.png" ? f : new File([f], `paste-${i + 1}.png`, { type: f.type }),
+      ),
+    );
+  };
+  const toggle = (path: string) =>
+    setPicked((p) => {
+      const n = new Set(p);
+      if (n.has(path)) n.delete(path);
+      else n.add(path);
+      return n;
+    });
+  const remove = (f: Attachment) => {
+    if (!window.confirm(S.agent.deleteConfirm(f.name))) return;
+    setErr(null);
+    api
+      .attachmentDelete(project, f.name)
+      .then(() => {
+        setPicked((p) => {
+          const n = new Set(p);
+          n.delete(f.path);
+          return n;
+        });
+        loadFiles();
+      })
+      .catch((e: Error) => setErr(e.message));
+  };
+
   const run = () => {
     setBusy(true);
     setErr(null);
     api
-      .taskCreate(project, text, variant || undefined)
+      .taskCreate(project, text, variant || undefined, [...picked])
       .then((t) => {
         setText("");
+        setPicked(new Set());
         setSelected(t.id);
         load();
       })
@@ -78,8 +148,84 @@ export function Agent() {
             value={text}
             placeholder={S.agent.placeholder}
             onChange={(e) => setText(e.target.value)}
+            onPaste={onPaste}
             disabled={!!active}
           />
+          <section className="attachments" aria-label={S.agent.attachments}>
+            <div className="commit__actions">
+              <strong className="small">{S.agent.attachments}</strong>
+              <button
+                type="button"
+                onClick={() => fileInput.current?.click()}
+                disabled={!!active || uploading}
+                aria-busy={uploading}
+              >
+                {uploading ? S.agent.uploading : S.agent.upload}
+              </button>
+              <input
+                ref={fileInput}
+                type="file"
+                multiple
+                accept={ACCEPT}
+                aria-label={S.agent.upload}
+                onChange={onPick}
+                disabled={!!active || uploading}
+                style={{ display: "none" }}
+              />
+              <span className="muted small">{S.agent.pasteHint}</span>
+            </div>
+            <p className="muted small" style={{ margin: 0 }}>
+              {S.agent.attachmentsHint} {S.agent.accept}
+            </p>
+            {files.length === 0 ? (
+              <p className="muted small" style={{ margin: 0 }}>
+                {S.agent.noAttachments}
+              </p>
+            ) : (
+              <ul className="attachments__list">
+                {files.map((f) => (
+                  <li key={f.path} className={"attachments__item" + (picked.has(f.path) ? " selected" : "")}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={picked.has(f.path)}
+                        onChange={() => toggle(f.path)}
+                        disabled={!!active}
+                        aria-label={S.agent.attach(f.name)}
+                      />
+                      {f.kind === "image" || f.kind === "svg" ? (
+                        <img src={attachmentUrl(project, f)} alt="" loading="lazy" />
+                      ) : (
+                        <span className="attachments__icon">{S.agent.kinds[f.kind] ?? f.kind}</span>
+                      )}
+                      <span className="attachments__text">
+                        <span className="attachments__name mono small" title={f.path}>
+                          {f.name}
+                        </span>
+                        <span className="attachments__meta">
+                          {f.width ? `${f.width}×${f.height} · ` : ""}
+                          {Math.max(1, Math.round(f.bytes / 1024))} КБ
+                          {f.author ? ` · ${f.author}` : ""}
+                        </span>
+                      </span>
+                    </label>
+                    <a className="small" href={attachmentUrl(project, f)} target="_blank" rel="noreferrer">
+                      {S.variant.showAll}
+                    </a>
+                    <button
+                      type="button"
+                      className="link small"
+                      onClick={() => remove(f)}
+                      disabled={!!active}
+                      aria-label={S.agent.deleteFile(f.name)}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
           <div className="commit__actions">
             <label className="small">
               {S.agent.variant}:{" "}
@@ -95,6 +241,7 @@ export function Agent() {
             <button onClick={run} disabled={!text.trim() || busy || !!active} aria-busy={busy}>
               {busy ? S.agent.starting : S.agent.run}
             </button>
+            {picked.size > 0 && <span className="muted small">{S.agent.withTask(picked.size)}</span>}
             {active && (
               <span className="badge badge--warn" role="status">
                 {S.agent.busy(active.id)} · {S.agent.status[active.status]}
@@ -117,6 +264,9 @@ export function Agent() {
                 >
                   <span>
                     <span className={"badge status-" + t.status}>{S.agent.status[t.status]}</span> {t.text.slice(0, 70)}
+                    {t.attachments?.length ? (
+                      <span className="muted small"> · {S.agent.withTask(t.attachments.length)}</span>
+                    ) : null}
                   </span>
                   <span className="muted small">{relativeTime(t.created)}</span>
                 </button>
@@ -211,6 +361,16 @@ function TaskLog({ id, project, onChange }: { id: string; project: string; onCha
           </Link>
         )}
       </div>
+      {task?.attachments?.length ? (
+        <p className="chips small" aria-label={S.agent.taskAttachments}>
+          <span className="muted">{S.agent.taskAttachments}:</span>
+          {task.attachments.map((a) => (
+            <a key={a} className="mono" href={attachmentUrl(project, a)} target="_blank" rel="noreferrer">
+              {a.replace(/^attachments\//, "")}
+            </a>
+          ))}
+        </p>
+      ) : null}
       <div className="log" ref={box}>
         {events.length === 0 && <p className="muted small">{S.agent.noEvents}</p>}
         {events.map((e, i) => (
@@ -222,6 +382,20 @@ function TaskLog({ id, project, onChange }: { id: string; project: string; onCha
               </>
             )}
             {e.type === "tool_result" && <pre className="small">{brief(e.text ?? "")}</pre>}
+            {e.type === "attachment" && (
+              <p className="muted small">
+                {S.agent.sentAttachment(e.path ?? "", e.images ?? 0)}
+                {e.path ? (
+                  <>
+                    {" "}
+                    <a href={attachmentUrl(project, e.path)} target="_blank" rel="noreferrer">
+                      {S.variant.showAll}
+                    </a>
+                  </>
+                ) : null}
+              </p>
+            )}
+            {e.type === "images" && <p className="muted small">{S.agent.sentImages(e.count ?? 1)}</p>}
             {e.type === "assistant" && (
               <p>
                 <span className="muted small">{S.agent.said}: </span>

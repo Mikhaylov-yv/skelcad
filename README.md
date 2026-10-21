@@ -63,6 +63,9 @@ docker compose -f compose/stack.yml --env-file compose/.env up -d   # серве
 (в compose — `LLM_BASE_URL`, `LLM_MODEL`, ключ в секрете `SKELCAD_LLM_API_KEY`); исполнитель
 `SKELCAD_AGENT_RUNNER=claude-code` запускает headless Claude Code, если команда `claude` есть на машине.
 Инструменты агент берёт из `/mcp` сервера с токеном `SKELCAD_AGENT_TOKEN` (клиент «workbench-agent»).
+Вложения конструктора (набросок от руки, фото, экспорт доски; D28) хранятся в `attachments/` репозитория проекта
+коммитом конструктора, прикладываются к задаче и уходят модели как изображения; агент смотрит их инструментом
+`attachment`.
 
 Как агенту работать с проектом через MCP — [AGENTS.md](AGENTS.md).
 Устройство репозитория и план этапа — в [docs/architecture/03-m0-plan.md](docs/architecture/03-m0-plan.md).

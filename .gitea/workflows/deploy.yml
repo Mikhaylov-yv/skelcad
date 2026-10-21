@@ -75,6 +75,8 @@ jobs:
           $COMPOSE build --pull
           $COMPOSE up -d --remove-orphans --wait --wait-timeout 300
           $COMPOSE ps
+          # прод и разработка на одной машине с общим диском: старые слои образов не копим
+          docker image prune -f >/dev/null || true
           EOF
 
       - name: Install nginx vhost (skelcad.br), smoke-check

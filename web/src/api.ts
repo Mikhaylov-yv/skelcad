@@ -371,11 +371,22 @@ export interface AgentTask {
   result?: string | null;
   error?: string | null;
   stop_requested?: boolean;
+  attachments?: string[]; // вложения проекта (attachments/<файл>), переданные агенту с задачей
 }
 
 export interface TaskEvent {
   t: string;
-  type: "start" | "assistant" | "tool_call" | "tool_result" | "done" | "error" | "stopped" | "limit";
+  type:
+    | "start"
+    | "assistant"
+    | "tool_call"
+    | "tool_result"
+    | "done"
+    | "error"
+    | "stopped"
+    | "limit"
+    | "attachment"
+    | "images";
   text?: string;
   name?: string;
   args?: Record<string, unknown>;
@@ -383,7 +394,30 @@ export interface TaskEvent {
   runner?: string;
   tools?: number;
   cost_usd?: number;
+  path?: string; // attachment: путь вложения
+  images?: number; // attachment: сколько изображений ушло модели
+  count?: number; // images: сколько изображений из инструментов ушло модели
 }
+
+// --- вложения конструктора (M2.3, D28): файлы в attachments/ репозитория проекта
+export type AttachmentKind = "image" | "svg" | "pdf" | "excalidraw" | "file";
+
+export interface Attachment {
+  path: string; // attachments/<файл>
+  name: string;
+  kind: AttachmentKind;
+  mime: string;
+  bytes: number;
+  width: number | null;
+  height: number | null;
+  author: string | null;
+  date: string | null;
+}
+
+export const attachmentUrl = (project: string, a: Attachment | string) =>
+  `/api/projects/${encodeURIComponent(project)}/attachments/${encodeURIComponent(
+    typeof a === "string" ? a.replace(/^attachments\//, "") : a.name,
+  )}`;
 
 // --- граф связей (M2.2, D27): производный индекс сущностей и связей в Postgres
 export interface GraphNode {
@@ -467,12 +501,28 @@ export const api = {
     }),
   tasks: (project: string) =>
     getJson<{ tasks: AgentTask[]; active: AgentTask | null }>(`/api/projects/${encodeURIComponent(project)}/tasks`),
-  taskCreate: (project: string, text: string, variant?: string) =>
+  taskCreate: (project: string, text: string, variant?: string, attachments?: string[]) =>
     getJson<AgentTask>(`/api/projects/${encodeURIComponent(project)}/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, variant }),
+      body: JSON.stringify({ text, variant, ...(attachments?.length ? { attachments } : {}) }),
     }),
+  attachments: (project: string) =>
+    getJson<{ items: Attachment[] }>(`/api/projects/${encodeURIComponent(project)}/attachments`),
+  attachmentUpload: (project: string, file: File, note?: string) => {
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    if (note) fd.append("note", note);
+    return getJson<{ item: Attachment; commit: Commit }>(`/api/projects/${encodeURIComponent(project)}/attachments`, {
+      method: "POST",
+      body: fd,
+    });
+  },
+  attachmentDelete: (project: string, name: string) =>
+    getJson<{ path: string; commit: Commit }>(
+      `/api/projects/${encodeURIComponent(project)}/attachments/${encodeURIComponent(name)}`,
+      { method: "DELETE" },
+    ),
   taskEvents: (id: string, since: number) =>
     getJson<{
       events: TaskEvent[];

@@ -31,6 +31,11 @@ envelopes, surroundings; requirements) конструктор согласовы
 Сводка — первая строка ответа; большие данные запрашивай срезами (model_query path=...).
 Связи между сущностями — индекс в базе: links (окрестность сущности), where_used (где используется, по всем
 проектам), search (поиск по всем проектам). Бери окрестность, а не весь YAML.
+Вложения конструктора (набросок от руки, фото, экспорт доски) — в project_read → attachments; смотри их
+инструментом attachment(project, path). Набросок переводи в скелет и обстановку: опорное (стена, пол, труба,
+ответная деталь) — surroundings и datums, где изделие крепится и что несёт — interfaces и нагрузки, подписанные
+числа — размеры, неподписанное оцени по пропорциям и запиши в assumptions; покажи render(layout=True) и жди
+согласования.
 Единицы: мм, кН, кг. Замечания уровня error блокируют приёмку — не оставляй их.
 """
 
@@ -68,8 +73,9 @@ def build_mcp(srv: Server) -> FastMCP:
 
     @mcp.tool()
     async def project_read(project: str, section: str | None = None) -> dict:
-        """Спецификация проекта (project.yaml), список вариантов и файлов. section: requirements | skeleton |
-        params | assumptions | variants | standards | generator | plugins — вернуть только этот раздел."""
+        """Спецификация проекта (project.yaml), список вариантов, файлов и вложений конструктора (attachments —
+        смотри инструментом attachment). section: requirements | skeleton | params | assumptions | variants |
+        standards | generator | plugins — вернуть только этот раздел."""
         return await run(t.project_read, project, section)
 
     @mcp.tool()
@@ -208,6 +214,19 @@ def build_mcp(srv: Server) -> FastMCP:
             out.append(Image(data=base64.b64decode(res["png_base64"]), format="png"))
         elif res.get("svg_text"):
             out.append(res["svg_text"][:20000])
+        return out
+
+    # ---------------- вложения конструктора (M2.3, D28)
+    @mcp.tool()
+    async def attachment(project: str, path: str) -> list:
+        """Вложение конструктора из attachments/ проекта (список — project_read → attachments): набросок от руки,
+        фото, экспорт доски. png / jpg / webp — как изображение; svg и первая страница pdf — растром; .excalidraw —
+        сводка элементов текстом (сам JSON — files_read). Набросок — исходный документ компоновки: по нему опиши
+        скелет и обстановку в project.yaml, покажи render(layout=True) и дождись согласования конструктора."""
+        res = await run(t.attachment, project, path)
+        out: list = [res["summary"]]
+        if res.get("png_base64"):
+            out.append(Image(data=base64.b64decode(res["png_base64"]), format=res.get("format") or "png"))
         return out
 
     # ---------------- граф связей (M2.2, D27)

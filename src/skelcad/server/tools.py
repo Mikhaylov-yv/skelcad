@@ -175,12 +175,15 @@ class Tools:
         open_items = review.list_items(self.ws, project, "open")
         note = f"; открытых замечаний конструктора: {len(open_items)} (см. review_list)" if open_items else ""
         lay = layout.state(self.ws, project)
+        atts = [f for f in files if f.startswith("attachments/")]
+        anote = f"; вложений конструктора: {len(atts)} (см. attachment)" if atts else ""
         return {
-            "summary": f"{project}: «{spec.get('title', '')}», варианты: {vnames}{note}; {layout.describe(lay)}",
+            "summary": f"{project}: «{spec.get('title', '')}», варианты: {vnames}{note}{anote}; {layout.describe(lay)}",
             "spec": spec,
             "variants": variants,
             "files": files,
             "review_open": len(open_items),
+            "attachments": atts,
             "layout": lay,
         }
 
@@ -252,6 +255,59 @@ class Tools:
 
         res = review.add(self.ws, project, text, current_actor(client), variant=variant, part=part, point=point)
         return {"summary": f"{res['item']['id']}: {res['item']['text']}", **res}
+
+    # ---------------------------------------------------------------- вложения конструктора (M2.3, D28)
+
+    def attachments(self, project: str) -> dict:
+        from skelcad.server import attachments as A
+
+        items = A.list_items(self.ws, project)
+        lines = [
+            f"{i['path']} ({A.KIND_RU.get(i['kind'], i['kind'])}"
+            + (f" {i['width']}×{i['height']}" if i.get("width") else "")
+            + f", {i['bytes'] // 1024} КБ)"
+            for i in items
+        ]
+        return {"summary": "\n".join(lines) or "вложений нет", "items": items}
+
+    def attachment_add(self, project: str, filename: str, data: bytes, note: str = "", client: str = "agent") -> dict:
+        from skelcad.server import attachments as A
+
+        res = A.add(self.ws, project, filename, data, current_actor(client), note)
+        return {"summary": f"вложение {res['item']['path']}: коммит {res['commit']['commit']}", **res}
+
+    def attachment_remove(self, project: str, path: str, client: str = "agent") -> dict:
+        from skelcad.server import attachments as A
+
+        res = A.remove(self.ws, project, path, current_actor(client))
+        return {"summary": f"удалено вложение {res['path']}: коммит {res['commit']['commit']}", **res}
+
+    def attachment_path(self, project: str, path: str) -> dict:
+        from skelcad.server import attachments as A
+
+        f = A.check_path(self.ws, project, path)
+        return {"file": f, "mime": A.MIME.get(A._ext(f.name), "application/octet-stream")}
+
+    def attachment(self, project: str, path: str) -> dict:
+        """Для агента: вложение как изображение (PNG/JPEG base64) или сводка текстом (.excalidraw)."""
+        from skelcad.server import attachments as A
+
+        res = A.image(self.ws, project, path)
+        it = res["item"]
+        head = f"{project}/{it['path']}: {A.KIND_RU.get(it['kind'], it['kind'])}" + (
+            f" {it['width']}×{it['height']}" if it.get("width") else ""
+        )
+        if it.get("author"):
+            head += f"; добавил {it['author']} {str(it['date'])[:10]}"
+        lines = [head]
+        if res.get("text"):
+            lines.append(res["text"])
+        return {
+            "summary": "\n".join(lines),
+            "item": it,
+            "format": res.get("format"),
+            "png_base64": base64.b64encode(res["png"]).decode() if res.get("png") else None,
+        }
 
     # ---------------------------------------------------------------- контекст
 
