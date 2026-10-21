@@ -10,6 +10,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -133,6 +134,33 @@ class TaskStore:
             except ValueError:
                 continue
         return {"events": events, "next": since + len(chunk), "total": len(lines), "task": self.get(task_id)}
+
+    # ---------- корзина: задачи уходят и возвращаются вместе с проектом (M2.5)
+
+    def archive(self, project: str, dst: Path) -> int:
+        """Перенести все задачи проекта в dst (папка корзины проекта); возвращает их число."""
+        n = 0
+        for d in list(self.root.iterdir()):
+            try:
+                task = json.loads((d / "task.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if task.get("project") != project:
+                continue
+            dst.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(d), str(dst / d.name))
+            n += 1
+        return n
+
+    def unarchive(self, src: Path) -> int:
+        n = 0
+        if not src.is_dir():
+            return 0
+        for d in list(src.iterdir()):
+            if (d / "task.json").is_file() and not (self.root / d.name).exists():
+                shutil.move(str(d), str(self.root / d.name))
+                n += 1
+        return n
 
     # ---------- со стороны агента
 

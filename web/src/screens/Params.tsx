@@ -17,8 +17,11 @@ function same(a: ParamField["value"], b: string | number | boolean): boolean {
   return String(a ?? "") === String(b);
 }
 
-export function Params() {
-  const { project = "", variant = "" } = useParams();
+export function Params(props: { project?: string; variant?: string; embedded?: boolean } = {}) {
+  const routeParams = useParams();
+  const project = props.project ?? routeParams.project ?? "";
+  const variant = props.variant ?? routeParams.variant ?? "";
+  const embedded = !!props.embedded;
   const nav = useNavigate();
   const pstate = useProjectState(project);
   const locked = pstate?.state === "agent";
@@ -121,6 +124,7 @@ export function Params() {
 
   return (
     <main className="params">
+      {!embedded && (
       <header className="variant__head">
         <nav aria-label="Путь">
           <Link to="/">{S.variant.back}</Link> <span className="muted">/</span> <span className="mono">{project}</span>{" "}
@@ -137,6 +141,7 @@ export function Params() {
           <span className="muted small">{S.params.hint}</span>
         </div>
       </header>
+      )}
       <AgentBanner p={pstate} />
       <div className="page params__body">
         {st.kind === "loading" && <p className="muted">{S.params.loading}</p>}

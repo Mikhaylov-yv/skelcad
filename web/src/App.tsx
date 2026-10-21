@@ -23,6 +23,7 @@ export function App() {
           </NavLink>
           <NavLink to="/tokens">{S.nav.tokens}</NavLink>
         </nav>
+        <div id="topbar-center" className="topbar__center" />
         <span className="topbar__user">
           {me && (
             <>

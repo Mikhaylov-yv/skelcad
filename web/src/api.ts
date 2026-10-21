@@ -22,7 +22,34 @@ export interface VariantOverview {
   info?: number;
 }
 
-export type LayoutStateKind = "none" | "approved" | "changed" | "invalid";
+export type LayoutStateKind = "none" | "waiting" | "approved" | "changed" | "invalid";
+
+// --- этапы изделия и следующий шаг (M2.5, D32)
+export type StageId = "brief" | "layout" | "design" | "kit";
+export type StageState = "done" | "wait" | "agent" | "next" | "todo";
+export type NextKind = "you" | "agent" | "running" | "done";
+export interface NextStep {
+  stage: StageId;
+  kind: NextKind;
+  title: string;
+  hint: string;
+  label: string;
+  act: string; // say | run:layout | approve | run:design | run:fix | choose | run:kit | download | open:<проект> | stop
+  short: string;
+}
+export interface KitFile {
+  name: string;
+  kind: string;
+  title: string;
+  size: number;
+  url: string;
+}
+export interface NodeSummary {
+  nodes: number;
+  done: number;
+  mass_kg: number;
+  k_min: number | null;
+}
 
 export interface ProjectOverview {
   name: string;
@@ -33,7 +60,59 @@ export interface ProjectOverview {
   state: "constructor" | "agent";
   task?: { id: string; status: TaskStatus; text: string } | null;
   unreviewed?: number;
-  layout?: { state: LayoutStateKind; by?: string | null; at?: string | null };
+  layout?: { state: LayoutStateKind; by?: string | null; at?: string | null; error?: string | null };
+  folder?: string | null;
+  parent?: string | null;
+  children: string[];
+  aggregate: boolean;
+  summary: NodeSummary | null;
+  stages: Record<StageId, StageState>;
+  next: NextStep;
+  chosen: string | null;
+  kit: { variant: string | null; files: KitFile[] };
+  thumb: string | null;
+  purchased?: boolean;
+}
+
+export interface Folder {
+  id: string;
+  title: string;
+  projects: string[];
+}
+export interface TrashItem {
+  id: string;
+  name: string;
+  title: string;
+  deleted: string;
+}
+export interface FoldersResponse {
+  folders: Folder[];
+  loose: string[];
+  children: Record<string, string[]>;
+  trash: TrashItem[];
+}
+
+// --- разговор по проекту (M2.5): задачи конструктора, ответы агента, служебные записи из коммитов
+export interface ThreadMessage {
+  id: string;
+  who: "you" | "agent" | "system";
+  at: string | null;
+  by?: string;
+  text: string;
+  brief?: string;
+  status?: TaskStatus;
+  images?: string[];
+  steps?: number | null;
+  model?: string | null;
+  task?: string;
+  attachments?: string[];
+  commit?: string;
+  kind?: CommitKind;
+  reviewed?: { by: string; at: string | null } | null;
+}
+export interface ThreadResponse {
+  messages: ThreadMessage[];
+  active: AgentTask | null;
 }
 
 // --- компоновочный эскиз (M2.1, D21)
@@ -130,11 +209,15 @@ export interface ProjectsResponse {
   summary: string;
   projects: ProjectOverview[];
   templates: TemplateInfo[];
+  folders: Folder[];
+  loose: string[];
+  trash: TrashItem[];
+  task_texts: Record<string, string>;
 }
 
 export interface ProjectCreated {
   summary: string;
-  project: { name: string; title: string; variants: string[] };
+  project: { name: string; title: string; variants: string[]; folder?: string | null; parent?: string | null };
 }
 
 export class ApiError extends Error {
@@ -576,7 +659,7 @@ export interface BuildResponse {
 export const api = {
   me: () => getJson<Me>("/api/me"),
   projects: () => getJson<ProjectsResponse>("/api/projects"),
-  projectCreate: (body: { name: string; title?: string; template?: string }) =>
+  projectCreate: (body: { name: string; title?: string; template?: string; folder?: string; parent?: string }) =>
     getJson<ProjectCreated>("/api/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -767,9 +850,48 @@ export const api = {
       body: JSON.stringify(body),
     }),
   layoutApprove: (project: string) =>
-    getJson<LayoutApproval & { commit: Commit }>(`/api/projects/${encodeURIComponent(project)}/layout/approve`, {
+    getJson<LayoutApproval & { commit: Commit; task?: AgentTask | null }>(
+      `/api/projects/${encodeURIComponent(project)}/layout/approve`,
+      { method: "POST" },
+    ),
+  // --- папки, узлы, корзина, решения, комплект, разговор (M2.5, D32)
+  folders: () => getJson<FoldersResponse>("/api/folders"),
+  folderCreate: (title: string) =>
+    getJson<Folder>("/api/folders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    }),
+  folderDelete: (id: string) => getJson<{ ok: boolean }>(`/api/folders/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  projectMove: (project: string, body: { folder?: string | null; parent?: string | null }) =>
+    getJson<{ folder: string | null; parent: string | null }>(`/api/projects/${encodeURIComponent(project)}/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  projectDelete: (project: string) =>
+    getJson<{ id: string; name: string; nodes: { id: string; name: string }[] }>(
+      `/api/projects/${encodeURIComponent(project)}`,
+      { method: "DELETE" },
+    ),
+  trashRestore: (id: string) =>
+    getJson<{ name: string }>(`/api/trash/${encodeURIComponent(id)}/restore`, { method: "POST" }),
+  choose: (project: string, variant: string) =>
+    getJson<{ variant: string | null; commit: Commit }>(`/api/projects/${encodeURIComponent(project)}/choose`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ variant }),
+    }),
+  kit: (project: string) =>
+    getJson<{ variant: string | null; files: KitFile[] }>(`/api/projects/${encodeURIComponent(project)}/kit`),
+  kitBuild: (project: string) =>
+    getJson<{ variant: string; files: KitFile[] }>(`/api/projects/${encodeURIComponent(project)}/kit`, {
       method: "POST",
     }),
+  kitZipUrl: (project: string) => `/api/projects/${encodeURIComponent(project)}/kit.zip`,
+  thread: (project: string) => getJson<ThreadResponse>(`/api/projects/${encodeURIComponent(project)}/thread`),
+  projectRead: (project: string) =>
+    getJson<{ spec: Record<string, unknown>; attachments: string[] }>(`/api/projects/${encodeURIComponent(project)}`),
   graphLinks: (project: string, ref: string, opts?: { variant?: string; hops?: number; direction?: string }) => {
     const q = new URLSearchParams({ ref });
     if (opts?.variant) q.set("variant", opts.variant);

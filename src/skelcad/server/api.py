@@ -39,24 +39,68 @@ def variant_overview(out_dir: Path, project: str, variant: dict) -> dict:
 
 
 def project_overview(ws: Workspace, out_dir: Path, name: str, tasks=None) -> dict:
-    from skelcad.server import layout
+    """Обзор проекта: варианты с числами, согласование компоновки, задача агента, папка и родитель, выбранный
+    вариант, файлы комплекта, состояния этапов и следующий шаг (M2.5, D32), картинка для дерева."""
+    from skelcad.server import decisions, layout, stages
 
     info = ws.info(name)
     info["variants"] = [variant_overview(out_dir, name, v) for v in ws.variants(name)]
-    info["layout"] = layout.brief(ws, name)
+    lay = layout.state(ws, name)
+    ap = lay.get("approved") or {}
+    info["layout"] = {"state": lay["state"], "by": ap.get("by"), "at": ap.get("at"), "error": lay.get("error")}
     active = tasks.active(name) if tasks is not None else None
     info["state"] = "agent" if active else "constructor"
     info["task"] = {"id": active["id"], "status": active["status"], "text": active["text"]} if active else None
     info["unreviewed"] = commits(ws, name, limit=200)["unreviewed"]
+    info.update(ws.meta.project(name))
+    spec = ws.spec(name)
+    info["purchased"] = bool(spec.get("purchased"))
+    chosen = decisions.chosen_variant(ws, name)
+    info["chosen"] = chosen
+    kit_variant = chosen or next((v["id"] for v in info["variants"] if v.get("built")), None)
+    info["kit"] = {"variant": kit_variant, "files": stages.kit_files(out_dir, name, kit_variant) if kit_variant else []}
+    has_tasks = bool(tasks is not None and tasks.list(name, limit=1))
+    st = stages.leaf(info, spec, has_tasks, chosen, info["kit"]["files"])
+    info["stages"], info["next"] = st["stages"], st["next"]
+    info["layout"]["state"] = st["layout_state"]  # «waiting»: скелет описан, согласования ещё нет
+    head = info["last_commit"]["hash"] if info.get("last_commit") else None
+    info["thumb"] = stages.thumb_url(out_dir, name, head, info["variants"], chosen)
+    info["children"] = []
+    info["aggregate"] = False
+    info["summary"] = None
     return info
 
 
 def projects_overview(ws: Workspace, out_dir: Path, tasks=None) -> dict:
-    items = [project_overview(ws, out_dir, n, tasks) for n in ws.names()]
+    """Все проекты; у проектов с узлами состояния «Узлы» и «Сводный комплект» сводятся из дочерних (снизу вверх)."""
+    from skelcad.server import stages
+
+    names = ws.names()
+    items = {n: project_overview(ws, out_dir, n, tasks) for n in names}
+    tree = ws.meta.tree(names)
+    for n, it in items.items():
+        it["children"] = tree["children"].get(n, [])
+
+    def depth(n: str) -> int:
+        d, cur = 0, items[n].get("parent")
+        while cur in items and d < 50:
+            d, cur = d + 1, items[cur].get("parent")
+        return d
+
+    for n in sorted(names, key=depth, reverse=True):
+        it = items[n]
+        kids = [items[c] for c in it["children"] if c in items]
+        if kids and not any(v.get("built") for v in it["variants"]):
+            agg = stages.aggregate(it, kids)
+            it["stages"], it["next"], it["summary"], it["aggregate"] = agg["stages"], agg["next"], agg["summary"], True
     return {
-        "summary": f"проектов: {len(items)}" + (": " + ", ".join(i["name"] for i in items) if items else ""),
-        "projects": items,
+        "summary": f"проектов: {len(items)}" + (": " + ", ".join(items) if items else ""),
+        "projects": [items[n] for n in names],
         "templates": ws.templates_info(),
+        "folders": tree["folders"],
+        "loose": tree["loose"],
+        "trash": ws.trash_list(),
+        "task_texts": stages.TASK_TEXT,
     }
 
 

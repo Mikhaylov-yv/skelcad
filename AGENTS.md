@@ -21,8 +21,10 @@
    открытые замечания конструктора (пометки на модели; росчерк на компоновочном эскизе — вид и точки в мм,
    место обведено или показано стрелкой: смотри `render(layout=true, view=<вид росчерка>)`), на каждое нужен
    `review_resolve` с ответом.
-   Новое изделие (`project_create(name, title=«название изделия»)`; конструктор может завести его сам кнопкой
-   «Новый проект» — тогда проект уже есть, пустой или копия примера) начинай с компоновки: в `project.yaml`
+   Новое изделие (`project_create(name, title=«название изделия», folder=, parent=)`; конструктор может завести его
+   сам кнопкой «Новый проект» — тогда проект уже есть, пустой или копия примера; `parent=<изделие>` делает проект
+   узлом изделия: в рабочем месте он виден в составе, изделие собирает из узлов массу, запасы и готовность — D32)
+   начинай с компоновки: в `project.yaml`
    опиши требования (нагрузки `Fv`/`Fh`/`Fa`/`Fx`…),
    скелет (`datums`, `interfaces`, `envelopes` keep_in / keep_out с `min`/`max`) и обстановку `skeleton.surroundings`
    (стена, пол, труба, ответная деталь, соседнее оборудование — plane: `origin`, `normal`, `extent`, `thickness`;
@@ -71,14 +73,16 @@
 - Документы: `docs/architecture/01-vision-and-architecture.md` (замысел), `02-decisions.md`
   (журнал решений), `03-m0-plan.md`, `04-m1-plan.md`, `05-m2-plan.md`, `06-m2-1-sketches-plan.md`, `07-m2-2-graph-plan.md` (планы этапов со статусом и дорожная карта),
   `08-m2-3-layout-input-plan.md` (ввод компоновки от конструктора), `09-m2-4-calm-ui-plan.md` (ход работы агента
-  словами, спокойная палитра; D30–D31), `10-m2-5-workbench-plan.md` (рабочее место с чистого листа: дерево папок, этапы,
-  один следующий шаг; макеты `docs/ui/prototypes/`; D32, обсуждается).
+  словами, спокойная палитра; D30–D31), `10-m2-5-workbench-plan.md` (рабочее место с чистого листа: состав изделия из узлов, этапы,
+  один следующий шаг, разговор с агентом; макеты `docs/ui/prototypes/`; D32).
 - Код: `src/skelcad/core` (модель), `geom` (OCCT; `layout.py` — компоновочный эскиз), `rules` (плагины),
   `graph/` (граф связей в Postgres: словарь сущностей и связей, индексатор, запросы; D27),
   `pipeline.py`, `server/` (FastAPI + MCP + git-проекты; `api.py`, `attachments.py` (вложения конструктора, D28),
   `auth.py`, `layout.py` (согласование компоновки), `layout_edit.py` (правка компоновки с эскиза на месте в
   `project.yaml`), `params.py`, `providers.py` (провайдеры модели встроенного агента, ключи шифрованы
-  `SKELCAD_SECRET_KEY`, D29), `review.py`, `tasks.py`, `tokens.py`),
+  `SKELCAD_SECRET_KEY`, D29), `review.py`, `tasks.py`, `tokens.py`, `workspace_meta.py` (папки и узлы:
+  `<data>/workspace.yaml`), `stages.py` (этапы изделия и следующий шаг, D32), `decisions.py` (выбор варианта
+  конструктором — `decisions.yaml`), `thread.py` (разговор по проекту из задач и коммитов)),
   `worker.py` (изолированное исполнение кода проектов), `agent.py` (встроенный агент из workbench),
   `measure.py`, `render.py`, `diff.py`. Workbench — `web/` (Vite + React + TS, three.js). Пакет стандарта — `packages/std-gost`.
 - Проверки перед коммитом: `uv run ruff check src tests && uv run ruff format src tests &&
@@ -91,5 +95,9 @@
 - Интерфейс (workbench, `web/`): проектируем по ISO 9241-110, каждое изменение экрана проверяем
   по чеклисту `docs/ui/checklist.md` и записываем ревью в `docs/ui/reviews/` (см. `05-m2-plan.md`). Палитра — одна
   акцентная, цвет только там, где нужно решение (D31); ход задачи агента показывается словами по словарю
-  `web/src/ui/agentSteps.ts` — новый инструмент MCP получает там фразу (D30).
+  `web/src/ui/agentSteps.ts` — новый инструмент MCP получает там фразу (D30). Оболочка — по макету
+  `docs/ui/prototypes/v05-nodes.html` (D32): `screens/Start.tsx`, `screens/Workbench.tsx`, `ui/wb/*`; старые экраны
+  (`Variant`, `Compare`, `Params`, `Feed`) встраиваются с `embedded`; новый этап или действие — через `stages.py`
+  на сервере (единственный следующий шаг) и карточку `NextCard`. Приёмка — `web/scripts/acceptance-m2-5.mjs` на
+  локальном сервере.
 - Тексты, сообщения правил и документация — по-русски; идентификаторы — по-английски.

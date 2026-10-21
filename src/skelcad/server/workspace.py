@@ -13,9 +13,12 @@ import shutil
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
+
+from skelcad.server.workspace_meta import Meta
 
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 FORBIDDEN_TOP = {".git", "out", ".gitea", ".github"}
@@ -73,6 +76,7 @@ class Workspace:
         self.projects_dir.mkdir(parents=True, exist_ok=True)
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.templates = templates or default_templates_dir()
+        self.meta = Meta(self.root)  # папки и узлы рабочего места (M2.5): <data>/workspace.yaml
         # слушатели коммитов: после каждого изменения HEAD проекта (запись, откат, создание, pull) — индекс связей
         self.listeners: list[Callable[[str], None]] = []
 
@@ -190,6 +194,56 @@ class Workspace:
             self.push(name)
         self._notify(name)
         return self.info(name)
+
+    # ---------- корзина: удалённый проект лежит в <data>/trash и возвращается одной кнопкой ----------
+
+    def trash(self, name: str) -> dict:
+        src = self.path(name)
+        tid = f"{name}.{datetime.now(tz=UTC).strftime('%Y%m%d-%H%M%S')}"
+        dst = self.root / "trash" / tid
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
+        placement = self.meta.project(name)
+        self.meta.forget(name)
+        (dst / ".placement.yaml").write_text(yaml.safe_dump(placement), encoding="utf-8")
+        return {"id": tid, "name": name, **placement}
+
+    def trash_list(self) -> list[dict]:
+        d = self.root / "trash"
+        out = []
+        for p in sorted(d.iterdir(), reverse=True) if d.is_dir() else []:
+            if not (p / "project.yaml").is_file():
+                continue
+            name, _, stamp = p.name.rpartition(".")
+            try:
+                title = (yaml.safe_load((p / "project.yaml").read_text(encoding="utf-8")) or {}).get("title", "")
+            except (OSError, yaml.YAMLError):
+                title = ""
+            out.append({"id": p.name, "name": name, "title": title, "deleted": stamp})
+        return out
+
+    def restore(self, tid: str) -> str:
+        if "/" in tid or tid.startswith("."):
+            raise WorkspaceError(f"неверный id «{tid}»")
+        src = self.root / "trash" / tid
+        if not (src / "project.yaml").is_file():
+            raise WorkspaceError(f"в корзине нет «{tid}»")
+        name = tid.rpartition(".")[0]
+        if (self.projects_dir / name).exists():
+            raise WorkspaceError(f"проект «{name}» уже есть — вернуть нельзя")
+        try:
+            placement = yaml.safe_load((src / ".placement.yaml").read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            placement = {}
+        (src / ".placement.yaml").unlink(missing_ok=True)
+        shutil.move(str(src), str(self.projects_dir / name))
+        if placement.get("folder") or placement.get("parent"):
+            try:
+                self.meta.place(name, self.names(), folder=placement.get("folder"), parent=placement.get("parent"))
+            except ValueError:
+                pass  # папки или родителя уже нет — проект вернётся на верхний уровень
+        self._notify(name)
+        return name
 
     def seed(self, names: list[str]) -> list[str]:
         """Завести проекты-примеры, которых ещё нет (при старте сервера)."""

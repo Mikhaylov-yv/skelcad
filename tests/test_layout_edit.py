@@ -142,6 +142,7 @@ def client(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("SKELCAD_TOKENS", "claude-code:secret1")
     monkeypatch.setenv("SKELCAD_SEED", "bracket")
     monkeypatch.setenv("SKELCAD_AUTH", "proxy")
+    monkeypatch.setenv("SKELCAD_AUTO_CONTINUE", "0")  # тест про правку компоновки, не про автопродолжение (D32)
     app = create_app(local_server(tmp_path / "data"))
     with TestClient(app) as c:
         yield c

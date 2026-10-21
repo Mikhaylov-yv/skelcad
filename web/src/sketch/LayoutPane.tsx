@@ -261,6 +261,7 @@ export function ApprovalBox({
   };
   const cls = {
     none: "badge--warn",
+    waiting: "badge--warn",
     approved: "badge--ok",
     changed: "badge--warn",
     invalid: "badge--warn",

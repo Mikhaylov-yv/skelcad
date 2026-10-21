@@ -361,16 +361,18 @@ function StatusDot({ status }: { status: AgentTask["status"] }) {
 }
 
 /** Ход работы одной задачи: состояние, отчёт, шаги словами; сырые данные — по кнопке «Подробности». */
-function Progress({
+export function Progress({
   id,
   project,
   layoutUrl,
   onChange,
+  compact = false,
 }: {
   id: string;
   project: string;
   layoutUrl: string;
   onChange: () => void;
+  compact?: boolean;
 }) {
   const [events, setEvents] = useState<TaskEvent[]>([]);
   const [task, setTask] = useState<AgentTask | null>(null);
@@ -451,7 +453,7 @@ function Progress({
   return (
     <>
       <div className="work__head">
-        {task && (
+        {task && !compact && (
           <span className={"pill pill--" + task.status} aria-live="polite">
             {S.agent.status[task.status]}
           </span>
@@ -459,7 +461,7 @@ function Progress({
         <span className="work__now" aria-live="polite">
           {headline}
         </span>
-        {live && (
+        {live && !compact && (
           <button className="danger" onClick={stop} disabled={stopping || task?.stop_requested} aria-busy={stopping}>
             {stopping || task?.stop_requested ? S.agent.stopping : S.agent.stop}
           </button>

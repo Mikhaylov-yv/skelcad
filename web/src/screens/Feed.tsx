@@ -10,8 +10,10 @@ import { AgentBanner } from "../ui/AgentBanner";
 type State =
   { kind: "loading" } | { kind: "error"; message: string } | { kind: "ok"; commits: FeedCommit[]; unreviewed: number };
 
-export function Feed() {
-  const { project = "" } = useParams();
+export function Feed(props: { project?: string; embedded?: boolean } = {}) {
+  const routeParams = useParams();
+  const project = props.project ?? routeParams.project ?? "";
+  const embedded = !!props.embedded;
   const [params, setParams] = useSearchParams();
   const [st, setSt] = useState<State>({ kind: "loading" });
   const [info, setInfo] = useState<ProjectOverview | null>(null);
@@ -34,6 +36,7 @@ export function Feed() {
 
   return (
     <main className="feed">
+      {!embedded && (
       <header className="variant__head">
         <nav aria-label="Путь">
           <Link to="/">{S.variant.back}</Link> <span className="muted">/</span> <span className="mono">{project}</span>{" "}
@@ -80,6 +83,7 @@ export function Feed() {
           </Link>
         </div>
       </header>
+      )}
       <AgentBanner p={info} />
       <div className="page feed__body">
         {st.kind === "loading" && <p className="muted">{S.feed.loading}</p>}

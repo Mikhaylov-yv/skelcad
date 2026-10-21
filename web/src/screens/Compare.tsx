@@ -21,8 +21,10 @@ export function unionViewBox(boxes: (number[] | undefined)[]): number[] | undefi
   return [x0, y0, x1 - x0, y1 - y0];
 }
 
-export function Compare() {
-  const { project = "" } = useParams();
+export function Compare(props: { project?: string; embedded?: boolean } = {}) {
+  const routeParams = useParams();
+  const project = props.project ?? routeParams.project ?? "";
+  const embedded = !!props.embedded;
   const [st, setSt] = useState<State>({ kind: "loading" });
   const [view, setView] = useState<{ name: ViewName; nonce: number }>({ name: "iso", nonce: 0 });
   const [mode, setMode] = useState<Mode>("3d");
@@ -53,6 +55,7 @@ export function Compare() {
 
   return (
     <main className="compare">
+      {!embedded && (
       <header className="variant__head">
         <nav aria-label="Путь">
           <Link to="/">{S.variant.back}</Link> <span className="muted">/</span> <span className="mono">{project}</span>{" "}
@@ -65,6 +68,7 @@ export function Compare() {
           </Link>
         </div>
       </header>
+      )}
       <div className="page compare__body">
         {st.kind === "loading" && (
           <p className="muted" aria-live="polite">

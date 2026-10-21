@@ -25,9 +25,9 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from skelcad.server import api
+from skelcad.server import api, decisions, stages, thread
 from skelcad.server import providers as PV
-from skelcad.server.auth import CURRENT_PRINCIPAL, client_for, parse_tokens, resolve, web_mode
+from skelcad.server.auth import CURRENT_PRINCIPAL, client_for, current_actor, parse_tokens, resolve, web_mode
 from skelcad.server.mcp import CURRENT_CLIENT, build_mcp
 from skelcad.server.providers import ProviderError, ProviderStore
 from skelcad.server.tasks import TaskError, TaskStore
@@ -38,6 +38,13 @@ __all__ = ["client_for", "create_app", "main", "parse_tokens"]
 
 log = logging.getLogger("skelcad.server")
 STATIC = Path(__file__).parent / "static"
+
+
+def auto_continue() -> bool:
+    """После «Согласовать компоновку» агент сам берётся за детали (D32); SKELCAD_AUTO_CONTINUE=0 выключает."""
+    return os.environ.get("SKELCAD_AUTO_CONTINUE", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
 PLACEHOLDER = """<!doctype html><html lang="ru"><meta charset="utf-8"><title>SkelCAD</title>
 <body style="font:15px system-ui;padding:2em;max-width:40em"><h1>SkelCAD</h1>
 <p>Рабочее место не собрано. Соберите его: <code>cd web &amp;&amp; npm ci &amp;&amp; npm run build</code>
@@ -171,12 +178,146 @@ def create_app(srv: Server | None = None) -> FastAPI:
         name = str(b.get("name") or "").strip()
         title = str(b.get("title") or "").strip() or None
         template = str(b.get("template") or "").strip() or None
-        return await to_thread.run_sync(tools.project_create, name, template, "workbench", None, title)
+        folder = str(b.get("folder") or "").strip() or None
+        parent = str(b.get("parent") or "").strip() or None
+        return await to_thread.run_sync(tools.project_create, name, template, "workbench", None, title, folder, parent)
 
     def guard(project: str) -> None:
         """Правки из workbench закрыты, пока проект у агента (D6: очерёдность)."""
         if (a := tasks.active(project)) is not None:
             raise HTTPException(409, f"проект у агента (задача {a['id']}, {a['status']}); остановите её или дождитесь")
+
+    # ---------- папки, узлы и корзина (M2.5, D32): организация рабочего места, не модель изделия
+    ws = srv.workspace
+
+    @app.get("/api/folders")
+    async def api_folders():
+        return await to_thread.run_sync(lambda: {**ws.meta.tree(ws.names()), "trash": ws.trash_list()})
+
+    @app.post("/api/folders")
+    async def api_folder_create(request: Request):
+        b = await request.json()
+        return await to_thread.run_sync(ws.meta.folder_create, str((b or {}).get("title") or ""))
+
+    @app.post("/api/folders/{fid}")
+    async def api_folder_rename(fid: str, request: Request):
+        b = await request.json()
+        return await to_thread.run_sync(ws.meta.folder_rename, fid, str((b or {}).get("title") or ""))
+
+    @app.delete("/api/folders/{fid}")
+    async def api_folder_delete(fid: str):
+        await to_thread.run_sync(ws.meta.folder_delete, fid, ws.names())
+        return {"ok": True}
+
+    @app.post("/api/projects/{name}/move")
+    async def api_project_move(name: str, request: Request):
+        """Перенести проект в папку и/или сделать узлом другого проекта; ключа нет в теле — не менять."""
+        b = await request.json()
+        b = b if isinstance(b, dict) else {}
+        ws.path(name)
+        folder = (str(b["folder"] or "").strip() or None) if "folder" in b else ...
+        parent = (str(b["parent"] or "").strip() or None) if "parent" in b else ...
+        return await to_thread.run_sync(lambda: ws.meta.place(name, ws.names(), folder=folder, parent=parent))
+
+    @app.delete("/api/projects/{name}")
+    async def api_project_delete(name: str):
+        """В корзину вместе с узлами; вернуть — POST /api/trash/{id}/restore."""
+        guard(name)
+        names = ws.names()
+
+        def below(n: str) -> list[str]:  # потомки, глубокие раньше: узлы уходят в корзину до родителя
+            out: list[str] = []
+            for k in ws.meta.children(n, names):
+                out.extend(below(k))
+                out.append(k)
+            return out
+
+        kids = below(name)
+        for k in kids:
+            guard(k)
+        res = {"id": None, "name": name, "nodes": []}
+        for k in kids:
+            res["nodes"].append(await to_thread.run_sync(ws.trash, k))
+            await to_thread.run_sync(tasks.archive, k, ws.root / "trash" / res["nodes"][-1]["id"] / "__tasks")
+        res.update(await to_thread.run_sync(ws.trash, name))
+        await to_thread.run_sync(tasks.archive, name, ws.root / "trash" / res["id"] / "__tasks")
+        if srv.indexer is not None:
+            for n in [name, *kids]:
+                try:
+                    await to_thread.run_sync(srv.indexer.drop_project, n)
+                except Exception as e:  # noqa: BLE001 — индекс не должен мешать удалению
+                    log.warning("индекс связей при удалении %s: %s", n, e)
+        return res
+
+    @app.get("/api/trash")
+    async def api_trash():
+        return {"items": await to_thread.run_sync(ws.trash_list)}
+
+    @app.post("/api/trash/{tid}/restore")
+    async def api_trash_restore(tid: str):
+        await to_thread.run_sync(tasks.unarchive, ws.root / "trash" / tid / "__tasks")
+        name = await to_thread.run_sync(ws.restore, tid)
+        return {"name": name, **ws.meta.project(name)}
+
+    # ---------- решения конструктора, комплект, разговор (M2.5)
+    @app.post("/api/projects/{name}/choose")
+    async def api_choose(name: str, request: Request):
+        guard(name)
+        b = await request.json()
+        variant = str((b or {}).get("variant") or "").strip()
+        return await to_thread.run_sync(decisions.choose, ws, name, variant, current_actor("workbench"))
+
+    def kit_variant(name: str, variant: str | None) -> str | None:
+        if variant:
+            return variant
+        chosen = decisions.chosen_variant(ws, name)
+        if chosen:
+            return chosen
+        built = [v["id"] for v in ws.variants(name) if (ws.out_dir / name / v["id"] / "report.json").is_file()]
+        return built[0] if built else None
+
+    @app.get("/api/projects/{name}/kit")
+    async def api_kit(name: str, variant: str | None = None):
+        ws.path(name)
+        v = await to_thread.run_sync(kit_variant, name, variant)
+        return {"variant": v, "files": stages.kit_files(ws.out_dir, name, v) if v else []}
+
+    @app.post("/api/projects/{name}/kit")
+    async def api_kit_build(name: str, variant: str | None = None):
+        """Выдать комплект: сборка выбранного варианта с экспортом (STEP, эскизы с размерами, отчёт)."""
+        guard(name)
+        v = await to_thread.run_sync(kit_variant, name, variant)
+        if not v:
+            raise HTTPException(400, "сначала выберите вариант")
+        res = await to_thread.run_sync(tools.build, name, v, True)
+        return {"variant": v, "files": stages.kit_files(ws.out_dir, name, v), "build": res}
+
+    @app.get("/api/projects/{name}/kit.zip")
+    async def api_kit_zip(name: str, variant: str | None = None):
+        import io
+        import zipfile
+
+        ws.path(name)
+        v = await to_thread.run_sync(kit_variant, name, variant)
+        files = stages.kit_files(ws.out_dir, name, v) if v else []
+        if not files:
+            raise HTTPException(404, "комплекта ещё нет: соберите вариант с экспортом")
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            for f in files:
+                z.write(ws.out_dir / name / v / f["name"], arcname=f"{name}_{v}/{f['name']}")
+        from fastapi.responses import Response
+
+        return Response(
+            buf.getvalue(),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{name}_{v}_kit.zip"'},
+        )
+
+    @app.get("/api/projects/{name}/thread")
+    async def api_thread(name: str, limit: int = 60):
+        ws.path(name)
+        return await to_thread.run_sync(thread.thread, ws, tasks, name, limit)
 
     # ---------- задачи агенту
     @app.get("/api/projects/{name}/tasks")
@@ -318,9 +459,22 @@ def create_app(srv: Server | None = None) -> FastAPI:
         return await to_thread.run_sync(api.layout_view, tools, name, variant)
 
     @app.post("/api/projects/{name}/layout/approve")
-    async def api_layout_approve(name: str):
+    async def api_layout_approve(name: str, request: Request):
+        """Согласовать компоновку; дальше ход у агента — задача «детали» ставится сразу (D32), если у проекта нет
+        узлов и деталей ещё нет. В ответе task — поставленная задача или null."""
         guard(name)
-        return await to_thread.run_sync(api.layout_approve, srv.workspace, name)
+        res = await to_thread.run_sync(api.layout_approve, srv.workspace, name)
+        res["task"] = None
+        if auto_continue() and not ws.meta.children(name, ws.names()):
+            info = await to_thread.run_sync(api.project_overview, ws, ws.out_dir, name, tasks)
+            if info["next"].get("act") == "run:design":
+                try:
+                    res["task"] = await to_thread.run_sync(
+                        tasks.create, name, stages.TASK_TEXT["design"], request.state.principal.name
+                    )
+                except TaskError as e:
+                    res["auto_error"] = str(e)
+        return res
 
     @app.post("/api/projects/{name}/layout/edit")
     async def api_layout_edit(name: str, request: Request):

@@ -31,8 +31,15 @@ type State =
   | { kind: "error"; message: string }
   | { kind: "ok"; report: Report };
 
-export function Variant() {
-  const { project = "", variant = "" } = useParams();
+type Mode = "3d" | "layout" | "sketch";
+
+export function Variant(
+  props: { project?: string; variant?: string; embedded?: boolean; mode?: Mode } = {},
+) {
+  const routeParams = useParams();
+  const project = props.project ?? routeParams.project ?? "";
+  const variant = props.variant ?? routeParams.variant ?? "";
+  const embedded = !!props.embedded;
   const pstate = useProjectState(project);
   const locked = pstate?.state === "agent";
   const [st, setSt] = useState<State>({ kind: "loading" });
@@ -54,10 +61,11 @@ export function Variant() {
   const [buildError, setBuildError] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
   // режим центрального окна: 3D или компоновка (эскиз по скелету и обстановке; работает и без сборки)
-  type Mode = "3d" | "layout" | "sketch";
   const modeParam = params.get("mode");
-  const mode: Mode = !variant ? "layout" : modeParam === "layout" || modeParam === "sketch" ? modeParam : "3d";
+  const mode: Mode =
+    props.mode ?? (!variant ? "layout" : modeParam === "layout" || modeParam === "sketch" ? modeParam : "3d");
   const setMode = (m: Mode) => {
+    if (props.mode) return; // режим задаёт этап рабочего места
     const p = new URLSearchParams(params);
     if (m === "3d") p.delete("mode");
     else p.set("mode", m);
@@ -316,8 +324,93 @@ export function Variant() {
   const geometryStale =
     !!report?.urls.glb && !!report.geometry_at && Date.parse(report.built_at) - Date.parse(report.geometry_at) > 60_000;
 
+  const treePane = <>            {mode === "layout" ? (
+              <LayoutTree
+                entities={layout?.entities ?? []}
+                selected={layoutSel}
+                onSelect={(r) => setLayoutSel((cur) => (cur.includes(r) ? [] : [r]))}
+              />
+            ) : (
+              report &&
+              idx && (
+                <>
+                  <h3>{S.variant.parts}</h3>
+                  <ul className="tree">
+                    {report.parts.map((p) => (
+                      <li key={p.id}>
+                        <button
+                          className={"tree__item" + (selected.includes(p.id) ? " selected" : "")}
+                          onClick={() => toggleNode(p.id)}
+                          aria-pressed={selected.includes(p.id)}
+                        >
+                          <span>{p.name || p.id}</span>
+                          <span className="muted small">
+                            {p.mass_kg !== undefined ? `${fmtNum(p.mass_kg)} кг` : ""}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {report.welds.length > 0 && (
+                    <>
+                      <h3>{S.variant.welds}</h3>
+                      <ul className="tree">
+                        {report.welds.map((w) => (
+                          <li key={w.id}>
+                            <button className="tree__item" onClick={() => pickRef("weld:" + w.id)} title={w.note}>
+                              <span className="mono">{w.id}</span>
+                              <span className="muted small">
+                                {w.leg !== undefined ? `к${fmtNum(w.leg)} · ` : ""}
+                                {w.length !== undefined ? `${fmtNum(w.length)} мм` : ""}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {idx.fasteners.length > 0 && (
+                    <>
+                      <h3>{S.variant.fasteners}</h3>
+                      <ul className="tree">
+                        {idx.fasteners.map((id) => (
+                          <li key={id}>
+                            <button
+                              className={"tree__item" + (selected.includes(id) ? " selected" : "")}
+                              onClick={() => toggleNode(id)}
+                              aria-pressed={selected.includes(id)}
+                            >
+                              <span className="mono">{id}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {idx.other.length > 0 && (
+                    <>
+                      <h3>{S.variant.other}</h3>
+                      <ul className="tree">
+                        {idx.other.map((id) => (
+                          <li key={id}>
+                            <button
+                              className={"tree__item" + (selected.includes(id) ? " selected" : "")}
+                              onClick={() => toggleNode(id)}
+                              aria-pressed={selected.includes(id)}
+                            >
+                              <span className="mono">{id}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </>
+              )
+            )}</>;
   return (
     <main className="variant">
+      {!embedded && (
       <header className="variant__head">
         <nav aria-label="Путь">
           <Link to="/">{S.variant.back}</Link> <span className="muted">/</span> <span className="mono">{project}</span>{" "}
@@ -436,8 +529,9 @@ export function Variant() {
           </div>
         )}
       </header>
+      )}
 
-      <AgentBanner p={pstate} />
+      {!embedded && <AgentBanner p={pstate} />}
       {st.kind === "loading" && <p className="muted page">{S.variant.loading}</p>}
       {st.kind === "error" && (
         <div className="callout callout--error page" role="alert">
@@ -455,95 +549,13 @@ export function Variant() {
       )}
 
       {(mode === "layout" || (report && idx)) && (
-        <div className="variant__body">
-          <aside className="pane pane--tree" aria-label={mode === "layout" ? S.layout.entities : S.variant.tree}>
-            {mode === "layout" ? (
-              <LayoutTree
-                entities={layout?.entities ?? []}
-                selected={layoutSel}
-                onSelect={(r) => setLayoutSel((cur) => (cur.includes(r) ? [] : [r]))}
-              />
-            ) : (
-              report &&
-              idx && (
-                <>
-                  <h3>{S.variant.parts}</h3>
-                  <ul className="tree">
-                    {report.parts.map((p) => (
-                      <li key={p.id}>
-                        <button
-                          className={"tree__item" + (selected.includes(p.id) ? " selected" : "")}
-                          onClick={() => toggleNode(p.id)}
-                          aria-pressed={selected.includes(p.id)}
-                        >
-                          <span>{p.name || p.id}</span>
-                          <span className="muted small">
-                            {p.mass_kg !== undefined ? `${fmtNum(p.mass_kg)} кг` : ""}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  {report.welds.length > 0 && (
-                    <>
-                      <h3>{S.variant.welds}</h3>
-                      <ul className="tree">
-                        {report.welds.map((w) => (
-                          <li key={w.id}>
-                            <button className="tree__item" onClick={() => pickRef("weld:" + w.id)} title={w.note}>
-                              <span className="mono">{w.id}</span>
-                              <span className="muted small">
-                                {w.leg !== undefined ? `к${fmtNum(w.leg)} · ` : ""}
-                                {w.length !== undefined ? `${fmtNum(w.length)} мм` : ""}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                  {idx.fasteners.length > 0 && (
-                    <>
-                      <h3>{S.variant.fasteners}</h3>
-                      <ul className="tree">
-                        {idx.fasteners.map((id) => (
-                          <li key={id}>
-                            <button
-                              className={"tree__item" + (selected.includes(id) ? " selected" : "")}
-                              onClick={() => toggleNode(id)}
-                              aria-pressed={selected.includes(id)}
-                            >
-                              <span className="mono">{id}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                  {idx.other.length > 0 && (
-                    <>
-                      <h3>{S.variant.other}</h3>
-                      <ul className="tree">
-                        {idx.other.map((id) => (
-                          <li key={id}>
-                            <button
-                              className={"tree__item" + (selected.includes(id) ? " selected" : "")}
-                              onClick={() => toggleNode(id)}
-                              aria-pressed={selected.includes(id)}
-                            >
-                              <span className="mono">{id}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                </>
-              )
-            )}
-          </aside>
+        <div className={"variant__body" + (embedded ? " variant__body--embedded" : "")}>
+          {!embedded && (
+                      <aside className="pane pane--tree" aria-label={mode === "layout" ? S.layout.entities : S.variant.tree}>{treePane}</aside>
+          )}
 
           <section className="pane pane--3d" aria-label={mode === "layout" ? S.layout.title : "3D"}>
+            {!props.mode && (
             <div className="modebar" role="tablist" aria-label="Окно">
               <button role="tab" aria-selected={mode === "3d"} onClick={() => setMode("3d")} disabled={!variant}>
                 {S.layout.mode3d}
@@ -561,6 +573,7 @@ export function Variant() {
                 {S.layout.tab}
               </button>
             </div>
+            )}
             {mode === "sketch" && report ? (
               <>
                 <div className="toolbar">
@@ -727,6 +740,12 @@ export function Variant() {
           </section>
 
           <aside className="pane pane--info">
+            {embedded && (
+              <details className="wb-tree">
+                <summary>{mode === "layout" ? S.layout.entities : S.variant.tree}</summary>
+                {treePane}
+              </details>
+            )}
             {mode === "layout" && layout && editing && (
               <LayoutEditPanel
                 project={project}
@@ -742,7 +761,7 @@ export function Variant() {
                 locked={locked}
               />
             )}
-            {mode === "layout" && layout && (
+            {mode === "layout" && layout && !embedded && (
               <ApprovalBox
                 project={project}
                 layout={layout}

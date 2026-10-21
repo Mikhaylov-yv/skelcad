@@ -144,7 +144,7 @@ class Tools:
     # ---------------------------------------------------------------- проекты
 
     def project_list(self) -> dict:
-        items = [self.ws.info(n) for n in self.ws.names()]
+        items = [{**self.ws.info(n), **self.ws.meta.project(n)} for n in self.ws.names()]
         return {
             "summary": f"проектов: {len(items)}" + (": " + ", ".join(i["name"] for i in items) if items else ""),
             "projects": items,
@@ -158,9 +158,21 @@ class Tools:
         client: str = "agent",
         origin: str | None = None,
         title: str | None = None,
+        folder: str | None = None,
+        parent: str | None = None,
     ) -> dict:
+        """folder — папка рабочего места; parent — проект-родитель: тогда новый проект — узел изделия (M2.5)."""
+        if parent:
+            self.ws.path(parent)
+        if folder:
+            self.ws.meta.folder(folder)
         info = self.ws.create(name, template=template, actor=current_actor(client), origin=origin, title=title)
-        return {"summary": f"создан проект «{name}»" + (f" из шаблона {template}" if template else ""), "project": info}
+        if folder or parent:
+            info.update(self.ws.meta.place(name, self.ws.names(), folder=folder, parent=parent))
+        else:
+            info.update(self.ws.meta.project(name))
+        what = "узел" if parent else "проект"
+        return {"summary": f"создан {what} «{name}»" + (f" из шаблона {template}" if template else ""), "project": info}
 
     def project_read(self, project: str, section: str | None = None) -> dict:
         spec = self.ws.spec(project)
