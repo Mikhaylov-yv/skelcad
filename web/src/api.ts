@@ -463,6 +463,7 @@ export interface TaskEvent {
   t: string;
   type:
     | "start"
+    | "step"
     | "assistant"
     | "tool_call"
     | "tool_result"
@@ -475,12 +476,13 @@ export interface TaskEvent {
   text?: string;
   name?: string;
   args?: Record<string, unknown>;
-  seconds?: number;
+  seconds?: number; // tool_result: длительность инструмента; step: сколько думала модель
+  n?: number; // step: номер шага
   runner?: string;
   tools?: number;
   cost_usd?: number;
   path?: string; // attachment: путь вложения
-  images?: number; // attachment: сколько изображений ушло модели
+  images?: number | string[]; // attachment: сколько изображений ушло модели; tool_result: файлы задачи с картинками
   count?: number; // images: сколько изображений из инструментов ушло модели
   provider?: string; // start: провайдер и модель
   model?: string;
@@ -660,6 +662,8 @@ export const api = {
       total: number;
       task: AgentTask;
     }>(`/api/tasks/${encodeURIComponent(id)}/events?since=${since}`),
+  /** Картинка, которую агент получил от инструмента в ходе задачи (tool_result.images). */
+  taskFileUrl: (id: string, name: string) => `/api/tasks/${encodeURIComponent(id)}/files/${encodeURIComponent(name)}`,
   taskStop: (id: string) =>
     getJson<AgentTask>(`/api/tasks/${encodeURIComponent(id)}/stop`, {
       method: "POST",

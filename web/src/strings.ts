@@ -280,8 +280,9 @@ export const S = {
     tab: "Агент",
     hint: "Опишите задачу словами конструктора. Агент прочитает проект и открытые замечания, будет править файлы коммитами и собирать; каждое его изменение появится в ленте — его можно откатить.",
     emptyProject:
-      "Проект пока пустой: ни скелета, ни вариантов. Приложите набросок или фото и опишите изделие словами — назначение, нагрузки, к чему крепится, габариты. Агент заполнит требования, скелет и обстановку и покажет компоновку на согласование; детали — после вашего «Компоновка согласована».",
-    placeholder: "Например: подними запас по анкерам до K ≥ 1,5 при минимальном росте массы; объясни, что менял",
+      "Проект пока пустой. Приложите набросок или фото и опишите изделие: назначение, нагрузки, к чему крепится, габариты. Агент опишет скелет и обстановку и покажет компоновку на согласование; детали — после вашего «Компоновка согласована».",
+    placeholder: "Что сделать? Например: подними запас по анкерам до K ≥ 1,5 при минимальном росте массы",
+    help: "Как это работает",
     variant: "Вариант",
     anyVariant: "все варианты",
     run: "Запустить",
@@ -290,6 +291,7 @@ export const S = {
     stopping: "Останавливаю…",
     busy: (id: string) => `Проект у агента: задача ${id}`,
     busyHint: "Пока агент работает, правки из рабочего места закрыты. Остановите задачу или дождитесь конца.",
+    busyShort: "Проект у агента — дождитесь конца задачи или остановите её",
     status: {
       queued: "в очереди",
       running: "выполняется",
@@ -299,25 +301,44 @@ export const S = {
       limit: "лимит шагов",
     },
     steps: (n: number, max: number) => `шагов ${n} из ${max}`,
-    log: "Ход задачи",
+    work: "Ход работы",
+    stepsTitle: (n: number) => `Что делал агент · шагов ${n}`,
+    details: "Подробности",
+    detailsHide: "Скрыть подробности",
+    detailsHint: "Аргументы вызовов и ответы инструментов как есть",
+    finished: {
+      done: (took: string) => `Готово${took ? ` за ${took}` : ""}`,
+      failed: "Остановилась с ошибкой",
+      stopped: "Остановлена конструктором",
+      limit: "Достигнут лимит шагов — агент остановлен",
+      queued: "Ждёт агента. Если контейнер агента не запущен, задача останется в очереди",
+      running: "",
+    },
+    elapsed: (s: string) => `${s}`,
+    changes: (n: number) => (n === 1 ? "1 коммит" : n < 5 ? `${n} коммита` : `${n} коммитов`),
+    noChanges: "модель не менялась",
+    seeFeed: "смотреть в ленте",
+    layoutWaiting: "компоновка ждёт вашего согласования",
+    openLayout: "открыть компоновку",
     history: "Задачи",
     none: "Задач ещё не было.",
-    noSelected: "Задача не выбрана.",
+    noSelected: "Выберите задачу слева или поставьте новую.",
     textLabel: "Текст задачи",
     result: "Отчёт агента",
+    noResult: "Агент закончил без отчёта.",
     error: "Ошибка",
     noEvents: "Агент ещё не начал. Если контейнер агента не запущен, задача останется «в очереди».",
     toFeed: "Смотреть изменения в ленте",
     byUser: (u: string) => `поставил ${u}`,
-    call: "вызов",
-    said: "агент",
+    imageAlt: "Картинка, которую видел агент",
+    open: "открыть",
     attachments: "Вложения",
     attachmentsHint:
       "Набросок от руки, фото, экспорт из доски: файл сохраняется в репозиторий проекта вашим коммитом, отмеченные уходят агенту с задачей как изображения.",
     upload: "Добавить файл",
     uploading: "Загружаю…",
-    pasteHint: "или вставьте картинку из буфера в текст задачи (Ctrl+V)",
-    accept: "png, jpg, webp, svg, pdf, excalidraw; до 16 МБ, картинка уменьшается до 3000 px",
+    pasteHint: "Картинку можно вставить из буфера прямо в текст задачи (Ctrl+V).",
+    accept: "png, jpg, webp, svg, pdf, excalidraw; до 16 МБ, картинка уменьшается до 3000 px.",
     noAttachments: "Вложений пока нет.",
     attach: (name: string) => `Приложить ${name} к задаче`,
     deleteFile: (name: string) => `Удалить ${name}`,
@@ -328,17 +349,55 @@ export const S = {
     >,
     withTask: (n: number) => `вложений: ${n}`,
     taskAttachments: "Вложения задачи",
-    sentAttachment: (path: string, n: number) =>
-      n > 0 ? `вложение ${path} передано модели как изображение` : `вложение ${path} передано модели текстом`,
+    sentAttachment: (n: number) => (n > 0 ? "передано модели как изображение" : "передано модели текстом"),
     sentImages: (n: number) =>
       n === 1 ? "изображение из инструмента передано модели" : `изображений передано модели: ${n}`,
     provider: "Провайдер",
     model: "Модель",
     defaultProvider: "по умолчанию",
     usage: (u: { prompt_tokens?: number; completion_tokens?: number; cost?: number }) =>
-      `токены ${u.prompt_tokens ?? 0} + ${u.completion_tokens ?? 0}` +
-      (u.cost != null ? `, ${u.cost.toFixed(4)} $` : ""),
+      `токены ${(u.prompt_tokens ?? 0).toLocaleString("ru-RU")} + ${(u.completion_tokens ?? 0).toLocaleString("ru-RU")}` +
+      (u.cost != null ? ` · ${u.cost.toLocaleString("ru-RU", { maximumFractionDigits: 4 })} $` : ""),
     noProviders: "Провайдер модели не настроен — агент возьмёт настройки сервера.",
+  },
+  // ход работы агента словами (web/src/ui/agentSteps.ts)
+  steps: {
+    start: (model: string, tools: number) =>
+      "Получил задачу" + (model ? `, модель ${model}` : "") + (tools ? `, инструментов ${tools}` : ""),
+    projectList: "Смотрю список проектов",
+    projectCreate: (name: string) => `Создаю проект «${name}»`,
+    projectRead: (p: string, section: string) => `Читаю проект ${p}` + (section ? `, раздел ${section}` : ""),
+    modelQuery: (pv: string, path: string) => `Смотрю модель ${pv}` + (path ? `: ${path}` : ""),
+    filesRead: (paths: string[]) => (paths.length === 1 ? `Читаю ${paths[0]}` : `Читаю файлы: ${paths.join(", ")}`),
+    filesWrite: (files: string[], message: string) => `Правлю ${files.join(", ") || "файлы"}: «${message}»`,
+    history: (p: string) => `Смотрю историю ${p}`,
+    revert: (c: string) => `Откатываю коммит ${c}`,
+    reviewList: "Смотрю замечания конструктора",
+    reviewResolve: (id: string, answer: string) => `Отвечаю на замечание ${id}` + (answer ? `: «${answer}»` : ""),
+    reviewAdd: "Оставляю замечание",
+    attachments: "Смотрю вложения проекта",
+    attachment: (path: string) => `Смотрю вложение ${path.replace(/^attachments\//, "")}`,
+    standards: "Смотрю пакеты стандартов",
+    contextTables: "Смотрю таблицы каталога",
+    contextLookup: (table: string, key: string) => `Беру из каталога ${table}: ${key}`,
+    contextSearch: (q: string, table: string) => `Ищу в каталоге «${q}»` + (table ? ` (${table})` : ""),
+    links: (ref: string) => `Смотрю связи ${ref}`,
+    whereUsed: (ref: string) => `Ищу, где используется ${ref}`,
+    search: (q: string) => `Ищу по проектам «${q}»`,
+    measure: (op: string, args: string) => `Измеряю ${op}` + (args ? ` ${args}` : ""),
+    renderLayout: (pv: string, view: string, highlight: string) =>
+      `Смотрю компоновку ${pv}` + (view ? `, вид «${view}»` : "") + (highlight ? `, подсветка ${highlight}` : ""),
+    renderView: (pv: string, view: string, highlight: string) =>
+      `Смотрю вид «${view}» ${pv}` + (highlight ? `, подсветка ${highlight}` : ""),
+    check: (pv: string, all: boolean) => (all ? `Проверяю правила всех вариантов ${pv}` : `Проверяю правила ${pv}`),
+    build: (pv: string, all: boolean, noExport: boolean) =>
+      (all ? `Собираю все варианты ${pv}` : pv.includes("/") ? `Собираю вариант ${pv}` : `Собираю ${pv}`) +
+      (noExport ? " без геометрии" : ""),
+    diff: (a: string, b: string) => `Сравниваю ${a} → ${b}`,
+    compare: (p: string) => `Сравниваю варианты ${p}`,
+    commit: (hash: string, files: string) => `коммит ${hash}` + (files ? ` · ${files}` : ""),
+    failed: "инструмент ответил ошибкой",
+    thinking: "Обдумываю следующий шаг…",
   },
   tokens: {
     title: "Подключение агента",
@@ -422,6 +481,13 @@ export const S = {
   },
   gate: {
     closed: (n: number) => `Выдача закрыта: ошибок ${n}. Устраните или откатите изменение.`,
+  },
+  duration: (sec: number) => {
+    const s = Math.max(0, Math.round(sec));
+    if (s < 60) return `${s} с`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m} мин ${String(s % 60).padStart(2, "0")} с`;
+    return `${Math.floor(m / 60)} ч ${String(m % 60).padStart(2, "0")} мин`;
   },
   numbers: {
     mass: "масса",

@@ -296,6 +296,12 @@ def create_app(srv: Server | None = None) -> FastAPI:
     async def api_task_stop(task_id: str):
         return await to_thread.run_sync(tasks.stop, task_id)
 
+    @app.get("/api/tasks/{task_id}/files/{name}")
+    async def api_task_file(task_id: str, name: str):
+        """Картинка, которую агент получил от инструмента в ходе задачи (имя — из события tool_result.images)."""
+        f, mime = await to_thread.run_sync(tasks.file_path, task_id, name)
+        return FileResponse(f, media_type=mime, headers={"Cache-Control": "private, max-age=86400"})
+
     @app.get("/api/projects/{name}")
     async def api_project(name: str):
         return await to_thread.run_sync(tools.project_read, name)

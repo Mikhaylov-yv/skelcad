@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import threading
 from pathlib import Path
 
 import pytest
 
-from skelcad.agent import McpBridge, openai_tools, run_loop
+from skelcad.agent import McpBridge, ToolOutput, openai_tools, run_loop
 from skelcad.server.tasks import TaskError, TaskStore
 
 
@@ -76,7 +77,8 @@ def test_run_loop_tool_calls_and_done():
     assert res["status"] == "done" and res["result"].startswith("Отчёт") and res["steps"] == 2
     assert bridge.called == [("project_read", {"project": "bracket"})]
     kinds = [k for k, _ in events]
-    assert kinds == ["start", "assistant", "tool_call", "tool_result", "assistant", "done"]
+    assert kinds == ["start", "step", "assistant", "tool_call", "tool_result", "step", "assistant", "done"]
+    assert [d["n"] for k, d in events if k == "step"] == [1, 2] and "seconds" in events[1][1]
     assert llm.calls[0][1] == 1  # инструменты переданы в формате OpenAI
     assert openai_tools(bridge.list_tools())[0]["function"]["name"] == "project_read"
 
@@ -143,3 +145,41 @@ def test_mcp_bridge_against_live_server(tmp_path: Path, monkeypatch):
     finally:
         server.should_exit = True
         th.join(timeout=5)
+
+
+def test_run_loop_saves_tool_images(tmp_path: Path):
+    """Картинка из инструмента (render) сохраняется к задаче, имя файла — в событии tool_result.images."""
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 16
+
+    class ImageBridge(FakeBridge):
+        def call(self, name, args):
+            self.called.append((name, args))
+            return ToolOutput("компоновка", [{"mime": "image/png", "b64": base64.b64encode(png).decode()}])
+
+    llm = FakeLLM(
+        [
+            {"content": "", "tool_calls": [{"id": "c", "function": {"name": "render", "arguments": "{}"}}]},
+            {"content": "готово"},
+        ]
+    )
+    st = TaskStore(tmp_path / "tasks")
+    t = st.create("bracket", "покажи", "ivanov")
+    events = []
+    res = run_loop(
+        {"project": "bracket", "text": "покажи", "id": t["id"]},
+        llm,
+        ImageBridge(),
+        lambda k, **d: events.append((k, d)),
+        lambda: False,
+        save=lambda n, b: st.save_file(t["id"], n, b),
+    )
+    assert res["status"] == "done"
+    result = next(d for k, d in events if k == "tool_result")
+    assert result["images"] == ["img-001.png"]
+    f, mime = st.file_path(t["id"], "img-001.png")
+    assert f.read_bytes() == png and mime == "image/png"
+    with pytest.raises(TaskError):
+        st.file_path(t["id"], "../task.json")
+    with pytest.raises(TaskError):
+        st.file_path(t["id"], "img-002.png")
+    assert st.save_file(t["id"], "bad name.png", png) is None

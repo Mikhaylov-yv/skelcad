@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 
 ACTIVE = ("queued", "running")
+MIMES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp", "svg": "image/svg+xml"}
 
 
 class TaskError(ValueError):
@@ -167,6 +169,27 @@ class TaskStore:
 
     def stop_requested(self, task_id: str) -> bool:
         return (self._dir(task_id) / "stop").exists()
+
+    FILE_RE = re.compile(r"^[A-Za-z0-9_-]+\.(png|jpg|jpeg|webp|svg)$")
+
+    def save_file(self, task_id: str, name: str, data: bytes) -> str | None:
+        """Картинка, которую агент получил от инструмента (компоновка, вид, вложение), — файлом в папке задачи;
+        рабочее место показывает её в ходе работы (GET /api/tasks/{id}/files/{name})."""
+        if not self.FILE_RE.match(name) or not data:
+            return None
+        try:
+            (self._dir(task_id) / name).write_bytes(data)
+        except OSError:
+            return None
+        return name
+
+    def file_path(self, task_id: str, name: str) -> tuple[Path, str]:
+        if not self.FILE_RE.match(name):
+            raise TaskError(f"неверное имя файла «{name}»")
+        f = self._dir(task_id) / name
+        if not f.is_file():
+            raise TaskError(f"у задачи {task_id} нет файла «{name}»")
+        return f, MIMES[f.suffix.lower().lstrip(".")]
 
     def finish(self, task_id: str, status: str, result: str | None = None, error: str | None = None, **extra) -> None:
         d = self._dir(task_id)

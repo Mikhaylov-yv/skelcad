@@ -2,9 +2,8 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError, type ProjectOverview, type SearchResponse, type TemplateInfo } from "../api";
 import { S } from "../strings";
-import { NumbersRow } from "../ui/NumbersRow";
 import { CommitLine } from "../ui/CommitLine";
-import { relativeTime } from "../ui/format";
+import { fmtNum, relativeTime } from "../ui/format";
 import { entityUrl, kindLabel } from "../ui/Links";
 import { NAME_RE, slug } from "../ui/translit";
 
@@ -235,23 +234,39 @@ function ProjectCard({ p }: { p: ProjectOverview }) {
     <article aria-labelledby={`p-${p.name}`}>
       <header className="card__head">
         <h2 id={`p-${p.name}`}>
-          {p.title || p.name} <span className="muted mono">{p.name}</span>
+          {p.title || p.name}{" "}
+          <span className="muted mono small">
+            {p.name}
+            {p.standards.length > 0 ? ` · ${p.standards.join(", ")}` : ""}
+          </span>
         </h2>
         <span className={"state state--" + p.state} title={S.projects.state[p.state]}>
           {S.projects.state[p.state]}
         </span>
       </header>
-      {p.standards.length > 0 && (
-        <p className="muted">
-          {S.projects.standards}: {p.standards.join(", ")}
-        </p>
-      )}
       <section>
-        <h3 className="muted">{S.projects.variants}</h3>
         {p.variants.length === 0 ? (
-          <p className="muted">{S.projects.noVariants}</p>
+          <p className="muted small">{S.projects.noVariants}</p>
         ) : (
           <table className="variants">
+            <thead>
+              <tr>
+                <th scope="col">{S.projects.variants}</th>
+                <th scope="col" className="num">
+                  {S.numbers.mass}, {S.numbers.kg}
+                </th>
+                <th scope="col" className="num">
+                  {S.numbers.kmin}
+                </th>
+                <th scope="col" className="num">
+                  {S.numbers.errors}
+                </th>
+                <th scope="col" className="num">
+                  {S.numbers.warnings}
+                </th>
+                <th scope="col">{S.numbers.builtAt}</th>
+              </tr>
+            </thead>
             <tbody>
               {p.variants.map((v) => (
                 <tr key={v.id}>
@@ -259,14 +274,26 @@ function ProjectCard({ p }: { p: ProjectOverview }) {
                     <Link to={`/p/${encodeURIComponent(p.name)}/${encodeURIComponent(v.id)}`} className="mono">
                       {v.id}
                     </Link>
-                    {v.title && <span className="muted"> — {v.title}</span>}
+                    {v.title && <span className="muted">{v.title}</span>}
                   </th>
-                  <td>
-                    {v.built ? <NumbersRow n={v} compact /> : <span className="muted">{S.projects.notBuilt}</span>}
-                  </td>
-                  <td className="muted small">
-                    {v.built_at ? `${S.numbers.builtAt} ${relativeTime(v.built_at)}` : ""}
-                  </td>
+                  {v.built ? (
+                    <>
+                      <td className="num">{fmtNum(v.mass_kg)}</td>
+                      <td
+                        className={"num" + (v.k_min !== undefined && v.k_min < 1.5 ? " bad" : "")}
+                        title={v.k_min_item}
+                      >
+                        {fmtNum(v.k_min)}
+                      </td>
+                      <td className={"num" + (v.errors ? " level-error" : "")}>{v.errors ?? 0}</td>
+                      <td className={"num" + (v.warnings ? " level-warning" : "")}>{v.warnings ?? 0}</td>
+                      <td className="muted small when">{v.built_at ? relativeTime(v.built_at) : ""}</td>
+                    </>
+                  ) : (
+                    <td className="muted small" colSpan={5}>
+                      {S.projects.notBuilt}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -286,16 +313,17 @@ function ProjectCard({ p }: { p: ProjectOverview }) {
           >
             {S.projects.layout}
           </Link>
-          {p.layout && (
-            <span
-              className={"badge " + (p.layout.state === "approved" ? "badge--ok" : "badge--warn")}
-              title={p.layout.by ? S.layout.approvedBy(p.layout.by, relativeTime(p.layout.at ?? "")) : undefined}
-            >
+          {p.layout && p.layout.state !== "approved" && (
+            <span className="badge badge--warn" title={S.layout.state[p.layout.state]}>
               {S.layout.state[p.layout.state]}
             </span>
           )}
           <Link to={`/p/${encodeURIComponent(p.name)}/commits`}>{S.feed.tab}</Link>
-          {p.unreviewed ? <span className="badge badge--warn">{p.unreviewed}</span> : null}
+          {p.unreviewed ? (
+            <span className="badge badge--warn" title={S.feed.unreviewed(p.unreviewed)}>
+              {p.unreviewed}
+            </span>
+          ) : null}
           {p.variants.length > 1 && <Link to={`/p/${encodeURIComponent(p.name)}/compare`}>{S.compare.tab}</Link>}
           <Link to={`/p/${encodeURIComponent(p.name)}/agent`}>{S.agent.tab}</Link>
         </span>

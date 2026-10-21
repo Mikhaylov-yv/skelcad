@@ -236,7 +236,7 @@ function CommitCard({
           </label>
         )}
         {c.kind !== "system" && (
-          <button className="danger" onClick={() => setRevertOpen(true)} disabled={locked}>
+          <button onClick={() => setRevertOpen(true)} disabled={locked}>
             {S.feed.revert}
           </button>
         )}

@@ -70,7 +70,8 @@
 
 - Документы: `docs/architecture/01-vision-and-architecture.md` (замысел), `02-decisions.md`
   (журнал решений), `03-m0-plan.md`, `04-m1-plan.md`, `05-m2-plan.md`, `06-m2-1-sketches-plan.md`, `07-m2-2-graph-plan.md` (планы этапов со статусом и дорожная карта),
-  `08-m2-3-layout-input-plan.md` (ввод компоновки от конструктора).
+  `08-m2-3-layout-input-plan.md` (ввод компоновки от конструктора), `09-m2-4-calm-ui-plan.md` (ход работы агента
+  словами, спокойная палитра; D30–D31).
 - Код: `src/skelcad/core` (модель), `geom` (OCCT; `layout.py` — компоновочный эскиз), `rules` (плагины),
   `graph/` (граф связей в Postgres: словарь сущностей и связей, индексатор, запросы; D27),
   `pipeline.py`, `server/` (FastAPI + MCP + git-проекты; `api.py`, `attachments.py` (вложения конструктора, D28),
@@ -87,5 +88,7 @@
   `docker compose`, nginx `skelcad.br`). Локально: `uv run skelcad serve` (без токенов — режим
   разработки) и `uv run skelcad worker --queue <папка>` или подпроцесс-воркер по умолчанию.
 - Интерфейс (workbench, `web/`): проектируем по ISO 9241-110, каждое изменение экрана проверяем
-  по чеклисту `docs/ui/checklist.md` и записываем ревью в `docs/ui/reviews/` (см. `05-m2-plan.md`).
+  по чеклисту `docs/ui/checklist.md` и записываем ревью в `docs/ui/reviews/` (см. `05-m2-plan.md`). Палитра — одна
+  акцентная, цвет только там, где нужно решение (D31); ход задачи агента показывается словами по словарю
+  `web/src/ui/agentSteps.ts` — новый инструмент MCP получает там фразу (D30).
 - Тексты, сообщения правил и документация — по-русски; идентификаторы — по-английски.

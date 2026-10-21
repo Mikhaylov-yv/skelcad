@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   api,
@@ -11,9 +11,13 @@ import {
 } from "../api";
 import { S } from "../strings";
 import { relativeTime } from "../ui/format";
+import { buildSteps, commitsOf, nowOf, type Step } from "../ui/agentSteps";
+import { Glyph } from "../ui/Glyph";
+import { Markdown, firstLine } from "../ui/Markdown";
 
 const ACCEPT = ".png,.jpg,.jpeg,.webp,.svg,.pdf,.excalidraw,image/png,image/jpeg,image/webp,image/svg+xml";
 
+/** Экран «Агент»: слева задача (текст, вложения, модель) и список задач, справа — ход работы словами и отчёт. */
 export function Agent() {
   const { project = "" } = useParams();
   const [params] = useSearchParams();
@@ -139,47 +143,99 @@ export function Agent() {
       .catch((e: Error) => setErr(e.message))
       .finally(() => setBusy(false));
   };
+  const locked = !!active;
+  const layoutUrl =
+    info && info.variants.length > 0
+      ? `/p/${encodeURIComponent(project)}/${encodeURIComponent(info.variants[0].id)}?mode=layout`
+      : `/p/${encodeURIComponent(project)}/layout`;
 
   return (
     <main className="agent">
       <header className="variant__head">
         <nav aria-label="Путь">
           <Link to="/">{S.variant.back}</Link> <span className="muted">/</span> <span className="mono">{project}</span>{" "}
-          <span className="muted">/</span> <strong>{S.agent.title}</strong>
+          <span className="muted">/</span> <strong>{S.agent.tab}</strong>
         </nav>
         <h1>
-          {info?.title || project} · {S.agent.title}
+          {info?.title || project} · {S.agent.tab}
         </h1>
         <div className="variant__numbers">
           <Link className="small" to={`/p/${encodeURIComponent(project)}/commits`}>
             {S.feed.tab}
           </Link>
+          <Link className="small" to={layoutUrl}>
+            {S.layout.tab}
+          </Link>
         </div>
       </header>
       <div className="page agent__body">
-        <section className="agent__form" aria-label={S.agent.title}>
-          <p className="muted small">{S.agent.hint}</p>
-          {info && info.variants.length === 0 && (
-            <p className="callout small" role="note">
-              {S.agent.emptyProject}
-            </p>
-          )}
-          <textarea
-            aria-label={S.agent.textLabel}
-            rows={5}
-            value={text}
-            placeholder={S.agent.placeholder}
-            onChange={(e) => setText(e.target.value)}
-            onPaste={onPaste}
-            disabled={!!active}
-          />
-          <section className="attachments" aria-label={S.agent.attachments}>
-            <div className="commit__actions">
-              <strong className="small">{S.agent.attachments}</strong>
+        <section className="agent__side">
+          <form
+            className="composer card"
+            aria-label={S.agent.title}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (text.trim() && !busy && !locked) run();
+            }}
+          >
+            {info && info.variants.length === 0 && (
+              <p className="composer__empty small" role="note">
+                {S.agent.emptyProject}
+              </p>
+            )}
+            {locked && (
+              <p className="composer__locked small" role="status">
+                <Glyph name="wait" /> {S.agent.busyShort}
+              </p>
+            )}
+            <textarea
+              aria-label={S.agent.textLabel}
+              rows={4}
+              value={text}
+              placeholder={S.agent.placeholder}
+              onChange={(e) => setText(e.target.value)}
+              onPaste={onPaste}
+              disabled={locked}
+            />
+            <div className="composer__files" aria-label={S.agent.attachments}>
+              {files.map((f) => (
+                <label
+                  key={f.path}
+                  className={"filechip" + (picked.has(f.path) ? " selected" : "")}
+                  title={`${f.name}${f.width ? ` · ${f.width}×${f.height}` : ""} · ${Math.max(1, Math.round(f.bytes / 1024))} КБ${f.author ? ` · ${f.author}` : ""}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={picked.has(f.path)}
+                    onChange={() => toggle(f.path)}
+                    disabled={locked}
+                    aria-label={S.agent.attach(f.name)}
+                  />
+                  {f.kind === "image" || f.kind === "svg" ? (
+                    <img src={attachmentUrl(project, f)} alt="" loading="lazy" />
+                  ) : (
+                    <span className="filechip__icon">{S.agent.kinds[f.kind] ?? f.kind}</span>
+                  )}
+                  <span className="filechip__name">{f.name}</span>
+                  <button
+                    type="button"
+                    className="filechip__x"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      remove(f);
+                    }}
+                    disabled={locked}
+                    aria-label={S.agent.deleteFile(f.name)}
+                  >
+                    ×
+                  </button>
+                </label>
+              ))}
               <button
                 type="button"
+                className="ghost"
                 onClick={() => fileInput.current?.click()}
-                disabled={!!active || uploading}
+                disabled={locked || uploading}
                 aria-busy={uploading}
               >
                 {uploading ? S.agent.uploading : S.agent.upload}
@@ -191,80 +247,28 @@ export function Agent() {
                 accept={ACCEPT}
                 aria-label={S.agent.upload}
                 onChange={onPick}
-                disabled={!!active || uploading}
+                disabled={locked || uploading}
                 style={{ display: "none" }}
               />
-              <span className="muted small">{S.agent.pasteHint}</span>
             </div>
-            <p className="muted small" style={{ margin: 0 }}>
-              {S.agent.attachmentsHint} {S.agent.accept}
-            </p>
-            {files.length === 0 ? (
-              <p className="muted small" style={{ margin: 0 }}>
-                {S.agent.noAttachments}
-              </p>
-            ) : (
-              <ul className="attachments__list">
-                {files.map((f) => (
-                  <li key={f.path} className={"attachments__item" + (picked.has(f.path) ? " selected" : "")}>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={picked.has(f.path)}
-                        onChange={() => toggle(f.path)}
-                        disabled={!!active}
-                        aria-label={S.agent.attach(f.name)}
-                      />
-                      {f.kind === "image" || f.kind === "svg" ? (
-                        <img src={attachmentUrl(project, f)} alt="" loading="lazy" />
-                      ) : (
-                        <span className="attachments__icon">{S.agent.kinds[f.kind] ?? f.kind}</span>
-                      )}
-                      <span className="attachments__text">
-                        <span className="attachments__name mono small" title={f.path}>
-                          {f.name}
-                        </span>
-                        <span className="attachments__meta">
-                          {f.width ? `${f.width}×${f.height} · ` : ""}
-                          {Math.max(1, Math.round(f.bytes / 1024))} КБ
-                          {f.author ? ` · ${f.author}` : ""}
-                        </span>
-                      </span>
-                    </label>
-                    <a className="small" href={attachmentUrl(project, f)} target="_blank" rel="noreferrer">
-                      {S.variant.showAll}
-                    </a>
-                    <button
-                      type="button"
-                      className="link small"
-                      onClick={() => remove(f)}
-                      disabled={!!active}
-                      aria-label={S.agent.deleteFile(f.name)}
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-          <div className="commit__actions">
-            <label className="small">
-              {S.agent.variant}:{" "}
-              <select value={variant} onChange={(e) => setVariant(e.target.value)} disabled={!!active}>
-                <option value="">{S.agent.anyVariant}</option>
-                {info?.variants.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.id}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {providers && providers.providers.length > 0 && (
-              <>
-                <label className="small">
-                  {S.agent.provider}:{" "}
-                  <select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={!!active}>
+            <div className="composer__row">
+              {info && info.variants.length > 0 && (
+                <label>
+                  {S.agent.variant}
+                  <select value={variant} onChange={(e) => setVariant(e.target.value)} disabled={locked}>
+                    <option value="">{S.agent.anyVariant}</option>
+                    {info.variants.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {providers && providers.providers.length > 0 && (
+                <label>
+                  {S.agent.provider}
+                  <select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={locked}>
                     <option value="">
                       {S.agent.defaultProvider}
                       {providers.default
@@ -278,69 +282,71 @@ export function Agent() {
                     ))}
                   </select>
                 </label>
-                {chosen?.kind === "openai" && (
-                  <label className="small">
-                    {S.agent.model}:{" "}
-                    <input
-                      list="task-models"
-                      value={model}
-                      placeholder={chosen.model || "—"}
-                      onChange={(e) => setModel(e.target.value)}
-                      disabled={!!active}
-                      style={{ width: 220 }}
-                    />
-                    <datalist id="task-models">
-                      {chosen.models.map((m) => (
-                        <option key={m} value={m} />
-                      ))}
-                    </datalist>
-                  </label>
-                )}
-              </>
-            )}
+              )}
+              {chosen?.kind === "openai" && (
+                <label>
+                  {S.agent.model}
+                  <input
+                    list="task-models"
+                    value={model}
+                    placeholder={chosen.model || "—"}
+                    onChange={(e) => setModel(e.target.value)}
+                    disabled={locked}
+                  />
+                  <datalist id="task-models">
+                    {chosen.models.map((m) => (
+                      <option key={m} value={m} />
+                    ))}
+                  </datalist>
+                </label>
+              )}
+            </div>
             {providers && providers.providers.length === 0 && (
-              <span className="muted small">{S.agent.noProviders}</span>
+              <p className="muted small" style={{ margin: 0 }}>
+                {S.agent.noProviders}
+              </p>
             )}
-            <button onClick={run} disabled={!text.trim() || busy || !!active} aria-busy={busy}>
-              {busy ? S.agent.starting : S.agent.run}
-            </button>
-            {picked.size > 0 && <span className="muted small">{S.agent.withTask(picked.size)}</span>}
-            {active && (
-              <span className="badge badge--warn" role="status">
-                {S.agent.busy(active.id)} · {S.agent.status[active.status]}
-              </span>
+            <div className="composer__actions">
+              <button type="submit" className="primary" disabled={!text.trim() || busy || locked} aria-busy={busy}>
+                {busy ? S.agent.starting : S.agent.run}
+              </button>
+              {picked.size > 0 && <span className="muted small">{S.agent.withTask(picked.size)}</span>}
+              <details className="help">
+                <summary className="small">{S.agent.help}</summary>
+                <p className="small muted">{S.agent.hint}</p>
+                <p className="small muted">
+                  {S.agent.attachmentsHint} {S.agent.pasteHint} {S.agent.accept}
+                </p>
+              </details>
+            </div>
+            {err && (
+              <p className="level-error small" role="alert" style={{ margin: 0 }}>
+                {err}
+              </p>
             )}
-          </div>
-          {err && (
-            <p className="level-error" role="alert">
-              {err}
-            </p>
-          )}
+          </form>
           <h3>{S.agent.history}</h3>
           {tasks.length === 0 && <p className="muted small">{S.agent.none}</p>}
           <ul className="tasks">
             {tasks.map((t) => (
               <li key={t.id}>
                 <button
-                  className={"tree__item" + (selected === t.id ? " selected" : "")}
+                  type="button"
+                  className={"task" + (selected === t.id ? " selected" : "")}
                   onClick={() => setSelected(t.id)}
+                  aria-current={selected === t.id ? "true" : undefined}
                 >
-                  <span>
-                    <span className={"badge status-" + t.status}>{S.agent.status[t.status]}</span> {t.text.slice(0, 70)}
-                    {t.attachments?.length ? (
-                      <span className="muted small"> · {S.agent.withTask(t.attachments.length)}</span>
-                    ) : null}
-                    {t.model ? <span className="muted small"> · {t.model}</span> : null}
-                  </span>
-                  <span className="muted small">{relativeTime(t.created)}</span>
+                  <StatusDot status={t.status} />
+                  <span className="task__text">{t.text}</span>
+                  <span className="muted small task__time">{relativeTime(t.created)}</span>
                 </button>
               </li>
             ))}
           </ul>
         </section>
-        <section className="agent__log" aria-label={S.agent.log}>
+        <section className="work card" aria-label={S.agent.work}>
           {selected ? (
-            <TaskLog key={selected} id={selected} project={project} onChange={load} />
+            <Progress key={selected} id={selected} project={project} layoutUrl={layoutUrl} onChange={load} />
           ) : (
             <p className="muted">{S.agent.noSelected}</p>
           )}
@@ -350,13 +356,29 @@ export function Agent() {
   );
 }
 
-function TaskLog({ id, project, onChange }: { id: string; project: string; onChange: () => void }) {
+function StatusDot({ status }: { status: AgentTask["status"] }) {
+  return <span className={"dot dot--" + status} title={S.agent.status[status]} />;
+}
+
+/** Ход работы одной задачи: состояние, отчёт, шаги словами; сырые данные — по кнопке «Подробности». */
+function Progress({
+  id,
+  project,
+  layoutUrl,
+  onChange,
+}: {
+  id: string;
+  project: string;
+  layoutUrl: string;
+  onChange: () => void;
+}) {
   const [events, setEvents] = useState<TaskEvent[]>([]);
   const [task, setTask] = useState<AgentTask | null>(null);
   const [stopping, setStopping] = useState(false);
+  const [details, setDetails] = useState(false);
   const next = useRef(0);
   const latest = useRef<AgentTask | null>(null); // статус из последнего опроса — для остановки опроса без замыкания на старом state
-  const box = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLOListElement>(null);
 
   useEffect(() => {
     next.current = 0;
@@ -391,9 +413,23 @@ function TaskLog({ id, project, onChange }: { id: string; project: string; onCha
       window.clearInterval(h);
     };
   }, [id]);
+
+  const live = !!task && ["queued", "running"].includes(task.status);
+  const steps = useMemo(() => buildSteps(events), [events]);
+  const commits = commitsOf(steps);
+  const touchedLayout = steps.some((s) => s.commit && /project\.yaml/.test(s.details ?? ""));
+  const done = events.find((e) => e.type === "done");
+  const fail = events.find((e) => e.type === "error")?.text ?? task?.error ?? null;
+  // живая задача: список прокручивается к последнему шагу, часы тикают
   useEffect(() => {
-    box.current?.scrollTo?.({ top: box.current.scrollHeight });
-  }, [events.length]);
+    if (live) list.current?.scrollTo?.({ top: list.current.scrollHeight });
+  }, [events.length, live]);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!live) return;
+    const h = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(h);
+  }, [live]);
 
   const stop = () => {
     setStopping(true);
@@ -402,31 +438,45 @@ function TaskLog({ id, project, onChange }: { id: string; project: string; onCha
       .then(() => onChange())
       .finally(() => setStopping(false));
   };
-  const live = task && ["queued", "running"].includes(task.status);
+  const took = task?.started && task?.finished ? (Date.parse(task.finished) - Date.parse(task.started)) / 1000 : null;
+  const last = events[events.length - 1];
+  const since = live && last ? Math.max(0, (now - Date.parse(last.t)) / 1000) : 0;
+  const headline = !task
+    ? ""
+    : live
+      ? `${task.status === "queued" ? S.agent.finished.queued : nowOf(steps)}${since >= 3 ? ` · ${S.duration(since)}` : ""}`
+      : task.status === "done"
+        ? S.agent.finished.done(took !== null ? S.duration(took) : "")
+        : S.agent.finished[task.status];
   return (
     <>
-      <div className="commit__actions">
-        <h3 style={{ margin: 0 }}>{S.agent.log}</h3>
+      <div className="work__head">
         {task && (
-          <span className={"badge status-" + task.status} aria-live="polite">
+          <span className={"pill pill--" + task.status} aria-live="polite">
             {S.agent.status[task.status]}
-            {task.steps !== undefined ? ` · ${S.agent.steps(task.steps, task.max_steps)}` : ""}
           </span>
         )}
-        {task && <span className="muted small">{S.agent.byUser(task.user)}</span>}
-        {task?.model && <span className="mono small muted">{task.model}</span>}
-        {task?.usage && <span className="muted small">{S.agent.usage(task.usage)}</span>}
+        <span className="work__now" aria-live="polite">
+          {headline}
+        </span>
         {live && (
           <button className="danger" onClick={stop} disabled={stopping || task?.stop_requested} aria-busy={stopping}>
             {stopping || task?.stop_requested ? S.agent.stopping : S.agent.stop}
           </button>
         )}
-        {task && !live && (
-          <Link className="small" to={`/p/${encodeURIComponent(project)}/commits`}>
-            {S.agent.toFeed}
-          </Link>
-        )}
       </div>
+      {task && (
+        <p className="work__meta muted small">
+          {[
+            task.model,
+            task.steps !== undefined ? S.agent.steps(task.steps, task.max_steps) : "",
+            task.usage ? S.agent.usage(task.usage) : "",
+            `${S.agent.byUser(task.user)} · ${relativeTime(task.created)}`,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      )}
       {task?.attachments?.length ? (
         <p className="chips small" aria-label={S.agent.taskAttachments}>
           <span className="muted">{S.agent.taskAttachments}:</span>
@@ -437,76 +487,122 @@ function TaskLog({ id, project, onChange }: { id: string; project: string; onCha
           ))}
         </p>
       ) : null}
-      <div className="log" ref={box}>
-        {events.length === 0 && <p className="muted small">{S.agent.noEvents}</p>}
-        {events.map((e, i) => (
-          <div key={i} className={"log__line log__line--" + e.type}>
-            {e.type === "tool_call" && (
+      {task && !live && task.status === "done" && (
+        <section className="report" aria-label={S.agent.result}>
+          <h3>{S.agent.result}</h3>
+          {done?.text?.trim() ? <Markdown text={done.text} /> : <p className="muted">{S.agent.noResult}</p>}
+          <p className="report__links small">
+            {commits.length ? (
               <>
-                <span className="mono small muted">{S.agent.call}</span> <strong className="mono">{e.name}</strong>{" "}
-                <span className="mono small muted">{JSON.stringify(e.args ?? {}).slice(0, 300)}</span>
+                {S.agent.changes(commits.length)} ·{" "}
+                <Link to={`/p/${encodeURIComponent(project)}/commits`}>{S.agent.seeFeed}</Link>
+              </>
+            ) : (
+              <span className="muted">{S.agent.noChanges}</span>
+            )}
+            {touchedLayout && (
+              <>
+                {" · "}
+                {S.agent.layoutWaiting} · <Link to={layoutUrl}>{S.agent.openLayout}</Link>
               </>
             )}
-            {e.type === "tool_result" && <pre className="small">{brief(e.text ?? "")}</pre>}
-            {e.type === "attachment" && (
-              <p className="muted small">
-                {S.agent.sentAttachment(e.path ?? "", e.images ?? 0)}
-                {e.path ? (
-                  <>
-                    {" "}
-                    <a href={attachmentUrl(project, e.path)} target="_blank" rel="noreferrer">
-                      {S.variant.showAll}
-                    </a>
-                  </>
-                ) : null}
-              </p>
-            )}
-            {e.type === "images" && <p className="muted small">{S.agent.sentImages(e.count ?? 1)}</p>}
-            {e.type === "assistant" && (
-              <p>
-                <span className="muted small">{S.agent.said}: </span>
-                {e.text}
-              </p>
-            )}
-            {e.type === "done" && (
-              <div className="callout">
-                <strong>{S.agent.result}</strong>
-                <p style={{ whiteSpace: "pre-wrap" }}>{e.text}</p>
-              </div>
-            )}
-            {e.type === "error" && (
-              <p className="level-error" role="alert">
-                {S.agent.error}: {e.text}
-              </p>
-            )}
-            {(e.type === "stopped" || e.type === "limit") && <p className="level-warning">{S.agent.status[e.type]}</p>}
-            {e.type === "start" && (
-              <p className="muted small">
-                {e.runner}
-                {e.provider ? ` · ${e.provider}` : ""}
-                {e.model ? ` · ${e.model}` : ""}
-                {e.tools ? ` · инструментов ${e.tools}` : ""}
-              </p>
-            )}
-          </div>
-        ))}
-      </div>
-      {task?.error && !events.some((e) => e.type === "error") && (
-        <p className="level-error" role="alert">
-          {S.agent.error}: {task.error}
+          </p>
+        </section>
+      )}
+      {fail && (
+        <p className="callout callout--error" role="alert">
+          <strong>{S.agent.error}:</strong> {fail}
         </p>
       )}
+      {task && !live && (task.status === "stopped" || task.status === "limit") && (
+        <p className="callout">{S.agent.finished[task.status]}</p>
+      )}
+      <div className="work__steps-head">
+        <h3>{S.agent.stepsTitle(steps.filter((s) => s.kind === "call").length)}</h3>
+        {steps.length > 0 && (
+          <button
+            type="button"
+            className="link small"
+            onClick={() => setDetails((d) => !d)}
+            aria-pressed={details}
+            title={S.agent.detailsHint}
+          >
+            {details ? S.agent.detailsHide : S.agent.details}
+          </button>
+        )}
+      </div>
+      <ol className="steps" ref={list}>
+        {steps.length === 0 && task && (
+          <li className="step step--wait">
+            <Glyph name="wait" />
+            <span className="muted small">{S.agent.noEvents}</span>
+          </li>
+        )}
+        {steps.map((s) => (
+          <StepRow key={s.i} s={s} id={id} project={project} details={details} />
+        ))}
+        {live && task?.status === "running" && !steps[steps.length - 1]?.pending && (
+          <li className="step step--pending" aria-live="polite">
+            <Glyph name="spin" className="spin" />
+            <span className="step__text">{S.steps.thinking}</span>
+          </li>
+        )}
+      </ol>
     </>
   );
 }
 
-/** Результат инструмента: если это JSON со сводкой — показываем сводку, иначе начало текста. */
-function brief(text: string, n = 500): string {
-  try {
-    const d = JSON.parse(text);
-    if (d && typeof d === "object" && typeof d.summary === "string") return d.summary.slice(0, n);
-  } catch {
-    /* не JSON */
+function StepRow({ s, id, project, details }: { s: Step; id: string; project: string; details: boolean }) {
+  if (s.kind === "note") {
+    const short = s.text.length <= 160 && !s.text.includes("\n");
+    return (
+      <li className="step step--note">
+        <Glyph name="note" />
+        {short ? (
+          <span className="step__text">{s.text}</span>
+        ) : (
+          <details className="step__note">
+            <summary>{firstLine(s.text)}</summary>
+            <Markdown text={s.text} className="small" />
+          </details>
+        )}
+      </li>
+    );
   }
-  return text.slice(0, n);
+  const cls =
+    "step" +
+    (s.failed ? " step--failed" : "") +
+    (s.pending ? " step--pending" : "") +
+    (s.kind === "start" ? " step--start" : "");
+  return (
+    <li className={cls}>
+      <Glyph name={s.failed ? "error" : s.pending ? "spin" : s.glyph} className={s.pending ? "spin" : undefined} />
+      <div className="step__body">
+        <span className="step__text">{s.text}</span>
+        {s.outcome && (
+          <span className={"step__outcome" + (s.failed ? " level-error" : "")} title={s.outcome}>
+            {s.outcome}
+          </span>
+        )}
+        {(s.images?.length || s.url) && (
+          <span className="step__images">
+            {s.url && (
+              <a href={attachmentUrl(project, s.url)} target="_blank" rel="noreferrer">
+                <img src={attachmentUrl(project, s.url)} alt={S.agent.imageAlt} loading="lazy" />
+              </a>
+            )}
+            {s.images?.map((f) => (
+              <a key={f} href={api.taskFileUrl(id, f)} target="_blank" rel="noreferrer">
+                <img src={api.taskFileUrl(id, f)} alt={S.agent.imageAlt} loading="lazy" />
+              </a>
+            ))}
+          </span>
+        )}
+        {details && s.details && <pre className="step__raw small">{s.details}</pre>}
+      </div>
+      {s.seconds !== undefined && s.seconds >= 1 && (
+        <span className="step__time muted small">{S.duration(s.seconds)}</span>
+      )}
+    </li>
+  );
 }

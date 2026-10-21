@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import concurrent.futures
 import json
 import logging
@@ -245,8 +246,13 @@ def run_loop(
     emit: Callable[..., None],
     should_stop: Callable[[], bool],
     on_step: Callable[[int], None] | None = None,
+    save: Callable[[str, bytes], str | None] | None = None,
 ) -> dict:
-    """Цикл агента. Возвращает {status, result, steps}."""
+    """Цикл агента. Возвращает {status, result, steps}.
+
+    save(имя, байты) — сохранить картинку, которую агент получил от инструмента (компоновка, вид, вложение),
+    в папку задачи; имя файла попадает в событие tool_result.images — рабочее место показывает, на что
+    смотрел агент (ход работы, M2.4)."""
     tools = openai_tools(bridge.list_tools())
     user = task_text(task)
     emit("start", runner="openai", tools=len(tools), provider=task.get("provider"), model=task.get("model"))
@@ -261,6 +267,7 @@ def run_loop(
         content.append({"type": "text", "text": f"Вложение {path}: {_clip(str(out), 2000)}"})
         content += _image_parts(images)
         emit("attachment", path=path, images=len(images), text=_clip(str(out), 300))
+    shots = 0  # счётчик сохранённых картинок — имена файлов в папке задачи
     first: str | list[dict] = content if len(content) > 1 else user
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": first}]
     steps = 0
@@ -275,7 +282,9 @@ def run_loop(
             return {"status": "limit", "result": f"достигнут лимит шагов ({max_steps})", "steps": steps, "usage": usage}
         steps += 1
         on_step and on_step(steps)
+        t_think = time.monotonic()
         msg = llm.chat(messages, tools)
+        emit("step", n=steps, seconds=round(time.monotonic() - t_think, 1))
         content = msg.get("content") or ""
         calls = msg.get("tool_calls") or []
         messages.append({"role": "assistant", "content": content, **({"tool_calls": calls} if calls else {})})
@@ -299,7 +308,20 @@ def run_loop(
             except Exception as e:  # noqa: BLE001 — ошибку инструмента отдаём модели текстом
                 out = f"ОШИБКА вызова {name}: {type(e).__name__}: {e}"
             images = getattr(out, "images", None) or []
-            emit("tool_result", name=name, text=_clip(str(out), 1500), seconds=round(time.monotonic() - t0, 1))
+            saved = []
+            for im in images:
+                shots += 1
+                ext = "jpg" if "jpeg" in (im.get("mime") or "") else "png"
+                fn = save and save(f"img-{shots:03d}.{ext}", base64.b64decode(im["b64"]))
+                if fn:
+                    saved.append(fn)
+            emit(
+                "tool_result",
+                name=name,
+                text=_clip(str(out), 1500),
+                seconds=round(time.monotonic() - t0, 1),
+                **({"images": saved} if saved else {}),
+            )
             messages.append({"role": "tool", "tool_call_id": call.get("id") or name, "content": _clip(str(out))})
             for im in images:
                 label = f"Изображение из {name} {json.dumps(args, ensure_ascii=False)[:200]}:"
@@ -410,6 +432,9 @@ def run_task(store: TaskStore, task: dict, providers: ProviderStore | None = Non
     def on_step(n: int) -> None:
         store.progress(tid, n)
 
+    def save(name: str, data: bytes) -> str | None:
+        return store.save_file(tid, name, data)
+
     try:
         prov = pick_provider(task, providers)
         task = {**task, "provider": prov.get("id") or task.get("provider"), "model": prov.get("model")}
@@ -418,7 +443,7 @@ def run_task(store: TaskStore, task: dict, providers: ProviderStore | None = Non
         else:
             llm = OpenAICompatible(prov["base_url"], prov["api_key"], prov["model"])
             with McpBridge(server_url, token) as bridge:
-                res = run_loop(task, llm, bridge, emit, should_stop, on_step)
+                res = run_loop(task, llm, bridge, emit, should_stop, on_step, save=save)
         store.finish(tid, res["status"], result=res.get("result"), usage=res.get("usage"), model=prov.get("model"))
     except ProviderError as e:
         log.error("задача %s: %s", tid, e)
