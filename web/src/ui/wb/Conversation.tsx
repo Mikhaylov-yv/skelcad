@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { api, attachmentUrl, type Attachment, type ProjectOverview, type ProvidersResponse, type ThreadMessage } from "../../api";
 import { S } from "../../strings";
 import { Markdown, firstLine } from "../Markdown";
 import { relativeTime } from "../format";
 import { Progress } from "../../screens/Agent";
 import { NextCard } from "./NextCard";
+import { ACCEPT, displayName, hasFiles, uploadAll } from "./FilesPane";
 
 export type ThreadLine = ThreadMessage & { project: string; projectTitle: string };
 
@@ -23,6 +24,8 @@ export function Conversation({
   onSend,
   onChanged,
   taskTexts,
+  picked,
+  setPicked,
 }: {
   p: ProjectOverview;
   messages: ThreadLine[];
@@ -36,13 +39,15 @@ export function Conversation({
   onSend: (text: string, attachments: string[], provider?: string, model?: string) => Promise<void>;
   onChanged: () => void;
   taskTexts: Record<string, string>;
+  picked: Attachment[]; // файлы к следующему сообщению (из «Добавить файл», вставки, перетаскивания или зоны файлов)
+  setPicked: Dispatch<SetStateAction<Attachment[]>>;
 }) {
   const list = useRef<HTMLDivElement>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [picked, setPicked] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [over, setOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const [providers, setProviders] = useState<ProvidersResponse | null>(null);
   const [provider, setProvider] = useState("");
@@ -75,20 +80,36 @@ export function Conversation({
       setSending(false);
     }
   };
+  // файл к сообщению: сохраняется в проект (коммит) и прикладывается к следующему сообщению
+  const uploadFiles = (files: File[]) => {
+    if (!files.length || locked) return;
+    setUploading(true);
+    setErr(null);
+    uploadAll(p.name, files, "", (a) => setPicked((x) => (x.some((y) => y.path === a.path) ? x : [...x, a])))
+      .catch((e: Error) => setErr(e.message))
+      .finally(() => {
+        setUploading(false);
+        onChanged();
+      });
+  };
   const onPick = (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
+    uploadFiles(files);
+  };
+  // картинка из буфера (Ctrl+V): у неё нет имени — «вставка-ЧЧММ.png»
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData?.files ?? []);
     if (!files.length) return;
-    setUploading(true);
-    setErr(null);
-    (async () => {
-      for (const f of files) {
-        const r = await api.attachmentUpload(p.name, f);
-        setPicked((x) => [...x, r.item]);
-      }
-    })()
-      .catch((e: Error) => setErr(e.message))
-      .finally(() => setUploading(false));
+    e.preventDefault();
+    const stamp = new Date().toTimeString().slice(0, 5).replace(":", "");
+    uploadFiles(
+      files.map((f, i) =>
+        /^image\.[a-z]+$/i.test(f.name) || !f.name
+          ? new File([f], `${S.wb.pasted}-${stamp}${i ? "-" + (i + 1) : ""}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg")}`, { type: f.type })
+          : f,
+      ),
+    );
   };
   const autoText = (m: ThreadLine) =>
     m.who === "you" && Object.values(taskTexts).includes(m.text) && m.by !== undefined;
@@ -128,10 +149,24 @@ export function Conversation({
         )}
       </div>
       <form
-        className="chat__composer"
+        className={"chat__composer" + (over ? " chat__composer--over" : "")}
         onSubmit={(e) => {
           e.preventDefault();
           submit();
+        }}
+        onDragOver={(e) => {
+          if (!hasFiles(e) || locked) return;
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+        }}
+        onDrop={(e) => {
+          if (!hasFiles(e)) return;
+          e.preventDefault();
+          setOver(false);
+          uploadFiles(Array.from(e.dataTransfer.files));
         }}
       >
         <textarea
@@ -142,6 +177,7 @@ export function Conversation({
           value={text}
           placeholder={p.stages.brief === "done" ? S.wb.say : S.wb.sayBrief}
           onChange={(e) => setText(e.target.value)}
+          onPaste={onPaste}
           disabled={locked || sending}
           onKeyDown={(e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submit();
@@ -150,9 +186,9 @@ export function Conversation({
         {picked.length > 0 && (
           <div className="chat__files">
             {picked.map((a) => (
-              <span key={a.path} className="filechip">
+              <span key={a.path} className="filechip" data-picked={a.name}>
                 {a.kind === "image" && <img src={attachmentUrl(p.name, a)} alt="" />}
-                <span>{a.name}</span>
+                <span>{displayName(a)}</span>
                 <button type="button" className="link small" onClick={() => setPicked((x) => x.filter((y) => y.path !== a.path))} aria-label={S.wb.unpick}>
                   ×
                 </button>
@@ -166,8 +202,8 @@ export function Conversation({
           </p>
         )}
         <div className="chat__row">
-          <input ref={fileInput} type="file" multiple hidden accept="image/*,.pdf,.excalidraw,.svg" onChange={onPick} />
-          <button type="button" className="ghost small" onClick={() => fileInput.current?.click()} disabled={locked || uploading} aria-busy={uploading}>
+          <input ref={fileInput} type="file" multiple hidden accept={ACCEPT} onChange={onPick} />
+          <button type="button" className="ghost small" onClick={() => fileInput.current?.click()} disabled={locked || uploading} aria-busy={uploading} title={S.agent.pasteHint}>
             {uploading ? S.agent.uploading : S.wb.attach}
           </button>
           {providers && providers.providers.length > 0 && (
@@ -212,7 +248,7 @@ function Message({ m, showNode, auto }: { m: ThreadLine; showNode: boolean; auto
     return (
       <div className="msg msg--sys" title={m.at ?? undefined}>
         {auto ? S.wb.autoTask(m.text) : m.text}
-        {m.by && !auto ? ` · ${m.by}` : ""}
+        {m.by && !auto && !m.text.includes(m.by) ? ` · ${m.by}` : ""}
         {node}
       </div>
     );
@@ -231,6 +267,7 @@ function Message({ m, showNode, auto }: { m: ThreadLine; showNode: boolean; auto
     );
   const failed = m.status && m.status !== "done";
   const long = (m.text ?? "").length > (m.brief ?? "").length;
+  const [showSteps, setShowSteps] = useState(false);
   return (
     <div className={"msg msg--agent" + (failed ? " msg--failed" : "")}>
       <div className="msg__h">
@@ -248,10 +285,22 @@ function Message({ m, showNode, auto }: { m: ThreadLine; showNode: boolean; auto
           ))}
         </div>
       )}
-      {long && (
-        <button type="button" className="link small" onClick={() => setOpen((v) => !v)}>
-          {open ? S.agent.detailsHide : S.wb.details}
-        </button>
+      <div className="msg__links">
+        {long && (
+          <button type="button" className="link small" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+            {open ? S.agent.detailsHide : S.wb.details}
+          </button>
+        )}
+        {m.task && (m.steps ?? 0) > 0 && (
+          <button type="button" className="link small" onClick={() => setShowSteps((v) => !v)} aria-expanded={showSteps} data-act="steps">
+            {showSteps ? S.wb.stepsHide : S.wb.stepsShow(m.steps ?? 0)}
+          </button>
+        )}
+      </div>
+      {showSteps && m.task && (
+        <div className="msg__steps">
+          <Progress id={m.task} project={m.project} layoutUrl={`/p/${encodeURIComponent(m.project)}/s/layout`} onChange={() => undefined} compact />
+        </div>
       )}
     </div>
   );

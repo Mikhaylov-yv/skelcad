@@ -400,16 +400,23 @@ button.danger { color: var(--error); }
 .topbar__center { display: flex; align-items: center; gap: 14px; min-width: 0; flex: 1; }
 .crumbs { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 14px; }
 .crumbs a { color: var(--muted); text-decoration: none; } .crumbs a:hover { color: var(--text); } .crumbs b { color: var(--text); font-weight: 600; } .crumbs__sep { margin: 0 4px; color: var(--border); }
-.steps { display: flex; align-items: center; flex-shrink: 0; }
-.steps__item { height: 30px; padding: 0 10px; border: 0; background: transparent; color: var(--muted); font-size: 13px; display: inline-flex; align-items: center; gap: 7px; border-radius: 6px; }
-.steps__item:hover { background: var(--bg); } .steps__item.cur { color: var(--text); font-weight: 600; background: var(--bg); }
-.steps__sep { width: 16px; height: 1px; background: var(--border); }
-.steps__n { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
-.steps__n--done { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
-.steps__n--wait { background: var(--warning-soft); border-color: color-mix(in srgb, var(--warning) 40%, transparent); color: var(--warning); }
-.steps__n--agent, .steps__n--next { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+/* этапы в шапке (не .steps — так назван список шагов агента) */
+.stepper { display: flex; align-items: center; flex-shrink: 0; }
+.stepper__item { height: 30px; padding: 0 10px; border: 0; background: transparent; color: var(--muted); font-size: 13px; display: inline-flex; align-items: center; gap: 7px; border-radius: 6px; }
+.stepper__item:hover { background: var(--bg); } .stepper__item.cur { color: var(--text); font-weight: 600; background: var(--bg); }
+.stepper__sep { width: 16px; height: 1px; background: var(--border); }
+.stepper__n { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
+.stepper__n--done { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+.stepper__n--wait { background: var(--warning-soft); border-color: color-mix(in srgb, var(--warning) 40%, transparent); color: var(--warning); }
+.stepper__n--agent, .stepper__n--next { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
 .wb { display: grid; grid-template-columns: 240px minmax(0, 1fr) 400px; flex: 1; min-height: 0; position: relative; }
-.wb__tree { border-right: 1px solid var(--border); background: var(--surface); min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.wb__tree { border-right: 1px solid var(--border); background: var(--surface); min-height: 0; overflow: auto; display: flex; flex-direction: column; position: relative; }
+/* разделители ширины: полоса 9 px на границе панели, при наведении и перетаскивании — акцентная линия */
+.wb__split { position: absolute; top: 0; bottom: 0; width: 9px; cursor: col-resize; z-index: 4; touch-action: none; }
+.wb__split--end { right: -5px; } .wb__split--start { left: -5px; }
+.wb__split::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: transparent; }
+.wb__split:hover::after, .wb__split:focus-visible::after, .wb__split:active::after { background: var(--accent); }
+.wb__split:focus-visible { outline: none; }
 .wb__center { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--surface); }
 .wb__bar { display: flex; align-items: center; gap: 12px; padding: 6px 12px; border-bottom: 1px solid var(--border); min-height: 44px; flex-wrap: wrap; }
 .wb__bar .spacer, .chat__row .spacer, .start__head .spacer, .gcard__row .spacer { flex: 1; }
@@ -418,7 +425,8 @@ button.danger { color: var(--error); }
 .wb__stage > .variant, .wb__stage > .compare, .wb__stage > .params, .wb__stage > .feed { flex: 1; min-height: 0; }
 .wb .variant__body--embedded { grid-template-columns: minmax(0, 1fr) 320px; }
 .wb-tree { margin-bottom: 10px; } .wb-tree > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
-.wb__side { border-left: 1px solid var(--border); background: var(--surface); min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.wb__side { border-left: 1px solid var(--border); background: var(--surface); min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); position: relative; }
+.wb__files { min-height: 0; overflow: auto; padding: 10px 12px; }
 .wb__sidetabs { display: flex; gap: 2px; padding: 8px 12px 0; border-bottom: 1px solid var(--border); }
 .wb__sidetabs button { border: 0; background: transparent; color: var(--muted); padding: 6px 10px; border-radius: 6px 6px 0 0; font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
 .wb__sidetabs button.cur { color: var(--text); font-weight: 600; background: var(--bg); }
@@ -464,19 +472,39 @@ button.danger { color: var(--error); }
 .chat__pin { padding: 0 12px 10px; border-bottom: 1px solid var(--border); }
 .chat__list { overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--bg); }
 .chat__list > * { flex-shrink: 0; }
-.msg { padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-size: 13px; line-height: 18px; max-width: 94%; align-self: flex-start; }
+.msg { padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-size: 13px; line-height: 18px; max-width: 100%; align-self: flex-start; min-width: 0; }
 .msg--you { background: var(--accent-soft); border-color: transparent; align-self: flex-end; max-width: 88%; }
 .msg--sys { align-self: center; background: transparent; border: 0; color: var(--muted); font-size: 12px; padding: 0; max-width: 100%; text-align: center; }
 .msg--live { border-color: var(--accent); max-width: 100%; align-self: stretch; } .msg--failed { border-color: color-mix(in srgb, var(--error) 50%, transparent); }
-.msg__h { font-size: 11px; color: var(--muted); margin-bottom: 2px; } .msg__t { white-space: pre-wrap; } .msg__t .md { font-size: 13px; }
+.msg__h { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+/* текст сообщений: длинные пути и идентификаторы переносятся, свои переносы — только у конструктора (краткий ответ агента приходит одной строкой) */
+.msg__t { overflow-wrap: anywhere; } .msg--you .msg__t { white-space: pre-wrap; } .msg__t .md { font-size: 13px; } .msg__t .md pre { overflow-wrap: anywhere; }
 .msg__imgs { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; } .msg__imgs img { height: 110px; max-width: 100%; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
 .msg__att { margin-top: 4px; }
+.msg__links { display: flex; gap: 12px; flex-wrap: wrap; } .msg__links:empty { display: none; }
+.msg__steps { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); } .msg__steps .steps { max-height: 320px; } .msg__steps .work__steps-head h3 { font-size: 12px; margin: 2px 0; }
 .msg--live .work__head { margin-bottom: 4px; } .msg--live .steps { max-height: 260px; }
 .chat__composer { padding: 10px 12px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
 .chat__composer textarea { font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); resize: vertical; min-height: 56px; }
 .chat__row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .chat__files { display: flex; gap: 6px; flex-wrap: wrap; } .chat__files .filechip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; } .chat__files .filechip img { height: 24px; border-radius: 3px; }
 .chat__settings summary { cursor: pointer; } .chat__settings label { display: flex; gap: 6px; align-items: center; margin-top: 4px; } .chat__settings select, .chat__settings input { flex: 1; min-width: 0; }
+.chat__composer--over { outline: 2px dashed var(--accent); outline-offset: -4px; }
+/* зона файлов конструктора: плитки с миниатюрами, перетаскивание */
+.fz { position: relative; display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
+.fz__bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .fz__note { flex: 1 1 160px; min-width: 0; }
+.fz__hint { margin: 0; } .fz__empty { margin: 0; padding: 18px 12px; border: 1px dashed var(--border); border-radius: var(--radius); text-align: center; }
+.fz__grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.fz--gallery .fz__grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.ftile { display: flex; flex-direction: column; gap: 3px; min-width: 0; } .ftile--busy { opacity: .5; }
+.ftile__pic { display: flex; align-items: center; justify-content: center; aspect-ratio: 4 / 3; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; overflow: hidden; text-decoration: none; }
+.ftile__pic img { width: 100%; height: 100%; object-fit: contain; }
+.ftile__ext { font: 600 13px/1 var(--mono); color: var(--muted); padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+.ftile__n { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ftile__meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ftile__acts { display: flex; gap: 10px; flex-wrap: wrap; } .ftile__acts .link { padding: 0; white-space: nowrap; }
+.fz__drop { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; border: 2px dashed var(--accent); border-radius: var(--radius); background: color-mix(in srgb, var(--accent-soft) 85%, transparent); color: var(--accent); font-weight: 600; pointer-events: none; }
+.brief__h { margin: 8px 0 0; font-size: 15px; }
 /* задание, комплект */
 .brief { display: flex; flex-direction: column; gap: 16px; padding: 16px 20px; max-width: 960px; }
 .brief__quote { font-size: 16px; line-height: 24px; margin: 0; } .brief__files { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }

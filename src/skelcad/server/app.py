@@ -420,6 +420,13 @@ def create_app(srv: Server | None = None) -> FastAPI:
         res = await to_thread.run_sync(tools.attachment_path, name, file)
         return FileResponse(res["file"], media_type=res["mime"], headers={"Cache-Control": "private, max-age=3600"})
 
+    @app.get("/api/projects/{name}/attachments/{file}/thumb")
+    async def api_attachment_thumb(name: str, file: str):
+        t = await to_thread.run_sync(tools.attachment_thumb, name, file)
+        if t is None:
+            raise HTTPException(404, "у файла нет миниатюры")
+        return FileResponse(t, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
+
     @app.delete("/api/projects/{name}/attachments/{file}")
     async def api_attachment_delete(name: str, file: str):
         guard(name)

@@ -573,7 +573,7 @@ export interface TaskEvent {
 }
 
 // --- вложения конструктора (M2.3, D28): файлы в attachments/ репозитория проекта
-export type AttachmentKind = "image" | "svg" | "pdf" | "excalidraw" | "file";
+export type AttachmentKind = "image" | "svg" | "pdf" | "excalidraw" | "text" | "cad" | "file";
 
 export interface Attachment {
   path: string; // attachments/<файл>
@@ -585,12 +585,15 @@ export interface Attachment {
   height: number | null;
   author: string | null;
   date: string | null;
+  note: string | null; // заметка конструктора при загрузке (из сообщения коммита)
 }
 
 export const attachmentUrl = (project: string, a: Attachment | string) =>
   `/api/projects/${encodeURIComponent(project)}/attachments/${encodeURIComponent(
     typeof a === "string" ? a.replace(/^attachments\//, "") : a.name,
   )}`;
+/** Миниатюра для галереи (картинка, SVG, первая страница PDF); у текста и моделей CAD её нет (404). */
+export const attachmentThumbUrl = (project: string, a: Attachment) => `${attachmentUrl(project, a)}/thumb?v=${a.bytes}`;
 
 // --- граф связей (M2.2, D27): производный индекс сущностей и связей в Postgres
 export interface GraphNode {

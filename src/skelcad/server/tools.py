@@ -309,6 +309,12 @@ class Tools:
         f = A.check_path(self.ws, project, path)
         return {"file": f, "mime": A.MIME.get(A._ext(f.name), "application/octet-stream")}
 
+    def attachment_thumb(self, project: str, path: str) -> Path | None:
+        """Миниатюра вложения для галереи файлов (None — у файла нет картинки)."""
+        from skelcad.server import attachments as A
+
+        return A.thumb(self.ws, self.srv.out_dir(project), project, path)
+
     def attachment(self, project: str, path: str) -> dict:
         """Для агента: вложение как изображение (PNG/JPEG base64) или сводка текстом (.excalidraw)."""
         from skelcad.server import attachments as A

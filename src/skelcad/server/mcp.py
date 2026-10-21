@@ -231,10 +231,12 @@ def build_mcp(srv: Server) -> FastMCP:
     # ---------------- вложения конструктора (M2.3, D28)
     @mcp.tool()
     async def attachment(project: str, path: str) -> list:
-        """Вложение конструктора из attachments/ проекта (список — project_read → attachments): набросок от руки,
-        фото, экспорт доски. png / jpg / webp — как изображение; svg и первая страница pdf — растром; .excalidraw —
-        сводка элементов текстом (сам JSON — files_read). Набросок — исходный документ компоновки: по нему опиши
-        скелет и обстановку в project.yaml, покажи render(layout=True) и дождись согласования конструктора."""
+        """Файл конструктора из attachments/ проекта (список — project_read → attachments): набросок от руки,
+        фото, экспорт доски, пример, справка. png / jpg / webp — как изображение; svg и первая страница pdf —
+        растром; .excalidraw — сводка элементов текстом (сам JSON — files_read); txt / md / csv / yaml / json —
+        текстом; модели CAD (step, dxf, iges) и документы (docx, xlsx, zip) — только имя и размер, их содержимое
+        агент не читает. Набросок — исходный документ компоновки: по нему опиши скелет и обстановку в
+        project.yaml, покажи render(layout=True) и дождись согласования конструктора."""
         res = await run(t.attachment, project, path)
         out: list = [res["summary"]]
         if res.get("png_base64"):

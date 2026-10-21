@@ -89,7 +89,7 @@ def test_add_shrinks_rotates_and_commits_as_constructor(srv):
 def test_validation(srv):
     ws, actor = srv.workspace, Actor("Иванов", "ivanov@x")
     with pytest.raises(ValueError, match="допустимые файлы"):
-        A.add(ws, "bracket", "model.step", b"ISO-10303", actor)
+        A.add(ws, "bracket", "model.exe", b"MZ", actor)
     with pytest.raises(ValueError, match="пустой"):
         A.add(ws, "bracket", "a.png", b"", actor)
     with pytest.raises(ValueError, match="не читается"):
@@ -170,7 +170,7 @@ def test_http_upload_list_file_task_delete(client: TestClient):
     f = client.get(f"/api/projects/bracket/attachments/{item['name']}", headers=USER)
     assert f.status_code == 200 and f.headers["content-type"] == "image/png" and f.content[:4] == b"\x89PNG"
     assert client.get("/api/projects/bracket/attachments/none.png", headers=USER).status_code == 400
-    bad = client.post("/api/projects/bracket/attachments", files={"file": ("m.step", b"x", "text/plain")}, headers=USER)
+    bad = client.post("/api/projects/bracket/attachments", files={"file": ("m.exe", b"x", "text/plain")}, headers=USER)
     assert bad.status_code == 400 and "допустимые" in bad.json()["error"]
     # задача с вложением: пути проверяются, список попадает в задачу; пока задача в очереди — загрузка закрыта
     r = client.post(
@@ -291,3 +291,38 @@ def test_run_loop_without_attachments_keeps_plain_text():
     llm = ScriptLLM([{"content": "ок"}])
     run_loop({"project": "p", "text": "x"}, llm, ImageBridge(), lambda k, **d: None, lambda: False)
     assert isinstance(llm.seen[0][1]["content"], str)
+
+
+def test_files_zone_kinds_note_and_thumb(client: TestClient):
+    """Зона файлов (M2.5): текст и модели CAD принимаются, заметка из коммита видна в списке, миниатюры для
+    картинок, SVG и PDF; у текста миниатюры нет; агент получает текст как текст, CAD — только имя и размер."""
+    up = lambda name, data, note="": client.post(  # noqa: E731
+        "/api/projects/bracket/attachments",
+        files={"file": (name, data, "application/octet-stream")},
+        data={"note": note},
+        headers=USER,
+    )
+    assert up("Примечания.txt", "нагрузка 12 кН, стена бетон".encode(), "пример задания").status_code == 200
+    assert up("analog.step", b"ISO-10303-21;\nHEADER;\nENDSEC;\n").status_code == 200
+    assert up("sketch.svg", SVG.encode()).status_code == 200
+    assert up("photo.png", png_bytes(900, 600)).status_code == 200
+    assert up("m.exe", b"MZ").status_code == 400
+    listed = client.get("/api/projects/bracket/attachments", headers=USER).json()["items"]
+    items = {i["name"].split("-", 2)[-1]: i for i in listed}
+    assert items["primechaniya.txt"]["kind"] == "text" and items["primechaniya.txt"]["note"] == "пример задания"
+    assert items["analog.step"]["kind"] == "cad" and items["analog.step"]["note"] is None
+    for n in ("photo.png", "sketch.svg"):
+        r = client.get(f"/api/projects/bracket/attachments/{items[n]['name']}/thumb", headers=USER)
+        assert r.status_code == 200 and r.headers["content-type"] == "image/png", n
+        im = Image.open(io.BytesIO(r.content))
+        assert max(im.size) <= A.THUMB_SIDE
+    r = client.get(f"/api/projects/bracket/attachments/{items['primechaniya.txt']['name']}/thumb", headers=USER)
+    assert r.status_code == 404
+    t = client.get(f"/api/projects/bracket/attachments/{items['primechaniya.txt']['name']}", headers=USER)
+    assert t.status_code == 200 and "12 кН" in t.text and t.headers["content-type"].startswith("text/plain")
+    # для агента
+    tools = Tools(client.app.state.server)
+    res = tools.attachment("bracket", items["primechaniya.txt"]["path"])
+    assert res["png_base64"] is None and "12 кН" in res["summary"]
+    res = tools.attachment("bracket", items["analog.step"]["path"])
+    assert res["png_base64"] is None and "не читает" in res["summary"]

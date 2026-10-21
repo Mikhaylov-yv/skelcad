@@ -207,3 +207,28 @@ def test_stage_rules_leaf_and_aggregate():
     assert agg["summary"]["k_min"] == 1.8
     agg = stages.aggregate(parent, [kid_done, {**kid_wait, "next": done_next}])
     assert agg["stages"]["design"] == "done" and agg["next"]["act"] == "run:kit" and agg["stages"]["kit"] == "next"
+
+
+def test_thread_brief_is_one_line_without_markup():
+    """Краткий ответ агента в ленте: заголовки и код пропущены, жёсткие переносы модели — пробелами, пункты
+    списка через «; », без **разметки**, обрезка по слову."""
+    from skelcad.server.thread import brief
+
+    text = (
+        "## Итог\n\n"
+        "Компоновочный эскиз **построен**: стена `interface:wall`,\n"
+        "труба Ø108 на высоте 1200 мм.\n\n"
+        "- анкеры M16 — 4 шт\n"
+        "- пластина 10 мм\n"
+    )
+    assert brief(text) == "Компоновочный эскиз построен: стена interface:wall, труба Ø108 на высоте 1200 мм."
+    assert brief("# Заголовок\n\n```\ncode\n```\n\n1. первое\n2. второе") == "первое; второе"
+    long = " ".join(["слово"] * 100)
+    b = brief(long, limit=40)
+    assert b.endswith("…") and len(b) <= 41 and "сло…" not in b
+    assert brief("") == "" and brief("Остановлено.") == "Остановлено."
+    from skelcad.server.thread import failure_text
+
+    assert failure_text("failed", "ReadTimeout: timed out", None).startswith("Провайдер модели не ответил вовремя: ")
+    assert "лимит шагов (60)" in failure_text("limit", "достигнут лимит шагов (60)", None, 60)
+    assert failure_text("failed", "", "") == "Агент завершился с ошибкой."

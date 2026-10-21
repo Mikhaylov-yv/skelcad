@@ -4,6 +4,9 @@
 `attachment(project, path)` как изображение. Растровая картинка с длинной стороной больше MAX_SIDE уменьшается при
 загрузке (набросок — не архивный документ), фото поворачивается по EXIF. SVG и первая страница PDF растрируются
 при выдаче агенту; файл доски `.excalidraw` отдаётся сводкой элементов (сам JSON агент читает `files_read`).
+Зона файлов конструктора (M2.5): кроме набросков сюда кладут примеры и справочные материалы — текст (txt, md, csv,
+yaml, json) агент получает как текст, модели CAD (step, dxf, iges) и документы (docx, xlsx, zip) хранятся для
+конструктора, агент видит только имя и размер. Для галереи сервер делает миниатюры (`thumb`) с кэшем в out/.
 """
 
 from __future__ import annotations
@@ -20,6 +23,8 @@ DIR = "attachments"
 MAX_BYTES = 16 * 1024 * 1024  # предел загрузки (nginx skelcad.br: client_max_body_size 16m)
 MAX_SIDE = 3000  # px: длинная сторона растровой картинки после загрузки
 RASTER_WIDTH = 1600  # px: ширина растра SVG и страницы PDF для агента
+THUMB_SIDE = 360  # px: длинная сторона миниатюры для галереи файлов
+TEXT_LIMIT = 30000  # символов текстового вложения, которые получает агент
 KINDS = {
     ".png": "image",
     ".jpg": "image",
@@ -28,8 +33,30 @@ KINDS = {
     ".svg": "svg",
     ".pdf": "pdf",
     ".excalidraw": "excalidraw",
+    ".txt": "text",
+    ".md": "text",
+    ".csv": "text",
+    ".yaml": "text",
+    ".yml": "text",
+    ".json": "text",
+    ".step": "cad",
+    ".stp": "cad",
+    ".dxf": "cad",
+    ".iges": "cad",
+    ".igs": "cad",
+    ".docx": "file",
+    ".xlsx": "file",
+    ".zip": "file",
 }
-KIND_RU = {"image": "изображение", "svg": "векторный рисунок", "pdf": "PDF", "excalidraw": "файл доски Excalidraw"}
+KIND_RU = {
+    "image": "изображение",
+    "svg": "векторный рисунок",
+    "pdf": "PDF",
+    "excalidraw": "файл доски Excalidraw",
+    "text": "текст",
+    "cad": "модель CAD",
+    "file": "файл",
+}
 MIME = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -37,8 +64,23 @@ MIME = {
     ".svg": "image/svg+xml",
     ".pdf": "application/pdf",
     ".excalidraw": "application/json",
+    ".txt": "text/plain; charset=utf-8",
+    ".md": "text/markdown; charset=utf-8",
+    ".csv": "text/csv; charset=utf-8",
+    ".yaml": "text/yaml; charset=utf-8",
+    ".yml": "text/yaml; charset=utf-8",
+    ".json": "application/json",
+    ".step": "model/step",
+    ".stp": "model/step",
+    ".dxf": "image/vnd.dxf",
+    ".iges": "model/iges",
+    ".igs": "model/iges",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".zip": "application/zip",
 }
 ACCEPT = ", ".join(sorted(KINDS))
+THUMB_KINDS = {"image", "svg", "pdf"}
 
 _TRANSLIT = str.maketrans(
     {
@@ -165,6 +207,7 @@ def info(ws: Workspace, project: str, path: str, commit: dict | None = None) -> 
         "height": None,
         "author": None,
         "date": None,
+        "note": None,
     }
     if item["kind"] == "image":
         try:
@@ -177,6 +220,8 @@ def info(ws: Workspace, project: str, path: str, commit: dict | None = None) -> 
     last = commit or next(iter(ws.history(project, limit=1, path=rel)), None)
     if last:
         item["author"], item["date"] = last["author"], last["date"]
+        m = re.match(rf"вложение {re.escape(f.name)}: (.+)$", last.get("message") or "", re.S)
+        item["note"] = m.group(1).strip() if m else None
     return item
 
 
@@ -263,5 +308,46 @@ def image(ws: Workspace, project: str, path: str) -> dict:
         buf = io.BytesIO()
         pil.convert("RGB").save(buf, "PNG")
         return {"png": buf.getvalue(), "format": "png", "text": f"страниц {pages}, показана первая", "item": item}
+    if kind == "text":
+        txt = data.decode("utf-8", "replace")
+        if len(txt) > TEXT_LIMIT:
+            txt = txt[:TEXT_LIMIT] + f"\n…(показаны первые {TEXT_LIMIT} символов)"
+        return {"png": None, "format": None, "text": txt, "item": item}
+    if kind in ("cad", "file"):
+        text = (
+            f"{KIND_RU[kind]} {ext}, {max(1, item['bytes'] // 1024)} КБ: содержимое агент не читает — "
+            "попроси конструктора описать его словами или приложить картинку, PDF или текст"
+        )
+        return {"png": None, "format": None, "text": text, "item": item}
     doc = json.loads(data)
     return {"png": None, "format": None, "text": excalidraw_summary(doc), "item": item}
+
+
+def thumb(ws: Workspace, out_dir: Path, project: str, path: str) -> Path | None:
+    """Миниатюра вложения для галереи: PNG с длинной стороной THUMB_SIDE в out/<проект>/_attachments/, кэш по
+    размеру и времени файла. Картинка — уменьшением, SVG и PDF — растром первой страницы; у текста, моделей CAD и
+    прочих файлов миниатюры нет (None)."""
+    f = check_path(ws, project, path)
+    kind = KINDS.get(_ext(f.name))
+    if kind not in THUMB_KINDS:
+        return None
+    st = f.stat()
+    d = out_dir / project / "_attachments"
+    t = d / f"{f.name}.{st.st_size}.{int(st.st_mtime)}.png"
+    if t.is_file():
+        return t
+    from PIL import Image
+
+    src = f.read_bytes() if kind == "image" else image(ws, project, path)["png"]
+    im = Image.open(io.BytesIO(src))
+    im.load()
+    im.thumbnail((THUMB_SIDE, THUMB_SIDE), Image.LANCZOS)
+    if im.mode not in ("RGB", "RGBA"):
+        im = im.convert("RGBA" if "transparency" in im.info or im.mode in ("LA", "P") else "RGB")
+    d.mkdir(parents=True, exist_ok=True)
+    for old in d.glob(f"{f.name}.*.png"):
+        old.unlink(missing_ok=True)
+    tmp = t.with_suffix(".tmp")
+    im.save(tmp, "PNG", optimize=True)
+    tmp.replace(t)
+    return t

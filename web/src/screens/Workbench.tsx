@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, type ProjectOverview, type ProjectsResponse, type StageId, type ThreadResponse } from "../api";
+import { api, type Attachment, type Commit, type ProjectOverview, type ProjectsResponse, type StageId, type ThreadResponse } from "../api";
 import { S } from "../strings";
 import { fmtNum } from "../ui/format";
 import { NewProjectForm } from "../ui/NewProjectForm";
 import { Conversation, type ThreadLine } from "../ui/wb/Conversation";
 import { BriefPane } from "../ui/wb/BriefPane";
+import { FilesPane, displayName } from "../ui/wb/FilesPane";
+import { Splitter, clamp, useStoredWidth, useWindowWidth } from "../ui/wb/Splitter";
 import { KitPane } from "../ui/wb/KitPane";
 import { NextCard } from "../ui/wb/NextCard";
 import { KIND_DOT, ProductTree, type TreeRow } from "../ui/wb/ProductTree";
@@ -36,6 +38,17 @@ export function Workbench() {
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const [scopeChoice, setScopeChoice] = useState<"node" | "all" | null>(null);
+  const [files, setFiles] = useState<Attachment[]>([]);
+  const [filesBusy, setFilesBusy] = useState(false);
+  const [picked, setPicked] = useState<Attachment[]>([]);
+  // ширина боковых панелей — тянется разделителем, помнится в браузере; центру остаётся не меньше 480 px
+  const winW = useWindowWidth();
+  const [treeStored, setTreeW] = useStoredWidth("skelcad.wb.tree", 240);
+  const [sideStored, setSideW] = useStoredWidth("skelcad.wb.side", 400);
+  const sideMax = winW - 160 - 480;
+  const sideW = clamp(sideStored, 300, sideMax);
+  const treeMax = Math.min(480, winW - sideW - 480);
+  const treeW = clamp(treeStored, 160, treeMax);
 
   const refresh = useCallback(() => {
     api
@@ -60,6 +73,22 @@ export function Workbench() {
       .then((r) => setSpec(r.spec))
       .catch(() => setSpec(null));
   }, [project, p?.last_commit?.hash]);
+  // файлы проекта (attachments/): список обновляется с каждым коммитом
+  const loadFiles = useCallback(() => {
+    setFilesBusy(true);
+    api
+      .attachments(project)
+      .then((r) => setFiles(r.items))
+      .catch(() => undefined)
+      .finally(() => setFilesBusy(false));
+  }, [project]);
+  useEffect(() => {
+    setFiles([]);
+    setPicked([]);
+  }, [project]);
+  useEffect(() => {
+    loadFiles();
+  }, [loadFiles, p?.last_commit?.hash]);
 
   // дерево изделия: корень — проект без родителя; строки — обход в глубину
   const byName = useMemo(() => new Map((all?.projects ?? []).map((x) => [x.name, x])), [all]);
@@ -99,7 +128,8 @@ export function Workbench() {
     else q.delete(k);
     setParams(q, { replace: true });
   };
-  const rtab = params.get("r") === "history" ? "history" : "chat";
+  const rq = params.get("r");
+  const rtab: "chat" | "history" | "files" = rq === "history" ? "history" : rq === "files" ? "files" : "chat";
 
   // разговор: по узлу или по всему изделию (по умолчанию у корня — всё изделие)
   const scope: "node" | "all" = scopeChoice ?? (p && !p.parent && p.children.length ? "all" : "node");
@@ -196,6 +226,26 @@ export function Workbench() {
       .catch((e: Error) => setActErr(e.message))
       .finally(() => setBusy(null));
   };
+  // зона файлов: «В сообщение» кладёт файл к следующему сообщению, удаление — коммит с возвратом (откат)
+  const filesChanged = () => {
+    loadFiles();
+    refresh();
+    loadThreads();
+  };
+  const attachFile = (a: Attachment) => {
+    setPicked((x) => (x.some((y) => y.path === a.path) ? x : [...x, a]));
+    setQ("r", null);
+    window.setTimeout(() => composer.current?.focus(), 50);
+  };
+  const fileDeleted = (a: Attachment, c: Commit) => {
+    setPicked((x) => x.filter((y) => y.path !== a.path));
+    showToast(S.wb.fileDeleted(displayName(a)), () =>
+      api
+        .revert(project, c.commit)
+        .then(filesChanged)
+        .catch((e: Error) => setActErr(e.message)),
+    );
+  };
   const remove = () => {
     if (!p) return;
     const title = p.title || p.name;
@@ -248,7 +298,7 @@ export function Workbench() {
   const stageName = (p.aggregate ? S.wb.aggStages : S.wb.stages)[stage];
 
   return (
-    <div className="wb">
+    <div className="wb" style={{ gridTemplateColumns: `${treeW}px minmax(0, 1fr) ${sideW}px` }}>
       {header &&
         createPortal(
           <>
@@ -288,6 +338,7 @@ export function Workbench() {
             />
           </div>
         )}
+        <Splitter edge="end" value={treeW} min={160} max={treeMax} fallback={240} onChange={setTreeW} label={S.wb.resizeTree} />
       </aside>
       <section className="wb__center" aria-label={stageName}>
         <div className="wb__bar">
@@ -349,6 +400,11 @@ export function Workbench() {
               description={String(spec?.description ?? "")}
               messages={messages.filter((m) => m.project === p.name)}
               locked={locked}
+              files={files}
+              filesLoading={filesBusy}
+              onFilesChanged={filesChanged}
+              onAttach={attachFile}
+              onDeleted={fileDeleted}
             />
           )}
           {stage === "layout" && <Variant key={"layout:" + p.name} project={p.name} variant={variants[0]?.id ?? ""} embedded mode="layout" />}
@@ -406,16 +462,26 @@ export function Workbench() {
         )}
       </section>
       <div className="wb__side">
+        <Splitter edge="start" value={sideW} min={300} max={sideMax} fallback={400} onChange={setSideW} label={S.wb.resizeSide} />
         <div className="wb__sidetabs" role="tablist">
           <button type="button" role="tab" aria-selected={rtab === "chat"} className={rtab === "chat" ? "cur" : ""} onClick={() => setQ("r", null)}>
             {S.wb.conversation}
+          </button>
+          <button type="button" role="tab" aria-selected={rtab === "files"} className={rtab === "files" ? "cur" : ""} onClick={() => setQ("r", "files")} data-act="tab:files">
+            {S.wb.files}
+            {files.length ? <span className="badge">{files.length}</span> : null}
           </button>
           <button type="button" role="tab" aria-selected={rtab === "history"} className={rtab === "history" ? "cur" : ""} onClick={() => setQ("r", "history")}>
             {S.wb.history}
             {p.unreviewed ? <span className="badge badge--warn">{p.unreviewed}</span> : null}
           </button>
         </div>
-        {rtab === "chat" ? (
+        {rtab === "files" && (
+          <div className="wb__files">
+            <FilesPane project={p.name} files={files} loading={filesBusy} locked={locked} size="grid" onChanged={filesChanged} onAttach={attachFile} onDeleted={fileDeleted} />
+          </div>
+        )}
+        {rtab === "chat" && (
           <Conversation
             p={p}
             messages={messages}
@@ -432,8 +498,11 @@ export function Workbench() {
               loadThreads();
             }}
             taskTexts={all.task_texts}
+            picked={picked}
+            setPicked={setPicked}
           />
-        ) : (
+        )}
+        {rtab === "history" && (
           <div className="wb__history">
             <NextCard p={p} onAct={act} busy={busy} stack />
             <Feed key={"feed:" + p.name} project={p.name} embedded />

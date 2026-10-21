@@ -69,7 +69,7 @@ await run("Новый проект в папке — открывается ра
   await page.click('[data-act="create"]');
   await page.waitForURL(/\/p\/nasosnyy_agregat/);
   await page.waitForSelector('[data-node="nasosnyy_agregat"]');
-  const cur = await page.locator(".steps__item.cur").innerText();
+  const cur = await page.locator(".stepper__item.cur").innerText();
   const next = await page.locator("[data-next]").innerText();
   return cur.includes("Задание") && next.includes("Опишите, что нужно");
 });
@@ -94,7 +94,7 @@ await run("«+ Узел» — узел внутри изделия, состав
   const rows = await page.locator(".ntree .nrow").count();
   const crumbs = await page.locator(".crumbs").innerText();
   await page.click('[data-node="nasosnyy_agregat"]');
-  await page.waitForSelector('.steps__item:has-text("Узлы")');
+  await page.waitForSelector('.stepper__item:has-text("Узлы")');
   await shot("product-nodes");
   return rows === 2 && crumbs.includes("Насосный агрегат") && crumbs.includes("Рама");
 });
@@ -154,6 +154,45 @@ await run("Старые адреса ведут в рабочее место", a
   await page.goto(BASE + "/p/bracket/A_fork?mode=layout");
   await page.waitForURL(/\/p\/bracket\/s\/layout\?v=A_fork/);
   return true;
+});
+await run("Файлы: вкладка справа, добавить, «В сообщение», удалить с возвратом", async () => {
+  await page.goto(BASE + "/p/priemka_planka?r=files");
+  await page.waitForSelector('[data-act="files-add"]');
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+  await page.setInputFiles('[data-field="files"]', [
+    { name: "набросок.png", mimeType: "image/png", buffer: png },
+    { name: "пример.txt", mimeType: "text/plain", buffer: Buffer.from("аналог: кронштейн 2016 года") },
+  ]);
+  await page.waitForSelector('.ftile[data-file$="-primer.txt"]');
+  await page.waitForSelector('.ftile[data-file$="-nabrosok.png"] img');
+  const tiles = await page.locator(".ftile").count();
+  await shot("files");
+  await page.click('[data-act^="file-attach:"][data-act$="-nabrosok.png"]');
+  await page.waitForSelector('.chat__files .filechip[data-picked$="-nabrosok.png"]');
+  await page.click('[data-act="tab:files"]');
+  await page.click('[data-act^="file-delete:"][data-act$="-primer.txt"]');
+  await page.waitForSelector('[data-act="undo"]');
+  await page.waitForFunction(() => document.querySelectorAll(".ftile").length === 1);
+  await page.click('[data-act="undo"]');
+  await page.waitForSelector('.ftile[data-file$="-primer.txt"]');
+  return tiles === 2;
+});
+await run("Ширина разговора меняется перетаскиванием и запоминается", async () => {
+  await page.goto(BASE + "/p/priemka_planka");
+  const side = page.locator(".wb__side");
+  await side.waitFor();
+  const w0 = (await side.boundingBox()).width;
+  const h = await page.locator(".wb__split--start").boundingBox();
+  await page.mouse.move(h.x + h.width / 2, h.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(h.x + h.width / 2 - 120, h.y + 200, { steps: 6 });
+  await page.mouse.up();
+  const w1 = (await side.boundingBox()).width;
+  await page.reload();
+  await page.locator(".wb__side").waitFor();
+  const w2 = (await page.locator(".wb__side").boundingBox()).width;
+  await page.evaluate(() => localStorage.removeItem("skelcad.wb.side"));
+  return Math.abs(w1 - (w0 + 120)) < 4 && Math.abs(w2 - w1) < 4;
 });
 await cleanup();
 await browser.close();

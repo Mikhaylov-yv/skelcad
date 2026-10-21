@@ -1,53 +1,33 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { api, attachmentUrl, type Attachment, type ThreadMessage } from "../../api";
+import type { Attachment, Commit, ThreadMessage } from "../../api";
 import { S } from "../../strings";
+import { FilesPane } from "./FilesPane";
 
-/** Задание: первое сообщение конструктора агенту (или назначение из project.yaml) и вложения — наброски, фото. */
+/** Задание: первое сообщение конструктора агенту (или назначение из project.yaml) и зона файлов проекта —
+ *  наброски, фото, примеры — крупными плитками. */
 export function BriefPane({
   project,
   purpose,
   description,
   messages,
   locked,
+  files,
+  filesLoading,
+  onFilesChanged,
+  onAttach,
+  onDeleted,
 }: {
   project: string;
   purpose: string;
   description: string;
   messages: ThreadMessage[];
   locked: boolean;
+  files: Attachment[];
+  filesLoading: boolean;
+  onFilesChanged: () => void;
+  onAttach: (a: Attachment) => void;
+  onDeleted: (a: Attachment, commit: Commit) => void;
 }) {
   const first = messages.find((m) => m.who === "you");
-  const [files, setFiles] = useState<Attachment[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const input = useRef<HTMLInputElement>(null);
-  const load = useCallback(
-    () =>
-      api
-        .attachments(project)
-        .then((r) => setFiles(r.items))
-        .catch(() => undefined),
-    [project],
-  );
-  useEffect(() => {
-    load();
-  }, [load]);
-  const onPick = (e: ChangeEvent<HTMLInputElement>) => {
-    const list = Array.from(e.target.files ?? []);
-    e.target.value = "";
-    if (!list.length) return;
-    setUploading(true);
-    setErr(null);
-    (async () => {
-      for (const f of list) await api.attachmentUpload(project, f);
-    })()
-      .catch((e: Error) => setErr(e.message))
-      .finally(() => {
-        setUploading(false);
-        load();
-      });
-  };
-  const images = files.filter((f) => f.kind === "image" || f.kind === "svg");
   return (
     <div className="brief">
       <div className="brief__text">
@@ -67,34 +47,8 @@ export function BriefPane({
           <p className="empty">{S.wb.briefEmpty}</p>
         )}
       </div>
-      <div className="brief__files">
-        {images.map((f) => (
-          <figure key={f.path} className="pic" style={{ height: 220 }}>
-            <img src={attachmentUrl(project, f)} alt={f.name} />
-            <figcaption className="muted small">{f.name}</figcaption>
-          </figure>
-        ))}
-        {files
-          .filter((f) => !images.includes(f))
-          .map((f) => (
-            <a key={f.path} className="file" href={attachmentUrl(project, f)} target="_blank" rel="noreferrer">
-              <span className="file__ext">{f.kind.toUpperCase()}</span>
-              <span className="file__n">{f.name}</span>
-            </a>
-          ))}
-        <div>
-          <input ref={input} type="file" multiple hidden accept="image/*,.pdf,.excalidraw,.svg" onChange={onPick} />
-          <button type="button" onClick={() => input.current?.click()} disabled={locked || uploading} aria-busy={uploading}>
-            {uploading ? S.agent.uploading : S.wb.briefAttach}
-          </button>
-          <span className="muted small"> {S.wb.briefAttachHint}</span>
-        </div>
-        {err && (
-          <p className="level-error small" role="alert">
-            {err}
-          </p>
-        )}
-      </div>
+      <h3 className="brief__h">{S.wb.files}</h3>
+      <FilesPane project={project} files={files} loading={filesLoading} locked={locked} size="gallery" onChanged={onFilesChanged} onAttach={onAttach} onDeleted={onDeleted} />
     </div>
   );
 }

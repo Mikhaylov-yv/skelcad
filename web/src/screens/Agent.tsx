@@ -489,7 +489,7 @@ export function Progress({
           ))}
         </p>
       ) : null}
-      {task && !live && task.status === "done" && (
+      {task && !live && task.status === "done" && !compact && (
         <section className="report" aria-label={S.agent.result}>
           <h3>{S.agent.result}</h3>
           {done?.text?.trim() ? <Markdown text={done.text} /> : <p className="muted">{S.agent.noResult}</p>}
@@ -511,12 +511,12 @@ export function Progress({
           </p>
         </section>
       )}
-      {fail && (
+      {fail && !compact && (
         <p className="callout callout--error" role="alert">
           <strong>{S.agent.error}:</strong> {fail}
         </p>
       )}
-      {task && !live && (task.status === "stopped" || task.status === "limit") && (
+      {task && !live && !compact && (task.status === "stopped" || task.status === "limit") && (
         <p className="callout">{S.agent.finished[task.status]}</p>
       )}
       <div className="work__steps-head">
